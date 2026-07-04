@@ -1,71 +1,129 @@
 import os
 import json
+import re
 import time
-from openai import OpenAI
 
-def generate_video_script(max_retries=3):
-    """
-    Calls OpenRouter to generate a YouTube Short script formatted as JSON.
-    Uses the 'openrouter/free' dynamic router to automatically find a working model.
-    """
+from openai import OpenAI
+from topics import pick_topic
+
+# "openrouter/free" is not a stable model ID. Use an explicit fallback chain of
+# known free models instead — if one is offline or rate-limited, the next is tried.
+# Check https://openrouter.ai/models?max_price=0 occasionally and refresh this list.
+FREE_MODELS = [
+    "deepseek/deepseek-chat-v3-0324:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+]
+
+SYSTEM_PROMPT = """You are a script writer for a top-performing dark-history YouTube Shorts channel.
+You write about REAL, verifiable historical events. Never invent facts, dates, or numbers.
+
+STRUCTURE (non-negotiable, this is what drives retention):
+- Scene 1 is the HOOK: one shocking sentence that creates an open question. Max 12 words. \
+No throat-clearing like "In the year..." — start with the impossible fact itself.
+- Scenes 2-4: escalate. Each scene must end on a mini-cliffhanger or a turn.
+- Scene 5: the payoff/twist, then ONE final line that lingers (a question or dark irony).
+- Total spoken length: 130-150 words (about 55 seconds of narration). 5 scenes.
+
+WRITING RULES:
+- Short punchy sentences. Max 15 words per sentence.
+- Concrete specifics (numbers, names, dates) beat vague drama.
+- BANNED phrases: "little did they know", "but that's not all", "what happened next \
+will shock you", "to this day", "lost to history", "the rest is history".
+- Write for the ear, not the page: no parentheses, no semicolons.
+
+IMAGE PROMPTS:
+- Each scene gets one image_prompt describing a SINGLE clear focal subject \
+(one person, one object, one place). Crowded prompts produce muddy AI images.
+- Vary the shot types across scenes: extreme close-up, wide establishing shot, \
+low-angle, overhead, silhouette. State the shot type first.
+- Every prompt must end with exactly: "dramatic chiaroscuro lighting, dark moody \
+cinematic oil painting, rich texture, muted color palette with one accent color, \
+highly detailed, no text, no watermark"
+
+OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
+{
+  "title": "curiosity-gap title under 80 chars, no clickbait lies, no ALL CAPS words",
+  "description": "2 sentences summarizing the story + 3 relevant hashtags",
+  "tags": ["8-12 specific search tags"],
+  "scenes": [
+    {"narration": "...", "image_prompt": "..."}
+  ]
+}"""
+
+
+def _extract_json(raw: str):
+    """Models sometimes wrap JSON in fences or add commentary. Pull out the object."""
+    raw = raw.strip()
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    # Last resort: grab the outermost braces
+    if not raw.startswith("{"):
+        start, end = raw.find("{"), raw.rfind("}")
+        if start != -1 and end != -1:
+            raw = raw[start : end + 1]
+    return json.loads(raw)
+
+
+def _validate(data: dict) -> bool:
+    scenes = data.get("scenes")
+    if not isinstance(scenes, list) or not (4 <= len(scenes) <= 6):
+        return False
+    for s in scenes:
+        if not s.get("narration") or not s.get("image_prompt"):
+            return False
+    total_words = sum(len(s["narration"].split()) for s in scenes)
+    if not (90 <= total_words <= 190):  # keep the short in the 40-70s zone
+        print(f"⚠️ Script rejected: {total_words} words (out of range).")
+        return False
+    return True
+
+
+def generate_video_script(max_retries_per_model: int = 2):
+    """Generates the daily script. Rotates topic by date, falls through free models."""
     print("🧠 Initializing LLM Engine...")
-    
+
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
-    system_prompt = """
-    You are an expert YouTube Shorts writer specializing in dark, cinematic history and bizarre strategy blunders. 
-    Your goal is to write a high-tension, 50-second script.
-    
-    You MUST output ONLY a valid JSON object with a single key "scenes" containing an array of objects. 
-    Each object must have exactly two keys:
-    1. "narration": The dramatic text to be spoken (keep sentences punchy and suspenseful).
-    2. "image_prompt": A highly detailed prompt for an AI image generator. Always end the prompt with: "dark, cinematic, gritty oil painting style, masterpiece, 8k resolution".
-    """
+    topic = pick_topic()
+    print(f"📚 Today's topic: {topic}")
 
-    user_prompt = "Write a 5-scene YouTube Short script about a bizarre historical paradox or a disastrous military strategy blunder. Make it mysterious and gripping. Output ONLY valid JSON."
+    user_prompt = (
+        f"Write today's YouTube Short script about this specific true story:\n\n{topic}\n\n"
+        "Stick to established facts about this event. Output ONLY the JSON object."
+    )
 
-    for attempt in range(1, max_retries + 1):
-        print(f"🤖 Requesting script via OpenRouter dynamic free pool (Attempt {attempt}/{max_retries})...")
-        try:
-            response = client.chat.completions.create(
-                # This automatically routes to any currently online free model
-                model="openrouter/free", 
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                # Enforces that the randomly selected model must support JSON output
-                response_format={"type": "json_object"},
-                temperature=0.7,
-            )
-
-            raw_content = response.choices[0].message.content
-            
-            # Print which model the API actually ended up using
-            used_model = response.model
-            print(f"✨ OpenRouter successfully routed us to: {used_model}")
-            
-            # Safely strip markdown blocks if the model wraps the JSON
-            if raw_content.startswith("```json"):
-                raw_content = raw_content.replace("```json\n", "").replace("\n```", "")
-            elif raw_content.startswith("```"):
-                raw_content = raw_content.replace("```\n", "").replace("\n```", "")
-
-            script_data = json.loads(raw_content)
-            print("✅ Script generated successfully!")
-            return script_data
-
-        except Exception as e:
-            print(f"⚠️ Attempt {attempt} failed: {e}")
-            if attempt < max_retries:
+    for model in FREE_MODELS:
+        for attempt in range(1, max_retries_per_model + 1):
+            print(f"🤖 Trying {model} (attempt {attempt}/{max_retries_per_model})...")
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.8,
+                    max_tokens=1500,
+                )
+                data = _extract_json(response.choices[0].message.content)
+                if _validate(data):
+                    data["topic"] = topic
+                    print(f"✅ Script generated by {response.model}")
+                    return data
+                print("⚠️ Script failed validation, retrying...")
+            except Exception as e:
+                print(f"⚠️ {model} failed: {e}")
                 time.sleep(2)
-            continue 
 
-    print("❌ All script generation attempts failed.")
+    print("❌ All models failed.")
     return None
+
 
 if __name__ == "__main__":
     script = generate_video_script()
