@@ -1,4 +1,5 @@
 openai==1.14.0
+httpx==0.27.2
 edge-tts==6.1.9
 requests==2.31.0
 google-api-python-client==2.122.0
