@@ -9,13 +9,25 @@ from topics import pick_topic
 # "openrouter/free" is not a stable model ID. Use an explicit fallback chain of
 # known free models instead — if one is offline or rate-limited, the next is tried.
 # Check https://openrouter.ai/models?max_price=0 occasionally and refresh this list.
-FREE_MODELS = [
-    "deepseek/deepseek-chat-v3-0324:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
-]
+import requests
+
+def get_free_models(limit: int = 6) -> list:
+    """Fetch currently-available free models live, so the list never goes stale."""
+    models = ["openrouter/free"]  # OpenRouter's own free-model router, try it first
+    try:
+        r = requests.get("https://openrouter.ai/api/v1/models", timeout=20)
+        r.raise_for_status()
+        for m in r.json().get("data", []):
+            p = m.get("pricing", {})
+            if (m["id"].endswith(":free")
+                    and float(p.get("prompt", 1)) == 0
+                    and float(p.get("completion", 1)) == 0):
+                models.append(m["id"])
+                if len(models) > limit:
+                    break
+    except Exception as e:
+        print(f"⚠️ Could not fetch live model list ({e}), using router only.")
+    return models
 
 SYSTEM_PROMPT = """You are a script writer for a top-performing dark-history YouTube Shorts channel.
 You write about REAL, verifiable historical events. Never invent facts, dates, or numbers.
