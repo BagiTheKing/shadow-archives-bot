@@ -40,10 +40,6 @@ def main():
     print("⏳ YouTube upload skipped (waiting for channel creation).")
 
     print("🎉 Pipeline executed flawlessly. Shutting down runner.")
-    
-    upload_video_to_youtube(final_video_path, title, description)
-
-    print("🎉 Pipeline executed flawlessly. Shutting down runner.")
 
 if __name__ == "__main__":
     main()
