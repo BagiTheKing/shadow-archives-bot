@@ -31,11 +31,16 @@ def main():
     final_video_path = generate_video_pipeline(script_data, build_dir)
 
     # Phase 4: Metadata & Upload
-    # We will use the narration of the first scene as the video title
     first_scene_text = script_data["scenes"][0]["narration"]
     title = f"{first_scene_text[:60]}... #shorts #history"
     description = "A bizarre historical paradox uncovered.\n\nSubscribe to the Shadow Archives for daily mysteries.\n#history #mystery #paradox"
 
+    # TEMPORARILY DISABLED UNTIL CHANNEL IS CREATED
+    # upload_video_to_youtube(final_video_path, title, description)
+    print("⏳ YouTube upload skipped (waiting for channel creation).")
+
+    print("🎉 Pipeline executed flawlessly. Shutting down runner.")
+    
     upload_video_to_youtube(final_video_path, title, description)
 
     print("🎉 Pipeline executed flawlessly. Shutting down runner.")
