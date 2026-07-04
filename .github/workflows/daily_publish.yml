@@ -15,27 +15,32 @@ jobs:
       - name: Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Fixed key to ensure correct environment
-          cache: 'pip'
+          python-version: '3.11'
+          # We purposefully removed the 'cache' command here to stop GitHub from loading broken files
 
       - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Install Python Dependencies
-        # --no-cache-dir forces GitHub to download the fresh, corrected packages
+      - name: Install Python Dependencies (Isolated Virtual Environment)
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          python -m venv myenv
+          source myenv/bin/activate
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir --force-reinstall -r requirements.txt
 
       - name: Run Automation Pipeline
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: python src/main.py
+        run: |
+          source myenv/bin/activate
+          python src/main.py
 
       - name: Upload Final Video as Artifact
+        if: always() # Ensures the video uploads even if a later step fails
         uses: actions/upload-artifact@v4
         with:
           name: shadow-archives-video
