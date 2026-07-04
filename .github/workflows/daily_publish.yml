@@ -1,9 +1,10 @@
+# .github/workflows/daily_publish.yml
 name: Daily YouTube Shorts Publisher
 
 on:
   schedule:
-    - cron: '0 15 * * *'
-  workflow_dispatch:
+    - cron: '0 15 * * *' # Executes automatically every day at 3:00 PM UTC
+  workflow_dispatch: # Allows manual triggering from the GitHub UI for testing
 
 jobs:
   build-and-publish:
@@ -15,33 +16,33 @@ jobs:
       - name: Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          # We purposefully removed the 'cache' command here to stop GitHub from loading broken files
+          python-version: '3.11'   # FIX: key was 'python-module-version' (invalid, silently ignored)
+          cache: 'pip'
 
       - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Install Python Dependencies (Isolated Virtual Environment)
+      - name: Install Python Dependencies
         run: |
-          python -m venv myenv
-          source myenv/bin/activate
           python -m pip install --upgrade pip
-          pip install --no-cache-dir --force-reinstall -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Run Automation Pipeline
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: |
-          source myenv/bin/activate
-          python src/main.py
+        run: python src/main.py
 
-      - name: Upload Final Video as Artifact
-        if: always() # Ensures the video uploads even if a later step fails
+      # Keep the rendered video as a downloadable artifact even if upload fails —
+      # invaluable for debugging without re-running the whole pipeline
+      - name: Upload build artifact (debugging aid)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: shadow-archives-video
+          name: final-short
           path: build/final_short.mp4
+          if-no-files-found: ignore
+          retention-days: 3
