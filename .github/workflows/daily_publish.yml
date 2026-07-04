@@ -1,10 +1,9 @@
-# .github/workflows/daily_publish.yml
 name: Daily YouTube Shorts Publisher
 
 on:
   schedule:
-    - cron: '0 15 * * *' # Executes automatically every day at 3:00 PM UTC
-  workflow_dispatch: # Allows manual triggering from the GitHub UI for testing
+    - cron: '0 15 * * *'
+  workflow_dispatch:
 
 jobs:
   build-and-publish:
@@ -16,7 +15,7 @@ jobs:
       - name: Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-module-version: '3.10'
+          python-version: '3.11' # Fixed key to ensure correct environment
           cache: 'pip'
 
       - name: Install System Dependencies (FFmpeg)
@@ -25,8 +24,9 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
+        # --no-cache-dir forces GitHub to download the fresh, corrected packages
         run: |
-          pip install -r requirements.txt
+          pip install --no-cache-dir -r requirements.txt
 
       - name: Run Automation Pipeline
         env:
@@ -34,3 +34,9 @@ jobs:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python src/main.py
+
+      - name: Upload Final Video as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-archives-video
+          path: build/final_short.mp4
