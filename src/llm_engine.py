@@ -110,7 +110,7 @@ def generate_video_script(max_retries_per_model: int = 2):
         "Stick to established facts about this event. Output ONLY the JSON object."
     )
 
-    for model in FREE_MODELS:
+    for model in get_free_models():
         for attempt in range(1, max_retries_per_model + 1):
             print(f"🤖 Trying {model} (attempt {attempt}/{max_retries_per_model})...")
             try:
@@ -131,7 +131,7 @@ def generate_video_script(max_retries_per_model: int = 2):
                 print("⚠️ Script failed validation, retrying...")
             except Exception as e:
                 print(f"⚠️ {model} failed: {e}")
-                time.sleep(2)
+                time.sleep(15 if "429" in str(e) else 2)
 
     print("❌ All models failed.")
     return None
