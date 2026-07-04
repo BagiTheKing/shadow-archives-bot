@@ -26,7 +26,6 @@ def generate_subtitles(script_data: dict, template_path: str, output_ass: str):
         start_time_str = format_ass_time(current_time)
         end_time_str = format_ass_time(current_time + duration)
         
-        # Add the dialogue line using the Default style defined in template.ass
         events.append(f"Dialogue: 0,{start_time_str},{end_time_str},Default,,0,0,0,,{text}")
         current_time += duration
         
@@ -37,8 +36,6 @@ def generate_subtitles(script_data: dict, template_path: str, output_ass: str):
 
 def create_scene_clip(image_path: str, audio_path: str, duration: float, output_path: str):
     """Uses FFmpeg to combine an image and audio file, applying a slow zoom effect."""
-    # The zoompan filter slowly scales the image up by 15% over the duration of the clip
-    # We output at 30fps, 720x1280 resolution
     zoom_filter = f"zoompan=z='min(zoom+0.0015,1.15)':d={int(duration*30)}:s=720x1280:fps=30"
     
     cmd = [
@@ -63,7 +60,6 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     scenes = script_data.get("scenes", [])
     clip_paths = []
     
-    # 1. Generate individual scene clips
     for idx, scene in enumerate(scenes):
         image_path = scene.get("image_path")
         audio_path = scene.get("audio_path")
@@ -78,14 +74,13 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
         create_scene_clip(image_path, audio_path, duration, clip_path)
         clip_paths.append(clip_path)
 
-    # 2. Concatenate all clips
     print("🔗 Concatenating scenes...")
     concat_list_path = os.path.join(build_dir, "concat_list.txt")
     with open(concat_list_path, "w") as f:
         for cp in clip_paths:
-            # FFmpeg requires forward slashes even on Windows for the concat demuxer
-            safe_path = cp.replace("\\", "/")
-            f.write(f"file '{safe_path}'\n")
+            # FIX: Convert to absolute path so FFmpeg doesn't get lost
+            abs_path = os.path.abspath(cp).replace("\\", "/")
+            f.write(f"file '{abs_path}'\n")
 
     raw_output = os.path.join(build_dir, "raw_output.mp4")
     concat_cmd = [
@@ -95,17 +90,15 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     ]
     subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
-    # 3. Generate and burn subtitles
     ass_path = os.path.join(build_dir, "subtitles.ass")
-    # Assumes template.ass is in the root directory (one level up from src)
-    template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "template.ass")
+    template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "template.ass")
     generate_subtitles(script_data, template_path, ass_path)
 
     print("🔥 Burning subtitles into final video...")
     final_output = os.path.join(build_dir, "final_short.mp4")
     
-    # Need to escape paths for the FFmpeg subtitles filter
-    safe_ass_path = ass_path.replace("\\", "/").replace(":", "\\:")
+    # FIX: Simplify path escaping for the subtitle filter
+    safe_ass_path = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     burn_cmd = [
         "ffmpeg", "-y", "-i", raw_output,
         "-vf", f"ass='{safe_ass_path}'",
