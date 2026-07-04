@@ -38,8 +38,7 @@ jobs:
           echo "🧹 Wiping cached libraries..."
           pip uninstall -y openai httpx
           echo "⬇️ Force-installing correct dependency chain..."
-          pip install --upgrade "openai>=1.56.0" "httpx==0.27.2" edge-tts==6.1.9 requests==2.31.0 google-api-python-client==2.122.0 google-auth-oauthlib==1.2.0 google-auth-httplib2==0.2.0
-          echo "🚀 Starting Python engine..."
+          pip install --upgrade "openai>=1.56.0" "httpx==0.27.2" "gTTS==2.5.1" requests==2.31.0 google-api-python-client==2.122.0 google-auth-oauthlib==1.2.0 google-auth-httplib2==0.2.0          echo "🚀 Starting Python engine..."
           python src/main.py
 
       # Keep the rendered video as a downloadable artifact even if upload fails —
