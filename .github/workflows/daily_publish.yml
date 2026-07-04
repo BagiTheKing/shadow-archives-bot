@@ -34,7 +34,13 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: python src/main.py
+        run: |
+          echo "🧹 Wiping cached libraries..."
+          pip uninstall -y openai httpx
+          echo "⬇️ Force-installing correct dependency chain..."
+          pip install --upgrade "openai>=1.56.0" "httpx==0.27.2" edge-tts==6.1.9 requests==2.31.0 google-api-python-client==2.122.0 google-auth-oauthlib==1.2.0 google-auth-httplib2==0.2.0
+          echo "🚀 Starting Python engine..."
+          python src/main.py
 
       # Keep the rendered video as a downloadable artifact even if upload fails —
       # invaluable for debugging without re-running the whole pipeline
