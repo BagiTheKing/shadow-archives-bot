@@ -1,78 +1,111 @@
 import os
-import requests
-import urllib.parse
-import time
+import subprocess
 
-def download_image(prompt: str, output_path: str, width: int = 720, height: int = 1280, max_retries: int = 3):
-    """
-    Encodes the text prompt and fetches a freshly generated AI image.
-    Includes robust error handling and retry logic for rate limits (429).
-    """
-    encoded_prompt = urllib.parse.quote(prompt)
-    api_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true"
+def format_ass_time(seconds: float) -> str:
+    """Converts seconds into the specific timestamp format required by .ass files (H:MM:SS.cs)"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    centiseconds = int(round((seconds - int(seconds)) * 100))
+    return f"{hours}:{minutes:02d}:{secs:02d}.{centiseconds:02d}"
+
+def generate_subtitles(script_data: dict, template_path: str, output_ass: str):
+    """Reads the audio durations and narration to build a perfectly timed subtitle file."""
+    print("📝 Generating subtitle timeline...")
     
-    for attempt in range(1, max_retries + 1):
-        try:
-            # Increased timeout to 45 seconds to give the free GPU time to render
-            response = requests.get(api_url, timeout=45)
-            
-            if response.status_code == 200:
-                with open(output_path, "wb") as f:
-                    f.write(response.content)
-                return True
-            elif response.status_code == 429:
-                print(f"⚠️ Rate limited (429). Retrying in 10 seconds... (Attempt {attempt}/{max_retries})")
-                time.sleep(10)
-            else:
-                print(f"❌ API returned status code {response.status_code}. Retrying...")
-                time.sleep(5)
-                
-        except Exception as e:
-            print(f"❌ Network timeout or error: {e}. Retrying in 5 seconds...")
-            time.sleep(5)
-            
-    return False
+    with open(template_path, 'r', encoding='utf-8') as f:
+        ass_content = f.read()
+        
+    current_time = 0.0
+    events = []
+    
+    for scene in script_data.get("scenes", []):
+        duration = scene.get("duration", 0)
+        text = scene.get("narration", "")
+        
+        start_time_str = format_ass_time(current_time)
+        end_time_str = format_ass_time(current_time + duration)
+        
+        events.append(f"Dialogue: 0,{start_time_str},{end_time_str},Default,,0,0,0,,{text}")
+        current_time += duration
+        
+    with open(output_ass, 'w', encoding='utf-8') as f:
+        f.write(ass_content + "\n" + "\n".join(events))
+        
+    print(f"✅ Subtitles saved to {output_ass}")
 
-def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> dict:
-    """
-    Iterates through the script data, requests images with a respectful cooldown,
-    and maps the assets to the JSON object.
-    """
-    print("🎨 Initializing Visual Engine...")
-    os.makedirs(output_dir, exist_ok=True)
+def create_scene_clip(image_path: str, audio_path: str, duration: float, output_path: str):
+    """Uses FFmpeg to combine an image and audio file, applying a slow zoom effect."""
+    zoom_filter = f"zoompan=z='min(zoom+0.0015,1.15)':d={int(duration*30)}:s=720x1280:fps=30"
+    
+    cmd = [
+        "ffmpeg", "-y",
+        "-loop", "1", "-i", image_path,
+        "-i", audio_path,
+        "-vf", zoom_filter,
+        "-c:v", "libx264", "-tune", "stillimage", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "192k",
+        "-pix_fmt", "yuv420p",
+        "-t", str(duration),
+        "-shortest",
+        output_path
+    ]
+    
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+
+def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
+    """Orchestrates the entire rendering process and returns the path to the final video."""
+    print("🎬 Initializing Video Engine...")
     
     scenes = script_data.get("scenes", [])
+    clip_paths = []
     
     for idx, scene in enumerate(scenes):
-        image_filename = f"scene_{idx}.jpg"
-        image_path = os.path.join(output_dir, image_filename)
-        prompt = scene.get("image_prompt", "Dark atmospheric historical setting")
+        image_path = scene.get("image_path")
+        audio_path = scene.get("audio_path")
+        duration = scene.get("duration")
         
-        print(f"🖼️ Fetching visual asset for Scene {idx}...")
-        success = download_image(prompt, image_path)
-        
-        if success:
-            scene["image_path"] = image_path
-            print(f"📸 Saved image asset to {image_path}")
-        else:
-            print(f"⚠️ Using fallback mechanism for Scene {idx}")
-            scene["image_path"] = None
+        if not image_path or not audio_path:
+            print(f"⚠️ Skipping Scene {idx}: Missing assets.")
+            continue
             
-        # Mandatory polite sleep between requests to avoid triggering the 429 rate limit again
-        if idx < len(scenes) - 1:
-            print("⏳ Sleeping for 5 seconds to respect API rate limits...")
-            time.sleep(5)
-            
-    print("✅ Visual pipeline execution complete.")
-    return script_data
+        clip_path = os.path.join(build_dir, f"clip_{idx}.mp4")
+        print(f"🎞️ Rendering clip for Scene {idx} ({duration}s)...")
+        create_scene_clip(image_path, audio_path, duration, clip_path)
+        clip_paths.append(clip_path)
 
-if __name__ == "__main__":
-    test_json = {
-        "scenes": [
-            {
-                "image_prompt": "A shadowed emperor sitting on a crumbling throne, cinematic lighting, gritty oil painting style, masterpiece, 8k resolution"
-            }
-        ]
-    }
-    updated_data = generate_visual_pipeline(test_json)
-    print(updated_data)
+    print("🔗 Concatenating scenes...")
+    concat_list_path = os.path.join(build_dir, "concat_list.txt")
+    with open(concat_list_path, "w") as f:
+        for cp in clip_paths:
+            # FIX: Convert to absolute path so FFmpeg doesn't get lost
+            abs_path = os.path.abspath(cp).replace("\\", "/")
+            f.write(f"file '{abs_path}'\n")
+
+    raw_output = os.path.join(build_dir, "raw_output.mp4")
+    concat_cmd = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", concat_list_path,
+        "-c", "copy", raw_output
+    ]
+    subprocess.run(concat_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+
+    ass_path = os.path.join(build_dir, "subtitles.ass")
+    template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "template.ass")
+    generate_subtitles(script_data, template_path, ass_path)
+
+    print("🔥 Burning subtitles into final video...")
+    final_output = os.path.join(build_dir, "final_short.mp4")
+    
+    # FIX: Simplify path escaping for the subtitle filter
+    safe_ass_path = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
+    burn_cmd = [
+        "ffmpeg", "-y", "-i", raw_output,
+        "-vf", f"ass='{safe_ass_path}'",
+        "-c:a", "copy",
+        final_output
+    ]
+    subprocess.run(burn_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+
+    print(f"✅ Video Pipeline Complete! Final file: {final_output}")
+    return final_output
