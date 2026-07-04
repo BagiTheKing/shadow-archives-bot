@@ -1,11 +1,12 @@
 import os
 import json
+import time
 from openai import OpenAI
 
-def generate_video_script():
+def generate_video_script(max_retries=3):
     """
     Calls OpenRouter to generate a YouTube Short script formatted as JSON.
-    Iterates through a list of free models to ensure maximum uptime.
+    Uses the 'openrouter/free' dynamic router to automatically find a working model.
     """
     print("🧠 Initializing LLM Engine...")
     
@@ -26,44 +27,44 @@ def generate_video_script():
 
     user_prompt = "Write a 5-scene YouTube Short script about a bizarre historical paradox or a disastrous military strategy blunder. Make it mysterious and gripping. Output ONLY valid JSON."
 
-    # A resilient array of OpenRouter's most stable free endpoints
-    free_models = [
-        "google/gemini-1.5-flash:free",
-        "qwen/qwen-2.5-72b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "huggingfaceh4/zephyr-7b-beta:free"
-    ]
-
-    for model in free_models:
-        print(f"🤖 Requesting script from {model}...")
+    for attempt in range(1, max_retries + 1):
+        print(f"🤖 Requesting script via OpenRouter dynamic free pool (Attempt {attempt}/{max_retries})...")
         try:
             response = client.chat.completions.create(
-                model=model, 
+                # This automatically routes to any currently online free model
+                model="openrouter/free", 
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
+                # Enforces that the randomly selected model must support JSON output
                 response_format={"type": "json_object"},
                 temperature=0.7,
             )
 
             raw_content = response.choices[0].message.content
             
-            # Sometimes models wrap JSON in markdown blocks, let's strip them safely
+            # Print which model the API actually ended up using
+            used_model = response.model
+            print(f"✨ OpenRouter successfully routed us to: {used_model}")
+            
+            # Safely strip markdown blocks if the model wraps the JSON
             if raw_content.startswith("```json"):
                 raw_content = raw_content.replace("```json\n", "").replace("\n```", "")
             elif raw_content.startswith("```"):
                 raw_content = raw_content.replace("```\n", "").replace("\n```", "")
 
             script_data = json.loads(raw_content)
-            print(f"✅ Script generated successfully using {model}!")
+            print("✅ Script generated successfully!")
             return script_data
 
         except Exception as e:
-            print(f"⚠️ {model} failed: {e}")
-            continue # Try the next model in the list
+            print(f"⚠️ Attempt {attempt} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(2)
+            continue 
 
-    print("❌ All free models exhausted. Script generation failed.")
+    print("❌ All script generation attempts failed.")
     return None
 
 if __name__ == "__main__":
