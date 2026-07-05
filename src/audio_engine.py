@@ -23,7 +23,7 @@ PITCH = os.getenv("TTS_PITCH", "-4Hz")  # slightly deeper = more gravitas
 
 async def _synthesize(text: str, output_path: str):
     """Generates the MP3 and returns word timings: [(word, start_s, end_s), ...]."""
-    communicate = edge_tts.Communicate(text, VOICE, rate=RATE, pitch=PITCH)
+    communicate = edge_tts.Communicate(text, VOICE, rate=RATE, pitch=PITCH, boundary="WordBoundary")
     words = []
     with open(output_path, "wb") as f:
         async for chunk in communicate.stream():
