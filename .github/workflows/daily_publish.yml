@@ -38,7 +38,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          PRIVACY_STATUS: public   # flip to 'public' once you're happy with quality
+          PRIVACY_STATUS: unlisted   # flip to 'public' once you're happy with quality
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
         run: python src/main.py
 
