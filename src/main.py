@@ -26,23 +26,58 @@ def sanitize_title(title: str) -> str:
     return clean + suffix
 
 
+# The channel is "The Archive Paradox". The pipeline used to write "The Shadow
+# Archives" into every description, so every video published so far has asked
+# viewers to subscribe to a channel that does not exist. Single source of truth:
+CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
+
+# Stated in the description so the promise matches what the schedule delivers.
+UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "five days a week")
+
+# Broad tags are close to worthless on their own, but they cost nothing and the
+# specific ones from the script are what give the video a chance in search.
+BASE_TAGS = ["history", "shorts", "history shorts", "military history",
+             "historical disasters", "engineering failures", "documentary"]
+
+
 def build_metadata(script_data: dict):
     title = sanitize_title(script_data.get("title")
                            or script_data["scenes"][0]["narration"])
+
     description = script_data.get("description", "").strip()
+
+    # Restating the subject in plain words gives the description something
+    # indexable — right now 96% of views come from the Shorts feed alone.
+    topic = (script_data.get("topic") or "").strip()
+    if topic:
+        description += f"\n\n{topic}"
+
     description += (
-        "\n\nSubscribe to The Shadow Archives for a new dark history story every day."
+        f"\n\n{CHANNEL_NAME} — one catastrophic decision, explained, {UPLOAD_CADENCE}."
+        f"\nSubscribe if you want the next one."
         "\n\nNote: visuals in this video are AI-generated illustrations of real"
-        " historical events.\n#shorts #history #mystery"
+        " historical events.\n#shorts #history #disaster"
     )
+
     tags = script_data.get("tags") or []
-    tags = [t for t in tags if isinstance(t, str)][:15]
-    tags += ["history", "shorts", "dark history", "mystery"]
-    return title, description, list(dict.fromkeys(tags))  # dedupe, keep order
+    tags = [t.strip() for t in tags if isinstance(t, str) and t.strip()][:15]
+    tags += BASE_TAGS
+    tags = list(dict.fromkeys(tags))  # dedupe, keep order
+
+    # YouTube rejects the request if the tag list exceeds 500 characters.
+    trimmed, budget = [], 500
+    for t in tags:
+        cost = len(t) + 1
+        if cost > budget:
+            break
+        trimmed.append(t)
+        budget -= cost
+
+    return title, description, trimmed
 
 
 def main():
-    print("🚀 Initiating The Shadow Archives pipeline...")
+    print(f"🚀 Initiating the {CHANNEL_NAME} pipeline...")
     build_dir = "build"
     cleanup_build_dir(build_dir)
 

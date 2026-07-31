@@ -40,12 +40,21 @@ PlayResY: {H}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Word,{FONT_NAME},96,&H00FFFFFF,&H0000E8FF,&H00000000,&HA0000000,-1,0,0,0,100,100,1,0,1,7,4,2,60,60,430,1
+Style: Cta,{FONT_NAME},60,&H0000E8FF,&H00FFFFFF,&H00000000,&HA0000000,-1,0,0,0,100,100,2,0,1,5,3,2,60,60,880,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 # Alignment=2 -> bottom-center; MarginV=430 keeps text above the Shorts UI
 # (like/comment buttons, title overlay) but well below screen center.
+# The Cta style sits at MarginV=880, well clear of the narration captions, so the
+# end card can appear over the final line without colliding with it.
+
+# Why an on-screen CTA: 6,373 views produced 16 subscribers (~0.25%). The only
+# ask was buried in the description, which Shorts viewers effectively never open.
+# Spoken CTAs cost retention, so this is a silent overlay on the last few seconds.
+CTA_TEXT = os.getenv("CTA_TEXT", "SUBSCRIBE FOR MORE DISASTERS")
+CTA_DURATION = 2.5  # seconds of screen time at the end of the video
 
 
 def _ass_time(seconds: float) -> str:
@@ -74,9 +83,11 @@ def _chunk_words(words, max_words=3):
     return chunks
 
 
-def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: list):
+def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: list,
+                       total_duration: float = 0.0):
     """Builds word-synced pop-in captions. timeline_offsets[i] is the global
-    start time of scene i in the final (crossfaded) video."""
+    start time of scene i in the final (crossfaded) video. total_duration is the
+    length of the crossfaded timeline, used to place the end-card CTA."""
     print("📝 Generating word-synced captions...")
     events = []
 
@@ -113,6 +124,17 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Word,,0,0,0,,{part}"
                 )
+
+    # End card: fades in over the last few seconds, above the narration captions.
+    if CTA_TEXT and total_duration > CTA_DURATION:
+        cta_start = total_duration - CTA_DURATION
+        # \fad(400,0) — fade in, then hold; the video's own 0.6s fade takes it out.
+        fx = r"{\fad(400,0)}"
+        events.append(
+            f"Dialogue: 1,{_ass_time(cta_start)},{_ass_time(total_duration)},"
+            f"Cta,,0,0,0,,{fx}{CTA_TEXT}"
+        )
+        print(f"📣 End-card CTA added at {cta_start:.1f}s: {CTA_TEXT!r}")
 
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))
@@ -216,7 +238,8 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
 
     # ---- Phase 3: captions (timed against the crossfaded timeline) ----
     ass_path = os.path.join(build_dir, "subtitles.ass")
-    generate_subtitles(script_data, ass_path, timeline_offsets=offsets)
+    generate_subtitles(script_data, ass_path, timeline_offsets=offsets,
+                       total_duration=total)
 
     # ---- Phase 4: grade + captions + music + end fade, single final encode ----
     print("🔥 Final render: grade, captions, music...")
