@@ -26,16 +26,22 @@ from topics import pick_topic
 # Words per chapter. edge-tts at +8% rate lands around 165 wpm, so ~1,200 words
 # is roughly 7.5 minutes — inside the 6-9 minute target.
 ARC = [
+    # The brief used to say "state the anomaly in two sentences" while asking for
+    # 110 words. The model obeyed the brief, produced ~54 words, and failed the
+    # length check twice — a self-inflicted deadlock. The brief now asks for the
+    # material that actually fills the chapter.
     ("Cold Open",
-     "State the anomaly in the first two sentences, the same way a Short would open. "
-     "Then promise the question this video answers: not what happened, but how the "
-     "decision that caused it looked reasonable at the time. Do not summarise the ending.",
-     110),
+     "Open with the anomaly in one or two sharp sentences, the way a Short would. "
+     "Then widen: sketch the scale of what was lost, name the people or place at "
+     "the centre of it, and pose the question this video answers — not what "
+     "happened, but how the decision behind it looked reasonable at the time. "
+     "Do not summarise the ending.",
+     90),
     ("What Was Supposed To Happen",
      "Establish the plan as its designers understood it. The viewer should finish this "
      "chapter thinking the plan sounds sensible. Give the specifics: who, when, what "
      "resources, what the expected outcome was.",
-     200),
+     210),
     ("The Decision",
      "The turning point. Name who decided what, what information they had, what they "
      "lacked, and the pressure they were under. This is the heart of the video — be "
@@ -48,7 +54,7 @@ ARC = [
     ("The Cost",
      "The consequences in hard numbers — dead, wounded, money, time, what was destroyed. "
      "Name at least one individual person if the record supports it. No sentimentality.",
-     190),
+     200),
     ("What Would Have Stopped It",
      "The counterfactual. What single change would have broken the chain, and what was "
      "actually changed afterwards as a result. End on the detail that lingers, not a moral.",
@@ -111,17 +117,23 @@ def _call(client, models, system, user, max_tokens, retries=2):
     return None
 
 
-def _chapter_prompt(topic, heading, brief, words, previous_tail):
+def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback=""):
     n_images = max(2, round(words / WORDS_PER_IMAGE))
     continuity = (f"\nThe previous chapter ended with: \"{previous_tail}\"\n"
                   "Continue from there without repeating it.\n" if previous_tail else "")
+    # Retrying with a byte-identical prompt just reproduces the same rejected
+    # output, which is exactly what happened on the first live trending run.
+    correction = f"\n{feedback}\n" if feedback else ""
     return (
         f"Story: {topic}\n"
-        f"{continuity}\n"
+        f"{continuity}{correction}\n"
         f"Write the chapter titled \"{heading}\".\n"
         f"Its job: {brief}\n\n"
-        f"Write approximately {words} words of narration. Split it into exactly "
-        f"{n_images} consecutive segments; each segment gets its own image prompt.\n\n"
+        f"Write approximately {words} words of narration, and no fewer than "
+        f"{int(words * 0.8)}. Split it into exactly "
+        f"{n_images} consecutive segments; each segment gets its own image prompt. "
+        f"Each segment should be roughly {max(20, words // n_images)} words — do not "
+        f"write one-line segments.\n\n"
         "Also give this chapter's single most striking figure as key_stat — a bare "
         "number or short quantity and a four-word label. If the chapter has no "
         "meaningful figure, set key_stat to null rather than inventing one.\n\n"
@@ -282,26 +294,42 @@ def select_historical_anchor(candidates, client=None, models=None):
             "anchor_year": year, "why": data.get("why", "")}
 
 
-def _validate_chapter(data, expected_words, enforce_history=False):
+def _chapter_usable(data, enforce_history=False):
+    """Structural floor: real segments, and — for the trending lane — compliant
+    with the history rule. A chapter failing this can never be published.
+
+    Separate from the length check on purpose. Length is a quality preference
+    and a short chapter is survivable; the history rule is a hard constraint and
+    is enforced here so the best-effort fallback can never bypass it.
+    """
     segs = (data or {}).get("segments")
     if not isinstance(segs, list) or not segs:
         return False
     for s in segs:
         if not s.get("narration") or not s.get("image_prompt"):
             return False
-    words = sum(len(s["narration"].split()) for s in segs)
-    # Generous band: the arc totals ~1,220 words, and a chapter landing at 60% is
-    # still usable. Below that the pacing collapses.
-    if words < expected_words * 0.55:
-        print(f"⚠️ Chapter too short: {words} words, wanted ~{expected_words}.")
-        return False
-
     if enforce_history:
-        joined = " ".join(s["narration"] for s in segs)
-        reason = _violates_history_rule(joined)
+        reason = _violates_history_rule(" ".join(s["narration"] for s in segs))
         if reason:
             print(f"⚠️ Chapter rejected: {reason}.")
             return False
+    return True
+
+
+def _chapter_words(data):
+    return sum(len(s["narration"].split()) for s in (data or {}).get("segments", []))
+
+
+def _validate_chapter(data, expected_words, enforce_history=False):
+    """Full check: usable AND long enough."""
+    if not _chapter_usable(data, enforce_history):
+        return False
+    words = _chapter_words(data)
+    # Generous band: the arc totals ~1,220 words, and a chapter landing at ~60%
+    # is still usable. Below that the pacing collapses.
+    if words < expected_words * 0.55:
+        print(f"⚠️ Chapter too short: {words} words, wanted ~{expected_words}.")
+        return False
     return True
 
 
@@ -325,18 +353,43 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
     if enforce_history:
         print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
-    chapters, tail = [], ""
+    chapters, tail, short_chapters = [], "", 0
     for heading, brief, words in ARC:
         print(f"✍️  Chapter: {heading} (~{words} words)...")
-        data = None
-        for attempt in range(2):
-            data = _call(client, models, SYSTEM_PROMPT,
-                         _chapter_prompt(topic, heading, brief, words, tail),
-                         max_tokens=2000)
-            if _validate_chapter(data, words, enforce_history=enforce_history):
+        data, best, feedback = None, None, ""
+
+        for attempt in range(3):
+            # Rotate which model leads each attempt. Retrying against the same
+            # model with the same prompt reproduces the same rejected output.
+            rotated = models[attempt:] + models[:attempt] if models else models
+            candidate = _call(client, rotated, SYSTEM_PROMPT,
+                              _chapter_prompt(topic, heading, brief, words, tail,
+                                              feedback),
+                              max_tokens=2000)
+
+            if _validate_chapter(candidate, words, enforce_history=enforce_history):
+                data = candidate
                 break
-            print(f"   retrying chapter {heading!r} ({attempt + 1}/2)...")
-            data = None
+
+            # Keep the longest structurally sound attempt as a fallback. The
+            # history rule is checked here too, so it can never be bypassed.
+            if _chapter_usable(candidate, enforce_history):
+                if best is None or _chapter_words(candidate) > _chapter_words(best):
+                    best = candidate
+                got = _chapter_words(candidate)
+                feedback = (f"Your previous attempt was only {got} words, which is "
+                            f"too short. Write at least {int(words * 0.8)} words "
+                            f"this time, with more specific detail — names, dates, "
+                            f"figures, and what people actually did.")
+            if attempt < 2:
+                print(f"   retrying chapter {heading!r} ({attempt + 1}/3)...")
+
+        if data is None and best is not None:
+            # A short chapter costs pacing. Abandoning the run costs the video.
+            data = best
+            short_chapters += 1
+            print(f"   ⚠️ Accepting a short {heading!r} ({_chapter_words(best)} "
+                  f"words) rather than losing the run.")
 
         if not data:
             print(f"❌ Chapter {heading!r} could not be generated.")
@@ -399,8 +452,12 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
         "chapters": chapters,
         "word_count": words,
     }
+    note = f", {short_chapters} under target" if short_chapters else ""
     print(f"✅ Script complete: {len(chapters)} chapters, {words} words "
-          f"(~{words / 165:.1f} min narrated)")
+          f"(~{words / 165:.1f} min narrated{note})")
+    if words < 700:
+        print(f"⚠️ {words} words is well under the ~1,220 target — the video will "
+              f"run short. Usually means the free models were degraded today.")
     return script
 
 
