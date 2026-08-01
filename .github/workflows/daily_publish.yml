@@ -43,6 +43,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run automation pipeline
+        id: pipeline
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
@@ -56,8 +57,15 @@ jobs:
       # including successful publishes where the video already lives on YouTube.
       # That is what filled the quota. The script is a few KB, so it stays.
 
+      # continue-on-error on both: these artifacts are diagnostics, not the
+      # deliverable. Run #45 published to YouTube successfully and was still
+      # marked failed because the artifact quota was full, which also made
+      # failure() true and dragged the video-upload step in behind it.
+      # Whether we can save a debug copy must never decide whether the run passed.
+
       - name: Upload script for review
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: script-${{ github.run_number }}
@@ -65,8 +73,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Keyed to the pipeline step specifically, not failure(), so a failed
+      # artifact upload cannot trigger another artifact upload.
       - name: Upload rendered video (dry runs and failures only)
-        if: failure() || inputs.skip_upload
+        if: always() && (steps.pipeline.outcome == 'failure' || inputs.skip_upload)
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_number }}
