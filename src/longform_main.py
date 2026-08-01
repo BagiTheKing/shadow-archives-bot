@@ -14,7 +14,7 @@ import re
 import shutil
 
 from longform_llm import (generate_longform_script, flatten_scenes,
-                          select_historical_anchor)
+                          select_historical_anchor, QuotaExhausted)
 from longform_visual import generate_longform_visuals
 from longform_video import generate_longform_video, timestamp
 from thumbnail_engine import make_thumbnail, pick_source_scene
@@ -133,6 +133,10 @@ def resolve_topic(lane: str):
             anchor = select_historical_anchor(candidates)
             if anchor:
                 return anchor["topic"], True
+        except QuotaExhausted:
+            # Falling back to the rotation here would be pointless: the chapter
+            # calls are about to hit the same wall. Let it surface.
+            raise
         except Exception as e:
             print(f"⚠️ Trending selection failed ({type(e).__name__}: {e}).")
         print("↩️  No anchor cleared the history rule — using the date rotation.")
@@ -149,7 +153,17 @@ def main():
     topic, enforce_history = resolve_topic(lane)
 
     # Phase 1: chaptered script
-    script = generate_longform_script(topic=topic, enforce_history=enforce_history)
+    try:
+        script = generate_longform_script(topic=topic,
+                                          enforce_history=enforce_history)
+    except QuotaExhausted as e:
+        print(f"❌ Halted: {e}")
+        print("   OpenRouter's free tier allows ~50 requests a day across all "
+              "free models, shared with the daily Shorts run.")
+        print("   Options: run this lane on a different day from a Shorts run, "
+              "or add credits to raise the free-model daily limit.")
+        raise SystemExit(1)
+
     if not script:
         print("❌ Halted: script generation failed.")
         raise SystemExit(1)

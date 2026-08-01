@@ -95,25 +95,75 @@ low-angle, overhead, silhouette, over-the-shoulder.
 """
 
 
-def _call(client, models, system, user, max_tokens, retries=2):
-    """Runs a prompt down the free-model fallback chain. Returns parsed JSON."""
-    for model in models:
-        for attempt in range(1, retries + 1):
-            try:
-                r = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "system", "content": system},
-                              {"role": "user", "content": user}],
-                    temperature=0.7,
-                    max_tokens=max_tokens,
-                )
-                content = r.choices[0].message.content
-                if not content or not content.strip():
-                    raise ValueError("empty content")
-                return _extract_json(content)
-            except Exception as e:
-                print(f"⚠️ {model} failed: {e}")
-                time.sleep(15 if "429" in str(e) else 2)
+class QuotaExhausted(RuntimeError):
+    """OpenRouter's free-model DAILY allowance is gone. Unlike a per-minute 429,
+    no amount of waiting or model-switching helps until the quota resets."""
+
+
+# OpenRouter's free tier allows ~50 requests a day across all free models, and a
+# six-chapter script needs eight successful calls. The old fallback chain tried
+# every model twice per call, wrapped in three outer attempts — up to 42 requests
+# for one chapter, which exhausted the day's allowance in a single run.
+#
+# Two changes keep a whole video inside ~12 requests: each model is tried once,
+# and the first model that works is remembered and tried first from then on, so
+# later chapters do not re-walk the models that already failed.
+MAX_MODELS_PER_CALL = 4
+_preferred_model = None
+_request_count = 0
+
+
+def _is_daily_quota(err: str) -> bool:
+    return "free-models-per-day" in err or "free_tier_daily" in err
+
+
+def _order_models(models):
+    """Preferred model first, then the rest, capped so one call cannot walk the
+    entire list."""
+    if _preferred_model and _preferred_model in models:
+        rest = [m for m in models if m != _preferred_model]
+        ordered = [_preferred_model] + rest
+    else:
+        ordered = list(models)
+    return ordered[:MAX_MODELS_PER_CALL]
+
+
+def _call(client, models, system, user, max_tokens):
+    """Runs a prompt down the free-model chain, one attempt per model.
+
+    Raises QuotaExhausted the moment the daily allowance is gone, instead of
+    walking the remaining models to collect identical 429s.
+    """
+    global _preferred_model, _request_count
+
+    for model in _order_models(models):
+        try:
+            _request_count += 1
+            r = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": user}],
+                temperature=0.7,
+                max_tokens=max_tokens,
+            )
+            content = r.choices[0].message.content
+            if not content or not content.strip():
+                raise ValueError("empty content")
+            data = _extract_json(content)
+            if _preferred_model != model:
+                print(f"   📌 using {model} for the rest of this run")
+                _preferred_model = model
+            return data
+        except Exception as e:
+            err = str(e)
+            if _is_daily_quota(err):
+                raise QuotaExhausted(
+                    f"OpenRouter free-model daily limit reached after "
+                    f"{_request_count} requests this run.")
+            # Truncate: these payloads are hundreds of lines of nested JSON.
+            print(f"⚠️ {model} failed: {err[:160]}")
+            if "429" in err:
+                time.sleep(10)          # per-minute throttle, worth one pause
     return None
 
 
@@ -358,14 +408,19 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
         print(f"✍️  Chapter: {heading} (~{words} words)...")
         data, best, feedback = None, None, ""
 
-        for attempt in range(3):
-            # Rotate which model leads each attempt. Retrying against the same
-            # model with the same prompt reproduces the same rejected output.
-            rotated = models[attempt:] + models[:attempt] if models else models
-            candidate = _call(client, rotated, SYSTEM_PROMPT,
-                              _chapter_prompt(topic, heading, brief, words, tail,
-                                              feedback),
-                              max_tokens=2000)
+        # Two attempts, not three: every attempt costs requests from a 50/day
+        # budget that eight successful calls already have to fit inside.
+        for attempt in range(2):
+            try:
+                candidate = _call(client, models, SYSTEM_PROMPT,
+                                  _chapter_prompt(topic, heading, brief, words,
+                                                  tail, feedback),
+                                  max_tokens=2000)
+            except QuotaExhausted as e:
+                print(f"🛑 {e}")
+                # Nothing further can succeed today, so stop rather than burning
+                # the remaining chapters against a wall.
+                raise
 
             if _validate_chapter(candidate, words, enforce_history=enforce_history):
                 data = candidate
@@ -381,8 +436,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
                             f"too short. Write at least {int(words * 0.8)} words "
                             f"this time, with more specific detail — names, dates, "
                             f"figures, and what people actually did.")
-            if attempt < 2:
-                print(f"   retrying chapter {heading!r} ({attempt + 1}/3)...")
+            if attempt < 1:
+                print(f"   retrying chapter {heading!r} (2/2)...")
 
         if data is None and best is not None:
             # A short chapter costs pacing. Abandoning the run costs the video.
@@ -416,23 +471,13 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
     # Packaging pass: title, description and tags, written against the finished
     # script rather than guessed up front.
     full_text = " ".join(s["narration"] for c in chapters for s in c["scenes"])
-    meta = _call(client, models,
-                 "You write YouTube metadata. Output only JSON, no fences.",
-                 f"This is the narration of a documentary about:\n{topic}\n\n"
-                 f"{full_text[:3000]}\n\n"
-                 "Write metadata for a YouTube SEARCH audience. The title must name the "
-                 "event with the words someone would actually type, and state the "
-                 "consequence. Under 70 characters. No clickbait the video does not "
-                 "deliver, no ALL CAPS.\n"
-                 "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
-                 "arresting fact in the video, readable at thumbnail size. Not a "
-                 "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
-                 "VALLEY', 'ONE MISSING BOLT'. Bad: 'The story of how a ship sank'.\n"
-                 "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
-                 'Output: {"title": "...", "description": "3 sentences, no hashtags", '
-                 '"tags": ["10-14 search tags including proper nouns"], '
-                 '"thumbnail_text": "...", "thumbnail_badge": "..."}',
-                 max_tokens=700) or {}
+    try:
+        meta = _packaging_call(client, models, topic, full_text)
+    except QuotaExhausted:
+        # Six chapters are already written. Losing the video over its title
+        # would be absurd — fall back to topic-derived metadata.
+        print("🛑 Quota gone before packaging; deriving metadata from the topic.")
+        meta = {}
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
@@ -455,10 +500,33 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
     note = f", {short_chapters} under target" if short_chapters else ""
     print(f"✅ Script complete: {len(chapters)} chapters, {words} words "
           f"(~{words / 165:.1f} min narrated{note})")
+    print(f"📊 Used {_request_count} OpenRouter requests this run.")
     if words < 700:
         print(f"⚠️ {words} words is well under the ~1,220 target — the video will "
               f"run short. Usually means the free models were degraded today.")
     return script
+
+
+def _packaging_call(client, models, topic, full_text):
+    """Title, description, tags and thumbnail text, written against the finished
+    script rather than guessed up front."""
+    return _call(client, models,
+                 "You write YouTube metadata. Output only JSON, no fences.",
+                 f"This is the narration of a documentary about:\n{topic}\n\n"
+                 f"{full_text[:3000]}\n\n"
+                 "Write metadata for a YouTube SEARCH audience. The title must name the "
+                 "event with the words someone would actually type, and state the "
+                 "consequence. Under 70 characters. No clickbait the video does not "
+                 "deliver, no ALL CAPS.\n"
+                 "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
+                 "arresting fact in the video, readable at thumbnail size. Not a "
+                 "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
+                 "VALLEY', 'ONE MISSING BOLT'. Bad: 'The story of how a ship sank'.\n"
+                 "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
+                 'Output: {"title": "...", "description": "3 sentences, no hashtags", '
+                 '"tags": ["10-14 search tags including proper nouns"], '
+                 '"thumbnail_text": "...", "thumbnail_badge": "..."}',
+                 max_tokens=700) or {}
 
 
 def flatten_scenes(script: dict) -> list:
