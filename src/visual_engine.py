@@ -28,12 +28,16 @@ def _is_valid_image(content: bytes) -> bool:
         return False
 
 
-def download_image(prompt: str, output_path: str, max_retries: int = 4) -> bool:
+def download_image(prompt: str, output_path: str, max_retries: int = 4,
+                   width: int = WIDTH, height: int = HEIGHT) -> bool:
+    """Defaults to the 1080x1920 Shorts frame. The long-form pipeline passes
+    16:9 dimensions instead — a vertical eight-minute documentary is a bad watch
+    on desktop and TV, where search traffic actually lands."""
     encoded = urllib.parse.quote(prompt)
     seed = random.randint(0, 999_999)  # new seed per scene -> no duplicate frames
     api_url = (
         f"https://image.pollinations.ai/prompt/{encoded}"
-        f"?width={WIDTH}&height={HEIGHT}&model=flux&nologo=true&enhance=true&seed={seed}"
+        f"?width={width}&height={height}&model=flux&nologo=true&enhance=true&seed={seed}"
     )
 
     for attempt in range(1, max_retries + 1):
@@ -41,8 +45,8 @@ def download_image(prompt: str, output_path: str, max_retries: int = 4) -> bool:
             response = requests.get(api_url, timeout=90)
             if response.status_code == 200 and _is_valid_image(response.content):
                 img = Image.open(io.BytesIO(response.content)).convert("RGB")
-                if (img.width, img.height) != (WIDTH, HEIGHT):
-                    img = img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+                if (img.width, img.height) != (width, height):
+                    img = img.resize((width, height), Image.LANCZOS)
                 img.save(output_path, "JPEG", quality=92)
                 return True
             if response.status_code == 429:
@@ -58,24 +62,29 @@ def download_image(prompt: str, output_path: str, max_retries: int = 4) -> bool:
     return False
 
 
-def make_fallback_image(output_path: str, seed: int = 0):
+def make_fallback_image(output_path: str, seed: int = 0,
+                        width: int = WIDTH, height: int = HEIGHT):
     """A moody dark-vignette gradient. Ugly-proof: if a download fails, the scene
-    becomes an atmospheric 'black screen' moment instead of a broken frame."""
+    becomes an atmospheric 'black screen' moment instead of a broken frame.
+    Dimensions are parameterised so the 16:9 long-form path is not handed a
+    portrait frame to stretch."""
     rng = random.Random(seed)
-    img = Image.new("RGB", (WIDTH, HEIGHT), (8, 8, 12))
+    short_side = min(width, height)
+    img = Image.new("RGB", (width, height), (8, 8, 12))
     draw = ImageDraw.Draw(img)
     # faint smoky blobs
     for _ in range(6):
-        x, y = rng.randint(0, WIDTH), rng.randint(0, HEIGHT)
-        r = rng.randint(200, 600)
+        x, y = rng.randint(0, width), rng.randint(0, height)
+        r = rng.randint(short_side // 5, short_side // 2)
         tone = rng.randint(18, 38)
         draw.ellipse([x - r, y - r, x + r, y + r], fill=(tone, tone, tone + 6))
-    img = img.filter(ImageFilter.GaussianBlur(120))
+    img = img.filter(ImageFilter.GaussianBlur(short_side // 9))
     # vignette
-    mask = Image.new("L", (WIDTH, HEIGHT), 0)
-    ImageDraw.Draw(mask).ellipse([-300, -300, WIDTH + 300, HEIGHT + 300], fill=90)
-    mask = mask.filter(ImageFilter.GaussianBlur(200))
-    black = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+    mask = Image.new("L", (width, height), 0)
+    pad = short_side // 4
+    ImageDraw.Draw(mask).ellipse([-pad, -pad, width + pad, height + pad], fill=90)
+    mask = mask.filter(ImageFilter.GaussianBlur(short_side // 5))
+    black = Image.new("RGB", (width, height), (0, 0, 0))
     img = Image.composite(img, black, mask)
     img.save(output_path, "JPEG", quality=92)
 

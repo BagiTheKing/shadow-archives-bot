@@ -1,0 +1,93 @@
+name: Weekly Long-Form Deep Dive
+
+on:
+  schedule:
+    # Sundays 09:00 UTC. Deliberately not 15:23, so it never overlaps the Shorts
+    # run on the same day. LONGFORM_TOPIC_OFFSET=-7 lands on the previous Sunday,
+    # which is also a Shorts publishing day — so the deep dive always expands a
+    # story the channel has already posted a Short about.
+    - cron: '0 9 * * 0'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Render only, do not upload (dry run)'
+        type: boolean
+        default: false
+      topic_offset:
+        description: 'Days back in the topic rotation (default -7)'
+        type: string
+        default: '-7'
+
+concurrency:
+  group: weekly-longform
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    # The repo is private, so minutes are metered against 2,000/month. A healthy
+    # run is ~60 min; this ceiling stops a hung ffmpeg or a Pollinations
+    # rate-limit spiral from quietly eating a fifth of the monthly budget.
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run long-form pipeline
+        id: pipeline
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Deliberately NOT public for the first runs. This pipeline has never
+          # executed in CI, and an eight-minute video is a much bigger thing to
+          # get wrong in public than a 45-second Short. Watch one render, then
+          # change this to 'public' — the Shorts workflow shipped the same way.
+          PRIVACY_STATUS: unlisted
+          SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
+          LONGFORM_TOPIC_OFFSET: ${{ inputs.topic_offset || '-7' }}
+        run: python src/longform_main.py
+
+      # Diagnostics only — never allowed to fail the run. Same reasoning as the
+      # Shorts workflow: whether we can save a debug copy must not decide whether
+      # a published video counts as a success.
+      - name: Upload script for review
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: longform-script-${{ github.run_number }}
+          path: build/longform_script.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # NOT uploaded on failure, unlike the Shorts workflow. An eight-minute
+      # 1080p render is 200-400 MB against a 500 MB account-wide quota, so one
+      # stray copy would refill the wall we just cleared. Dry runs only, one day.
+      - name: Upload rendered video (explicit dry runs only)
+        if: always() && inputs.skip_upload
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: longform-video-${{ github.run_number }}
+          path: build/final_longform.mp4
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 1
