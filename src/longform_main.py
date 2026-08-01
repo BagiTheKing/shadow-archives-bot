@@ -82,10 +82,12 @@ def build_metadata(script, chapter_marks, total_duration):
     if chapters:
         parts.append(chapters)
 
+    # Only claim a companion Short exists when the topic actually came from one.
+    cross_promo = ("\nThe 60-second version of this story is on the channel."
+                   if script.get("has_short") else "")
     parts.append(
-        f"{CHANNEL_NAME} — one catastrophic decision, examined in full.\n"
-        f"The 60-second version of this story is on the channel. "
-        f"Subscribe for the next one."
+        f"{CHANNEL_NAME} — one catastrophic decision, examined in full."
+        f"{cross_promo}\nSubscribe for the next one."
     )
     parts.append("Note: visuals in this video are AI-generated illustrations of "
                  "real historical events.")
@@ -108,7 +110,12 @@ def build_metadata(script, chapter_marks, total_duration):
 
 
 def resolve_topic(lane: str):
-    """Chooses this run's topic. Returns (topic, enforce_history).
+    """Chooses this run's topic. Returns (topic, enforce_history, from_short).
+
+    from_short records whether the topic really is one the channel has already
+    posted a Short about. Only then may the description say so — on a fallback
+    the rotation can hand back a topic that was never published, and the
+    cross-promotion line would be a lie.
 
     Both lanes fall back to the date rotation, which always works offline. A
     failed insight or a dead trend feed must cost the run its *choice* of topic,
@@ -120,11 +127,11 @@ def resolve_topic(lane: str):
             from channel_insights import best_performing_topic
             picked = best_performing_topic()
             if picked:
-                return picked[0], False
+                return picked[0], False, True
         except Exception as e:
             print(f"⚠️ Encore selection failed ({type(e).__name__}: {e}).")
         print("↩️  Falling back to the date rotation.")
-        return None, False
+        return None, False, False
 
     if lane == "timely":
         try:
@@ -132,7 +139,7 @@ def resolve_topic(lane: str):
             region, candidates = get_trending_subjects()
             anchor = select_historical_anchor(candidates)
             if anchor:
-                return anchor["topic"], True
+                return anchor["topic"], True, False
         except QuotaExhausted:
             # Falling back to the rotation here would be pointless: the chapter
             # calls are about to hit the same wall. Let it surface.
@@ -140,9 +147,9 @@ def resolve_topic(lane: str):
         except Exception as e:
             print(f"⚠️ Trending selection failed ({type(e).__name__}: {e}).")
         print("↩️  No anchor cleared the history rule — using the date rotation.")
-        return None, False
+        return None, False, False
 
-    return None, False
+    return None, False, False
 
 
 def main():
@@ -150,24 +157,27 @@ def main():
     print(f"🚀 {CHANNEL_NAME} — long-form pipeline [lane: {lane}]")
     cleanup_build_dir()
 
-    topic, enforce_history = resolve_topic(lane)
-
-    # Phase 1: chaptered script
+    # Topic selection and script generation are covered by one handler. Anchor
+    # selection is itself an LLM call, so it can hit the wall first — it did, and
+    # the handler used to sit below it, letting the exception escape as a raw
+    # traceback instead of the explanation it exists to print.
     try:
+        topic, enforce_history, from_short = resolve_topic(lane)
         script = generate_longform_script(topic=topic,
                                           enforce_history=enforce_history)
     except QuotaExhausted as e:
-        print(f"❌ Halted: {e}")
-        print("   OpenRouter's free tier allows ~50 requests a day across all "
-              "free models, shared with the daily Shorts run.")
-        print("   Options: run this lane on a different day from a Shorts run, "
-              "or add credits to raise the free-model daily limit.")
+        print(f"\n❌ Halted: {e}")
+        print("   OpenRouter's free tier allows 50 requests a day across all "
+              "free models, shared with every other run that day.")
+        print("   Options: move this lane to a day with no other run, or add "
+              "credits to raise the free-model daily limit to 1,000.")
         raise SystemExit(1)
 
     if not script:
         print("❌ Halted: script generation failed.")
         raise SystemExit(1)
     script["lane"] = lane
+    script["has_short"] = from_short
 
     with open(os.path.join(BUILD_DIR, "longform_script.json"), "w",
               encoding="utf-8") as f:

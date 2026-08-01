@@ -117,6 +117,24 @@ def _is_daily_quota(err: str) -> bool:
     return "free-models-per-day" in err or "free_tier_daily" in err
 
 
+def _quota_reset(err: str) -> str:
+    """OpenRouter reports the reset as epoch milliseconds buried in the error.
+    Nobody should have to decode that by hand at 3am."""
+    m = re.search(r"'X-RateLimit-Reset':\s*'(\d{10,13})'", err)
+    if not m:
+        return ""
+    try:
+        import datetime
+        ts = int(m.group(1))
+        when = datetime.datetime.fromtimestamp(ts / 1000, datetime.timezone.utc)
+        delta = when - datetime.datetime.now(datetime.timezone.utc)
+        hours = max(0, delta.total_seconds()) / 3600
+        return (f" Resets {when:%Y-%m-%d %H:%M} UTC"
+                f" (in about {hours:.1f}h).")
+    except Exception:
+        return ""
+
+
 def _order_models(models):
     """Preferred model first, then the rest, capped so one call cannot walk the
     entire list."""
@@ -159,7 +177,8 @@ def _call(client, models, system, user, max_tokens):
             if _is_daily_quota(err):
                 raise QuotaExhausted(
                     f"OpenRouter free-model daily limit reached after "
-                    f"{_request_count} requests this run.")
+                    f"{_request_count} request(s) this run."
+                    f"{_quota_reset(err)}") from None
             # Truncate: these payloads are hundreds of lines of nested JSON.
             print(f"⚠️ {model} failed: {err[:160]}")
             if "429" in err:

@@ -12,9 +12,11 @@ name: Weekly Long-Form — Trending Lane
 
 on:
   schedule:
-    # Wednesdays 09:00 UTC — mid-week, so it reads a fresh trend cycle and sits
-    # well away from Sunday's encore run and the daily 15:23 Shorts run.
-    - cron: '0 9 * * 3'
+    # Thursdays 09:00 UTC. Shorts publish Mon/Wed/Fri/Sat/Sun, so Tuesday and
+    # Thursday are the only days with no other run — and OpenRouter's free tier
+    # is 50 requests per DAY across everything. This lane was on Wednesday and
+    # was sharing that budget with a Shorts run.
+    - cron: '0 9 * * 4'
   workflow_dispatch:
     inputs:
       skip_upload:
