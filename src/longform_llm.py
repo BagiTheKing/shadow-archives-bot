@@ -15,6 +15,7 @@ choose its own structure every week is how a channel stops having a format.
 
 import json
 import os
+import re
 import time
 
 from openai import OpenAI
@@ -121,12 +122,167 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail):
         f"Its job: {brief}\n\n"
         f"Write approximately {words} words of narration. Split it into exactly "
         f"{n_images} consecutive segments; each segment gets its own image prompt.\n\n"
+        "Also give this chapter's single most striking figure as key_stat — a bare "
+        "number or short quantity and a four-word label. If the chapter has no "
+        "meaningful figure, set key_stat to null rather than inventing one.\n\n"
         "Output ONLY a JSON object, no markdown fences:\n"
-        '{"segments": [{"narration": "...", "image_prompt": "..."}]}'
+        '{"key_stat": {"value": "1,415", "label": "men lost with Hood"}, '
+        '"segments": [{"narration": "...", "image_prompt": "..."}]}'
     )
 
 
-def _validate_chapter(data, expected_words):
+# ---------------------------------------------------------------------------
+# Trending lane
+#
+# The rule: the trend chooses the SUBJECT, history supplies the CONTENT. This
+# pipeline publishes without a human reading the script first, and free models
+# have a training cutoff, so they cannot know what happened yesterday and will
+# confabulate if asked. Beyond accuracy, unreviewed commentary on a live war is
+# a policy problem on YouTube and a neutrality claim nobody can verify.
+#
+# So a trending headline about the Strait of Hormuz becomes a documentary about
+# the 1953 coup or the tanker war — never about this week. The cutoff year below
+# is enforced on the model's chosen anchor AND on the narration it then writes,
+# because prompting alone is not a control.
+# ---------------------------------------------------------------------------
+
+HISTORY_CUTOFF_YEAR = int(os.getenv("HISTORY_CUTOFF_YEAR", "2005"))
+
+# Present-tense framing that would turn a history video into commentary.
+PRESENT_TENSE_BANS = (
+    "currently", "right now", "as of today", "this week", "in recent days",
+    "ongoing war", "ongoing conflict", "at the time of writing", "nowadays",
+)
+
+
+def _recent_years(text: str, cutoff: int = None):
+    """Years later than the cutoff mentioned anywhere in the narration."""
+    cutoff = cutoff or HISTORY_CUTOFF_YEAR
+    return sorted({int(y) for y in re.findall(r"\b(1\d{3}|20\d{2})\b", text)
+                   if int(y) > cutoff})
+
+
+def _violates_history_rule(text: str):
+    """Returns a reason string if this narration strays into the present."""
+    recent = _recent_years(text)
+    if recent:
+        return f"references {recent}, later than the {HISTORY_CUTOFF_YEAR} cutoff"
+    low = text.lower()
+    for phrase in PRESENT_TENSE_BANS:
+        if phrase in low:
+            return f"uses present-tense framing {phrase!r}"
+    return None
+
+
+def _entities(text: str):
+    """Capitalised words and demonyms from a headline — the actors involved."""
+    words = re.findall(r"\b[A-Z][a-zA-Z]{3,}\b", text or "")
+    skip = {"The", "This", "That", "What", "When", "Where", "Why", "How",
+            "After", "Before", "During", "With", "From", "Into", "Says",
+            "Said", "New", "Two", "Three", "Amid", "Over", "Under"}
+    return [w for w in words if w not in skip]
+
+
+def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
+    """The anchor must explain the headline, not merely share a country with it.
+
+    Checks that at least one actor named in the trending subject also appears in
+    the chosen event or its stated connection. Prefix-matched so Ukraine and
+    Ukrainian, or Spain and Spanish, count as the same actor.
+
+    Without this the model happily answers a Ukraine headline with the history
+    of the Trans-Siberian Railway: technically Russian, and useless to a viewer
+    who came asking why the strikes are happening.
+    """
+    actors = _entities(subject)
+    if not actors:
+        return True          # nothing to check against; the year gate still applies
+    haystack = f"{topic} {why}".lower()
+    for a in actors:
+        stem = a.lower()[:5]
+        if stem and stem in haystack:
+            return True
+    return False
+
+
+def select_historical_anchor(candidates, client=None, models=None):
+    """Maps a trending subject onto a historical event old enough to be settled.
+
+    Returns {"subject", "topic", "anchor_year", "why"} or None. None is not a
+    failure — the caller falls back to the normal topic rotation, which is
+    always preferable to publishing something the guardrail could not clear.
+    """
+    if not candidates:
+        return None
+
+    client = client or OpenAI(base_url="https://openrouter.ai/api/v1",
+                              api_key=os.getenv("OPENROUTER_API_KEY"))
+    models = models or get_free_models()
+
+    listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
+    prompt = (
+        "Here are subjects currently in the news:\n\n" + listing + "\n\n"
+        "Pick the ONE with the richest documentary history behind it, then name "
+        "the historical event that explains THE SPECIFIC SITUATION IN THAT "
+        "HEADLINE.\n\n"
+        "RELEVANCE IS THE POINT. The viewer arrives asking why this is "
+        "happening. The event you choose must be the origin of that exact "
+        "dispute, border, alliance or grievance — not a famous episode that "
+        "merely happens to involve the same country.\n"
+        "- Headline about Russian strikes on Ukraine -> the 1994 Budapest "
+        "Memorandum, or the 1954 transfer of Crimea. NOT the Trans-Siberian "
+        "Railway, which involves Russia but explains nothing in the headline.\n"
+        "- Headline about the Spanish-Moroccan border -> the 1415 capture of "
+        "Ceuta and the contested sovereignty that followed. NOT the Spanish "
+        "Armada.\n"
+        "- Headline about the Strait of Hormuz -> the 1980s tanker war. NOT the "
+        "construction of Persepolis.\n\n"
+        "HARD RULES:\n"
+        f"- The event must have CONCLUDED in {HISTORY_CUTOFF_YEAR} or earlier. "
+        "Anything more recent is rejected.\n"
+        "- Pick a settled, documented event, not a live dispute.\n"
+        "- Do not take a side, assign blame between present-day states, or "
+        "describe current politics. You are choosing a history topic, not "
+        "commenting on the news.\n"
+        "- The topic must fit this channel: a decision, order or miscalculation "
+        "and what it cost.\n\n"
+        'Output ONLY JSON: {"subject": "the headline you chose", "topic": "one '
+        'specific sentence describing the historical event", "anchor_year": '
+        '1415, "why": "one sentence naming the countries or places involved and '
+        'how this event produced the situation in the headline"}'
+    )
+
+    data = _call(client, models,
+                 "You choose historical documentary topics. Output only JSON.",
+                 prompt, max_tokens=600)
+    if not data or not data.get("topic"):
+        print("⚠️ No usable anchor returned.")
+        return None
+
+    try:
+        year = int(data.get("anchor_year", 9999))
+    except (TypeError, ValueError):
+        year = 9999
+
+    if year > HISTORY_CUTOFF_YEAR:
+        print(f"⚠️ Anchor rejected: year {year} is later than the "
+              f"{HISTORY_CUTOFF_YEAR} cutoff. ({data.get('topic', '')[:70]})")
+        return None
+
+    if not _anchor_is_relevant(data.get("subject", ""), data.get("topic", ""),
+                               data.get("why", "")):
+        print("⚠️ Anchor rejected: does not name any actor from the trending "
+              "subject, so it is background about the country rather than an "
+              "explanation of the story.")
+        return None
+
+    print(f"🧭 Trending subject: {data.get('subject', '?')}")
+    print(f"   Anchored to {year}: {data['topic'][:100]}")
+    return {"subject": data.get("subject", ""), "topic": data["topic"],
+            "anchor_year": year, "why": data.get("why", "")}
+
+
+def _validate_chapter(data, expected_words, enforce_history=False):
     segs = (data or {}).get("segments")
     if not isinstance(segs, list) or not segs:
         return False
@@ -139,12 +295,23 @@ def _validate_chapter(data, expected_words):
     if words < expected_words * 0.55:
         print(f"⚠️ Chapter too short: {words} words, wanted ~{expected_words}.")
         return False
+
+    if enforce_history:
+        joined = " ".join(s["narration"] for s in segs)
+        reason = _violates_history_rule(joined)
+        if reason:
+            print(f"⚠️ Chapter rejected: {reason}.")
+            return False
     return True
 
 
-def generate_longform_script(topic: str = None) -> dict:
+def generate_longform_script(topic: str = None, enforce_history: bool = False) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
-    unrecoverable — a single weak chapter is retried, not fatal to the run."""
+    unrecoverable — a single weak chapter is retried, not fatal to the run.
+
+    enforce_history is set by the trending lane: it rejects any chapter that
+    drifts past the cutoff year or slips into present-tense commentary.
+    """
     print("🧠 Long-form LLM engine starting...")
 
     client = OpenAI(base_url="https://openrouter.ai/api/v1",
@@ -155,6 +322,8 @@ def generate_longform_script(topic: str = None) -> dict:
         offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
         topic = pick_topic(offset)
     print(f"📚 Deep dive topic: {topic}")
+    if enforce_history:
+        print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
     chapters, tail = [], ""
     for heading, brief, words in ARC:
@@ -164,7 +333,7 @@ def generate_longform_script(topic: str = None) -> dict:
             data = _call(client, models, SYSTEM_PROMPT,
                          _chapter_prompt(topic, heading, brief, words, tail),
                          max_tokens=2000)
-            if _validate_chapter(data, words):
+            if _validate_chapter(data, words, enforce_history=enforce_history):
                 break
             print(f"   retrying chapter {heading!r} ({attempt + 1}/2)...")
             data = None
@@ -177,7 +346,16 @@ def generate_longform_script(topic: str = None) -> dict:
         for s in segs:
             if STYLE_SUFFIX not in s["image_prompt"]:
                 s["image_prompt"] = s["image_prompt"].rstrip(". ") + ", " + STYLE_SUFFIX
-        chapters.append({"heading": heading, "scenes": segs})
+
+        stat = data.get("key_stat") or {}
+        if isinstance(stat, dict) and stat.get("value"):
+            # The on-screen callout is ~10 characters wide before it looks silly.
+            stat = {"value": str(stat["value"])[:14],
+                    "label": str(stat.get("label", ""))[:34]}
+        else:
+            stat = {}
+
+        chapters.append({"heading": heading, "scenes": segs, "key_stat": stat})
         tail = segs[-1]["narration"][-160:]
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
@@ -193,16 +371,31 @@ def generate_longform_script(topic: str = None) -> dict:
                  "event with the words someone would actually type, and state the "
                  "consequence. Under 70 characters. No clickbait the video does not "
                  "deliver, no ALL CAPS.\n"
+                 "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
+                 "arresting fact in the video, readable at thumbnail size. Not a "
+                 "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
+                 "VALLEY', 'ONE MISSING BOLT'. Bad: 'The story of how a ship sank'.\n"
+                 "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
                  'Output: {"title": "...", "description": "3 sentences, no hashtags", '
-                 '"tags": ["10-14 search tags including proper nouns"]}',
+                 '"tags": ["10-14 search tags including proper nouns"], '
+                 '"thumbnail_text": "...", "thumbnail_badge": "..."}',
                  max_tokens=700) or {}
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
+    title = (meta.get("title") or topic[:70]).strip()
+    # Thumbnail text must be short or it turns to mush at 210px wide. If the
+    # model ignored that, fall back to the first few words of the title.
+    thumb = " ".join((meta.get("thumbnail_text") or "").split()[:5]).strip(" .,:;!?")
+    if not thumb or len(thumb) > 42:
+        thumb = " ".join(title.split()[:4])
+
     script = {
         "topic": topic,
-        "title": (meta.get("title") or topic[:70]).strip(),
+        "title": title,
         "description": (meta.get("description") or "").strip(),
         "tags": [t for t in (meta.get("tags") or []) if isinstance(t, str)],
+        "thumbnail_text": thumb,
+        "thumbnail_badge": str(meta.get("thumbnail_badge") or "").strip()[:12],
         "chapters": chapters,
         "word_count": words,
     }
@@ -224,6 +417,8 @@ def flatten_scenes(script: dict) -> list:
             if s_idx == 0:
                 s["card_title"] = chapter["heading"]
                 s["card_number"] = c_idx + 1
+                # longform_video reads key_stat off the chapter's first scene.
+                s["key_stat"] = chapter.get("key_stat") or {}
             scenes.append(s)
     return scenes
 

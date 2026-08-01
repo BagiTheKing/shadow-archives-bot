@@ -24,12 +24,13 @@ a smaller face at the lower third.
 
 import os
 import random
+import re
 import subprocess
 
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
-CARD_HOLD_BONUS = 0.0    # chapter cards use their narration duration as-is
+STAT_HOLD = 3.5          # seconds a headline number stays on screen
 
 FONT_NAME = "Anton"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -47,10 +48,25 @@ PlayResY: {H}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Body,{FONT_NAME},54,&H00FFFFFF,&H0000E8FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,140,140,70,1
+Style: Stat,{FONT_NAME},170,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,8,120,120,120,1
+Style: StatLabel,{FONT_NAME},46,&H00E8E8E8,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,3,0,1,3,2,8,120,120,330,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+
+# Crossfade styles, rotated per cut. One transition for seven minutes is the
+# single biggest reason a stills-based documentary reads as a slideshow. These
+# all suit a dark tone — no pixelize, no wind, nothing that reads as a 90s
+# PowerPoint. Cost is identical to plain fade: xfade is already running.
+TRANSITIONS = [
+    "fade", "smoothleft", "circleopen", "fadeblack", "smoothright",
+    "diagtl", "dissolve", "radial", "smoothup", "diagbr",
+    "wipeleft", "squeezeh",
+]
+
+# Accent used for numbers in captions and for stat callouts (BGR in ASS).
+ACCENT_ASS = r"&H0000E8FF&"
 
 
 def _ass_time(seconds: float) -> str:
@@ -86,8 +102,19 @@ def _chunk_words(words, max_words=4):
     return chunks
 
 
-def generate_subtitles(scenes, output_ass, offsets):
-    """offsets[i] is the global start time of scene i on the final timeline."""
+def _style_chunk(text: str) -> str:
+    """Fades the caption in, and tints any chunk carrying a figure. The numbers
+    are the point of this channel, so they should read as the point."""
+    body = text.replace("{", "").replace("}", "")
+    fx = r"{\fad(140,90)}"
+    if re.search(r"\d", body):
+        return f"{fx}{{\\c{ACCENT_ASS}}}{body}"
+    return f"{fx}{body}"
+
+
+def generate_subtitles(scenes, output_ass, offsets, stat_cues=None):
+    """offsets[i] is the global start time of scene i on the final timeline.
+    stat_cues is [(start_seconds, value, label), ...] for the number callouts."""
     print("📝 Building long-form captions...")
     events = []
     for idx, scene in enumerate(scenes):
@@ -100,9 +127,9 @@ def generate_subtitles(scenes, output_ass, offsets):
                 end = (offset + chunks[c + 1][0]["start"]) if c + 1 < len(chunks) \
                     else (offset + scene["duration"])
                 text = " ".join(w["word"] for w in chunk)
-                text = text.replace("{", "").replace("}", "")
                 events.append(
-                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,{text}")
+                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,"
+                    f"{_style_chunk(text)}")
         else:
             dur, sentence = scene["duration"], scene.get("narration", "")
             step = dur / max(1, (len(sentence) // 70) + 1)
@@ -112,27 +139,55 @@ def generate_subtitles(scenes, output_ass, offsets):
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
+    # Number callouts: big accent figure, small label under it, punched in at the
+    # top of frame so it never collides with the lower-third captions.
+    for start, value, label in (stat_cues or []):
+        end = start + STAT_HOLD
+        grow = r"{\fad(200,260)\fscx60\fscy60\t(0,220,\fscx100\fscy100)}"
+        events.append(
+            f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{grow}{value}")
+        if label:
+            events.append(
+                f"Dialogue: 1,{_ass_time(start + 0.18)},{_ass_time(end)},"
+                f"StatLabel,,0,0,0,,{{\\fad(220,260)}}{label.upper()}")
+
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))
-    print(f"✅ Captions: {len(events)} events")
+    print(f"✅ Captions: {len(events)} events "
+          f"({len(stat_cues or [])} number callouts)")
 
 
 def _ken_burns(duration: float, style: int) -> str:
-    """No scale= prefix: longform_visual already saved the frame upscaled."""
+    """Eight motions instead of four, including diagonals and vertical drifts.
+    No scale= prefix: longform_visual already saved the frame upscaled."""
     frames = max(int(duration * FPS), 1)
     common = f"d={frames}:s={W}x{H}:fps={FPS}"
     rate = 0.18 / frames
-    if style == 0:
-        return (f"zoompan=z='min(zoom+{rate:.6f},1.18)'"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':{common}")
-    if style == 1:
+    cx, cy = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+    # Horizontal / vertical travel expressions for a held zoom.
+    right, left = f"(iw-iw/zoom)*on/{frames}", f"(iw-iw/zoom)*(1-on/{frames})"
+    down, up = f"(ih-ih/zoom)*on/{frames}", f"(ih-ih/zoom)*(1-on/{frames})"
+
+    style %= 8
+    if style == 0:   # slow push in
+        return f"zoompan=z='min(zoom+{rate:.6f},1.18)':x='{cx}':y='{cy}':{common}"
+    if style == 1:   # pull out
         return (f"zoompan=z='if(eq(on,1),1.18,max(zoom-{rate:.6f},1.0))'"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':{common}")
-    if style == 2:
-        return (f"zoompan=z='1.12':x='(iw-iw/zoom)*on/{frames}'"
-                f":y='ih/2-(ih/zoom/2)':{common}")
-    return (f"zoompan=z='1.12':x='(iw-iw/zoom)*(1-on/{frames})'"
-            f":y='ih/2-(ih/zoom/2)':{common}")
+                f":x='{cx}':y='{cy}':{common}")
+    if style == 2:   # pan right
+        return f"zoompan=z='1.12':x='{right}':y='{cy}':{common}"
+    if style == 3:   # pan left
+        return f"zoompan=z='1.12':x='{left}':y='{cy}':{common}"
+    if style == 4:   # drift down
+        return f"zoompan=z='1.12':x='{cx}':y='{down}':{common}"
+    if style == 5:   # drift up
+        return f"zoompan=z='1.12':x='{cx}':y='{up}':{common}"
+    if style == 6:   # diagonal, top-left to bottom-right, pushing in
+        return (f"zoompan=z='min(zoom+{rate:.6f},1.20)'"
+                f":x='{right}':y='{down}':{common}")
+    # diagonal, bottom-right to top-left, pulling out
+    return (f"zoompan=z='if(eq(on,1),1.20,max(zoom-{rate:.6f},1.0))'"
+            f":x='{left}':y='{up}':{common}")
 
 
 def _run(cmd):
@@ -147,8 +202,10 @@ def _scene_clip(image, audio, duration, out, style):
           "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out])
 
 
-def _xfade_chapter(clips, durations, out):
-    """Crossfades one chapter's clips. Returns (within-chapter offsets, total)."""
+def _xfade_chapter(clips, durations, out, cut_index=0):
+    """Crossfades one chapter's clips, rotating transition style per cut.
+    cut_index continues across chapters so the pattern does not restart every
+    chapter. Returns (within-chapter offsets, total)."""
     if len(clips) == 1:
         os.replace(clips[0], out)
         return [0.0], durations[0]
@@ -166,7 +223,8 @@ def _xfade_chapter(clips, durations, out):
     for i in range(1, n):
         vout = f"[v{i}]" if i < n - 1 else "[vout]"
         aout = f"[a{i}]" if i < n - 1 else "[aout]"
-        fc.append(f"{vprev}[{i}:v]xfade=transition=fade:duration={XFADE}"
+        trans = TRANSITIONS[(cut_index + i - 1) % len(TRANSITIONS)]
+        fc.append(f"{vprev}[{i}:v]xfade=transition={trans}:duration={XFADE}"
                   f":offset={offsets[i]:.3f}{vout}")
         fc.append(f"{aprev}[{i}:a]acrossfade=d={XFADE}{aout}")
         vprev, aprev = vout, aout
@@ -211,15 +269,26 @@ def generate_longform_video(scenes, build_dir="build"):
     if current:
         chapters.append((current_idx, current))
 
-    reels, global_offsets, chapter_marks, cursor = [], [], [], 0.0
+    reels, global_offsets, chapter_marks, cursor, cuts = [], [], [], 0.0, 0
+    stat_cues = []
     for c_idx, group in chapters:
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
         offs, total = _xfade_chapter([g["_clip"] for g in group],
-                                     [g["duration"] for g in group], reel)
+                                     [g["duration"] for g in group], reel,
+                                     cut_index=cuts)
+        cuts += max(0, len(group) - 1)
         chapter_marks.append((group[0].get("chapter_heading", f"Part {c_idx + 1}"), cursor))
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
+
+        # A chapter's headline number, held over whatever frame is on screen.
+        # Costs nothing: it rides the caption pass that already runs.
+        stat = group[0].get("key_stat") or {}
+        if stat.get("value") and total > STAT_HOLD + 4:
+            stat_cues.append((cursor + total * 0.45, str(stat["value"]),
+                              str(stat.get("label", ""))))
+
         cursor += total
         reels.append(reel)
 
@@ -240,7 +309,7 @@ def generate_longform_video(scenes, build_dir="build"):
 
     # ---- Phase 4: single quality pass — grade, captions, music, fades ----
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
-    generate_subtitles(usable, ass_path, global_offsets)
+    generate_subtitles(usable, ass_path, global_offsets, stat_cues=stat_cues)
 
     print("🔥 Final render: grade, captions, music...")
     final_output = os.path.join(build_dir, "final_longform.mp4")

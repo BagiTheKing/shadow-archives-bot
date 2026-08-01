@@ -13,9 +13,11 @@ import os
 import re
 import shutil
 
-from longform_llm import generate_longform_script, flatten_scenes
+from longform_llm import (generate_longform_script, flatten_scenes,
+                          select_historical_anchor)
 from longform_visual import generate_longform_visuals
 from longform_video import generate_longform_video, timestamp
+from thumbnail_engine import make_thumbnail, pick_source_scene
 from audio_engine import generate_audio_pipeline
 from youtube_publisher import upload_video_to_youtube
 
@@ -105,15 +107,53 @@ def build_metadata(script, chapter_marks, total_duration):
     return title, description, trimmed
 
 
+def resolve_topic(lane: str):
+    """Chooses this run's topic. Returns (topic, enforce_history).
+
+    Both lanes fall back to the date rotation, which always works offline. A
+    failed insight or a dead trend feed must cost the run its *choice* of topic,
+    never the video itself.
+    """
+    if lane == "encore":
+        # Expand whichever Short actually earned the most likes.
+        try:
+            from channel_insights import best_performing_topic
+            picked = best_performing_topic()
+            if picked:
+                return picked[0], False
+        except Exception as e:
+            print(f"⚠️ Encore selection failed ({type(e).__name__}: {e}).")
+        print("↩️  Falling back to the date rotation.")
+        return None, False
+
+    if lane == "timely":
+        try:
+            from trend_source import get_trending_subjects
+            region, candidates = get_trending_subjects()
+            anchor = select_historical_anchor(candidates)
+            if anchor:
+                return anchor["topic"], True
+        except Exception as e:
+            print(f"⚠️ Trending selection failed ({type(e).__name__}: {e}).")
+        print("↩️  No anchor cleared the history rule — using the date rotation.")
+        return None, False
+
+    return None, False
+
+
 def main():
-    print(f"🚀 {CHANNEL_NAME} — long-form pipeline")
+    lane = os.getenv("LONGFORM_LANE", "encore").strip().lower()
+    print(f"🚀 {CHANNEL_NAME} — long-form pipeline [lane: {lane}]")
     cleanup_build_dir()
 
+    topic, enforce_history = resolve_topic(lane)
+
     # Phase 1: chaptered script
-    script = generate_longform_script()
+    script = generate_longform_script(topic=topic, enforce_history=enforce_history)
     if not script:
         print("❌ Halted: script generation failed.")
         raise SystemExit(1)
+    script["lane"] = lane
 
     with open(os.path.join(BUILD_DIR, "longform_script.json"), "w",
               encoding="utf-8") as f:
@@ -140,7 +180,22 @@ def main():
     elif minutes > 12:
         print(f"⚠️ Video is {minutes:.1f} min — longer than the 6-9 min target.")
 
-    # Phase 4: metadata + upload
+    # Phase 4: thumbnail
+    thumb_path = None
+    try:
+        source = pick_source_scene(scenes)
+        if source:
+            thumb_path = os.path.join(BUILD_DIR, "thumbnail.jpg")
+            make_thumbnail(source, script.get("thumbnail_text") or script["title"],
+                           thumb_path, badge=script.get("thumbnail_badge", ""))
+            print(f"🖼️  Thumbnail: {script.get('thumbnail_text')!r} "
+                  f"({os.path.getsize(thumb_path) / 1024:.0f} KB)")
+    except Exception as e:
+        print(f"⚠️ Thumbnail generation failed ({type(e).__name__}: {e}) — "
+              "YouTube will auto-select a frame.")
+        thumb_path = None
+
+    # Phase 5: metadata + upload
     title, description, tags = build_metadata(script, chapter_marks, total)
     print(f"📋 Title: {title}")
     print(f"⏱️  Duration: {minutes:.1f} min | {len(chapter_marks)} chapters")
@@ -150,7 +205,8 @@ def main():
         print("--- description ---")
         print(description)
     else:
-        upload_video_to_youtube(video_path, title, description, tags)
+        upload_video_to_youtube(video_path, title, description, tags,
+                                thumbnail_path=thumb_path)
 
     print("🎉 Long-form pipeline complete.")
 

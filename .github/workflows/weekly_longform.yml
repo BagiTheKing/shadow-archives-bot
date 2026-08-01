@@ -1,4 +1,8 @@
-name: Weekly Long-Form Deep Dive
+name: Weekly Long-Form — Encore Lane
+
+# Lane 1 of 2. Expands whichever Short actually earned the most likes, so the
+# deep dive follows the channel's own numbers instead of the date rotation.
+# Lane 2 is weekly_timely.yml.
 
 on:
   schedule:
@@ -62,6 +66,7 @@ jobs:
           # change this to 'public' — the Shorts workflow shipped the same way.
           PRIVACY_STATUS: unlisted
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
+          LONGFORM_LANE: encore
           LONGFORM_TOPIC_OFFSET: ${{ inputs.topic_offset || '-7' }}
         run: python src/longform_main.py
 
@@ -81,6 +86,16 @@ jobs:
       # NOT uploaded on failure, unlike the Shorts workflow. An eight-minute
       # 1080p render is 200-400 MB against a 500 MB account-wide quota, so one
       # stray copy would refill the wall we just cleared. Dry runs only, one day.
+      - name: Upload thumbnail for review
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: longform-thumbnail-${{ github.run_number }}
+          path: build/thumbnail.jpg
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload rendered video (explicit dry runs only)
         if: always() && inputs.skip_upload
         continue-on-error: true

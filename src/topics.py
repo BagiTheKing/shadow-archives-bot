@@ -116,6 +116,45 @@ EXPERIMENT_TOPICS = [
 ]
 
 
+# Topics already covered by the Shorts channel. Excluded from the rotation so
+# they never repeat as Shorts — but kept here on purpose, because the long-form
+# encore lane works by expanding whichever Short performed best, and that Short
+# is by definition one of these. Without this list channel_insights can never
+# match a title to a topic and the lane silently falls back to the rotation.
+PUBLISHED_TOPICS = [
+    "The Charge of the Light Brigade (1854) and the ambiguous order that sent cavalry into a valley of cannons",
+    "The Siege of Petersburg crater disaster (1864), where Union troops charged into the hole they had just blown",
+    "The Darien Scheme (1698), Scotland's colonial gamble that bankrupted the nation and led to union with England",
+    "The Zimmermann Telegram, the intercepted message that pulled America into WWI",
+    "The Battle of New Orleans (1815), fought two weeks after the war had officially ended",
+    "Napoleon's invasion of Russia and the mathematics of how 400,000 soldiers became 10,000",
+    "The sinking of the Vasa (1628), Sweden's mightiest warship that sank 20 minutes into its maiden voyage",
+    "Operation Eiche and the glider rescue of Mussolini that succeeded despite absurd risks",
+    "The novel 'Futility' (1898) that described the Titanic disaster 14 years before it happened",
+    "Lincoln and Kennedy assassination parallels, and which ones are actually true",
+    "The Maginot Line and how Germany simply went around France's 'impenetrable' defenses in 1940",
+    "The Emu War (1932), when Australia deployed machine guns against birds and lost",
+    "The Halifax Explosion (1917), the largest man-made blast before the atomic bomb",
+    "Operation Mincemeat (1943), the corpse with fake documents that fooled Hitler",
+    "The Dancing Plague of 1518, when hundreds of people danced themselves to exhaustion in Strasbourg",
+    "The Christmas Truce of 1914, when enemies played football between the trenches",
+    "The Ghost Army of WWII, the American unit of artists that fooled Germany with inflatable tanks",
+    "The Jim Twins, separated at birth, who lived nearly identical lives without knowing each other",
+    "The Battle of Los Angeles (1942), when the US fired 1,400 shells at nothing",
+    "The Trojan Horse of Meknes and other lesser-known deception tactics in siege warfare",
+    "The Millennium Bridge wobble and other engineering marvels that failed on day one",
+    "Spain's Anjouan expedition mishaps and other invasions launched on wrong intelligence",
+    "Tsutomu Yamaguchi, the man who survived both Hiroshima and Nagasaki",
+    "The curious case of the two Dennis the Menace comics debuting the same week on opposite sides of the Atlantic",
+    "The Dyatlov Pass incident (1959) and the leading scientific explanation for the hikers' deaths",
+    "The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck",
+    "The Zeebrugge Raid (1918), the blockships that were scuttled in the wrong position",
+]
+
+# Everything the encore lane may match a published title against.
+ALL_TOPICS = CORE_TOPICS + EXPERIMENT_TOPICS + PUBLISHED_TOPICS
+
+
 def pick_topic(offset: int = 0) -> str:
     """Deterministically rotates by date so every run gets a different topic.
 

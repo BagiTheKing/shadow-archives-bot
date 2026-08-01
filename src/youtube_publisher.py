@@ -28,7 +28,26 @@ def get_authenticated_service():
     return build("youtube", "v3", credentials=credentials)
 
 
-def upload_video_to_youtube(video_path: str, title: str, description: str, tags=None):
+def set_thumbnail(youtube, video_id: str, thumbnail_path: str) -> bool:
+    """Custom thumbnails need a verified channel (phone verification). If the
+    channel is not verified YouTube returns 403, which must not fail a run whose
+    video already uploaded — the auto-selected frame is a survivable outcome."""
+    try:
+        youtube.thumbnails().set(
+            videoId=video_id,
+            media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+        ).execute()
+        print(f"🖼️ Custom thumbnail set for {video_id}")
+        return True
+    except Exception as e:
+        print(f"⚠️ Could not set thumbnail ({type(e).__name__}: {e}).")
+        print("   Custom thumbnails require a phone-verified channel: "
+              "youtube.com/verify")
+        return False
+
+
+def upload_video_to_youtube(video_path: str, title: str, description: str, tags=None,
+                            thumbnail_path: str = None):
     youtube = get_authenticated_service()
     print(f"📤 Uploading: {title}")
 
@@ -59,4 +78,10 @@ def upload_video_to_youtube(video_path: str, title: str, description: str, tags=
     request = youtube.videos().insert(part="snippet,status", body=body,
                                       media_body=media)
     response = request.execute()
-    print(f"✅ Upload complete! https://www.youtube.com/shorts/{response.get('id')}")
+    video_id = response.get("id")
+    print(f"✅ Upload complete! https://www.youtube.com/watch?v={video_id}")
+
+    if thumbnail_path and video_id and os.path.exists(thumbnail_path):
+        set_thumbnail(youtube, video_id, thumbnail_path)
+
+    return video_id
