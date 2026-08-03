@@ -61,14 +61,19 @@ ARC = [
      180),
 ]
 
-STYLE_SUFFIX = ("dramatic chiaroscuro lighting, dark moody cinematic oil painting, "
-                "rich texture, muted color palette with one accent color, highly "
-                "detailed, no text, no watermark")
+# Photorealistic film-still language, not "oil painting": the painterly suffix
+# produced exactly the muddy, obviously-AI frames viewers bounce off. A frame
+# that reads as a cinematic photograph sits far more comfortably next to the
+# real archival photos this pipeline now mixes in.
+STYLE_SUFFIX = ("cinematic film still, shot on 35mm film, dramatic chiaroscuro "
+                "lighting, photorealistic, deep shadows, volumetric light, "
+                "muted desaturated palette with one warm accent color, subtle "
+                "film grain, highly detailed, no text, no watermark")
 
-# One image per ~45 spoken words, so each frame holds ~16 seconds. Long-form
-# cannot cut every 8 seconds for 8 minutes without becoming exhausting, and every
-# extra image is another Pollinations request that can rate-limit the run.
-WORDS_PER_IMAGE = 45
+# One image per ~32 spoken words — a cut roughly every 11 seconds. The old 45
+# produced 13-frame nine-minute videos that reviewed as slideshows; the video
+# engine additionally splits any scene that still runs past ~13 seconds.
+WORDS_PER_IMAGE = 32
 
 SYSTEM_PROMPT = f"""You write documentary narration for The Archive Paradox, a YouTube \
 channel about catastrophic decisions: one order, one design flaw, one miscalculation, \
@@ -285,12 +290,20 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback=""):
         f"{n_images} consecutive segments; each segment gets its own image prompt. "
         f"Each segment should be roughly {max(20, words // n_images)} words — do not "
         f"write one-line segments.\n\n"
+        "Each segment also gets archive_query: a 1-6 word search phrase naming the "
+        "REAL, PHOTOGRAPHABLE subject of that segment — the specific ship, person, "
+        "aircraft, building or place, as it would be captioned in an archive "
+        "(e.g. \"HMS Hood 1941\", \"Leonid Kuchma\", \"Chernobyl reactor 4\"). "
+        "It is used to find a genuine historical photograph. Set it to null when "
+        "the segment is abstract, hypothetical, or about something that predates "
+        "photography.\n\n"
         "Also give this chapter's single most striking figure as key_stat — a bare "
         "number or short quantity and a four-word label. If the chapter has no "
         "meaningful figure, set key_stat to null rather than inventing one.\n\n"
         "Output ONLY a JSON object, no markdown fences:\n"
         '{"key_stat": {"value": "1,415", "label": "men lost with Hood"}, '
-        '"segments": [{"narration": "...", "image_prompt": "..."}]}'
+        '"segments": [{"narration": "...", "image_prompt": "...", '
+        '"archive_query": "HMS Hood 1941"}]}'
     )
 
 
@@ -471,6 +484,20 @@ def _chapter_words(data):
     return sum(len(s["narration"].split()) for s in (data or {}).get("segments", []))
 
 
+def _clean_archive_query(value):
+    """Normalises a segment's archive_query, or returns None when the model
+    sent nothing usable. A null here simply means the scene will be generated
+    instead of sourced from the archives — never an error."""
+    if not isinstance(value, str):
+        return None
+    q = " ".join(value.replace('"', " ").split())
+    if not (3 <= len(q) <= 60) or len(q.split()) > 8:
+        return None
+    if q.lower() in {"null", "none", "n/a", "na", "unknown"}:
+        return None
+    return q
+
+
 def _validate_chapter(data, expected_words, enforce_history=False):
     """Full check: usable AND long enough."""
     if not _chapter_usable(data, enforce_history):
@@ -566,6 +593,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
         for s in segs:
             if STYLE_SUFFIX not in s["image_prompt"]:
                 s["image_prompt"] = s["image_prompt"].rstrip(". ") + ", " + STYLE_SUFFIX
+            s["archive_query"] = _clean_archive_query(s.get("archive_query"))
 
         stat = data.get("key_stat") or {}
         if isinstance(stat, dict) and stat.get("value"):
@@ -651,8 +679,9 @@ def _packaging_call(client, models, topic, full_text):
 
 def flatten_scenes(script: dict) -> list:
     """Flattens chapters into the scene list the audio/visual engines expect.
-    The first scene of each chapter carries card_title, so the visual engine
-    renders a chapter card there instead of spending a Pollinations request."""
+    Chapter titles are typeset over the footage by the video engine (keyed off
+    chapter_index changes), so every scene gets real imagery — the old
+    full-screen chapter cards are gone."""
     scenes = []
     for c_idx, chapter in enumerate(script["chapters"]):
         for s_idx, scene in enumerate(chapter["scenes"]):
@@ -660,8 +689,6 @@ def flatten_scenes(script: dict) -> list:
             s["chapter_index"] = c_idx
             s["chapter_heading"] = chapter["heading"]
             if s_idx == 0:
-                s["card_title"] = chapter["heading"]
-                s["card_number"] = c_idx + 1
                 # longform_video reads key_stat off the chapter's first scene.
                 s["key_stat"] = chapter.get("key_stat") or {}
             scenes.append(s)

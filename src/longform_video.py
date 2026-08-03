@@ -20,6 +20,16 @@ Four changes bring it to a bit under an hour:
 Captions are deliberately not the Shorts treatment. Word-synced 96pt text
 punching in for eight minutes is exhausting; this uses calmer four-word chunks in
 a smaller face at the lower third.
+
+Motion design, after the "bad PowerPoint" review:
+- Scenes may carry several images (image_paths) and are cut internally, so no
+  still outlives MAX_SHOT_SECONDS regardless of how the narration was segmented.
+- Scenes may carry a video_path: real muted b-roll, cover-cropped to frame.
+- Chapter titles are typeset over the opening footage of each chapter (kicker +
+  heading, slide-and-fade) instead of pausing the film for a title card.
+- The stat callout is ONE ASS event (value \\N label) so the label can never
+  collide with a wrapping value — which is exactly what it used to do.
+- The final pass adds animated film grain; static frames read as alive.
 """
 
 import os
@@ -49,7 +59,7 @@ PlayResY: {H}
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Body,{FONT_NAME},54,&H00FFFFFF,&H0000E8FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,140,140,70,1
 Style: Stat,{FONT_NAME},170,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,8,120,120,120,1
-Style: StatLabel,{FONT_NAME},46,&H00E8E8E8,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,3,0,1,3,2,8,120,120,330,1
+Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,1,0,1,4,3,4,150,150,60,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -112,9 +122,47 @@ def _style_chunk(text: str) -> str:
     return f"{fx}{body}"
 
 
-def generate_subtitles(scenes, output_ass, offsets, stat_cues=None):
+_PART_WORDS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT"]
+
+
+def _stat_event(start: float, value: str, label: str) -> str:
+    """The number callout as a SINGLE event: value, forced line break, label.
+
+    It used to be two independent events with fixed vertical margins, and a
+    value long enough to wrap dropped its second line straight onto the label
+    (the '1,300 / U1' collision). One event with \\N makes the layout engine
+    stack them, whatever their sizes; \\q2 stops the value wrapping at all.
+    """
+    end = start + STAT_HOLD
+    grow = (r"{\an8\q2\fad(200,260)\fscx60\fscy60\t(0,220,\fscx100\fscy100)}")
+    body = value.replace("{", "").replace("}", "")
+    text = f"{grow}{body}"
+    if label:
+        clean = label.replace("{", "").replace("}", "").upper()
+        text += r"\N{\fs46\c&HE8E8E8&\bord3}" + clean
+    return f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{text}"
+
+
+def _chapter_title_event(start: float, duration: float, number: int,
+                         heading: str) -> str:
+    """Documentary-style chapter title over the footage: small accent kicker,
+    big heading, sliding in from the left and fading out. Replaces the old
+    full-screen title cards."""
+    hold = min(4.2, max(2.0, duration - 0.4))
+    kicker = f"PART {_PART_WORDS[(number - 1) % len(_PART_WORDS)]}"
+    y = int(H * 0.52)
+    fx = (f"{{\\an4\\move(110,{y},150,{y},0,420)\\fad(280,420)\\q2}}"
+          f"{{\\fs44\\c{ACCENT_ASS}\\bord2}}{kicker}"
+          r"\N{\fs104\c&HFFFFFF&\bord4}" + heading.upper())
+    return (f"Dialogue: 1,{_ass_time(start)},{_ass_time(start + hold)},"
+            f"Chapter,,0,0,0,,{fx}")
+
+
+def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
+                       chapter_titles=None):
     """offsets[i] is the global start time of scene i on the final timeline.
-    stat_cues is [(start_seconds, value, label), ...] for the number callouts."""
+    stat_cues is [(start_seconds, value, label), ...] for the number callouts.
+    chapter_titles is [(start_seconds, scene_duration, number, heading), ...]."""
     print("📝 Building long-form captions...")
     events = []
     for idx, scene in enumerate(scenes):
@@ -139,22 +187,19 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None):
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
-    # Number callouts: big accent figure, small label under it, punched in at the
-    # top of frame so it never collides with the lower-third captions.
+    # Number callouts, top of frame, one event each so value and label can
+    # never overlap.
     for start, value, label in (stat_cues or []):
-        end = start + STAT_HOLD
-        grow = r"{\fad(200,260)\fscx60\fscy60\t(0,220,\fscx100\fscy100)}"
-        events.append(
-            f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{grow}{value}")
-        if label:
-            events.append(
-                f"Dialogue: 1,{_ass_time(start + 0.18)},{_ass_time(end)},"
-                f"StatLabel,,0,0,0,,{{\\fad(220,260)}}{label.upper()}")
+        events.append(_stat_event(start, str(value), str(label or "")))
+
+    for start, duration, number, heading in (chapter_titles or []):
+        events.append(_chapter_title_event(start, duration, number, heading))
 
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))
     print(f"✅ Captions: {len(events)} events "
-          f"({len(stat_cues or [])} number callouts)")
+          f"({len(stat_cues or [])} number callouts, "
+          f"{len(chapter_titles or [])} chapter titles)")
 
 
 def _ken_burns(duration: float, style: int) -> str:
@@ -194,12 +239,64 @@ def _run(cmd):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
 
-def _scene_clip(image, audio, duration, out, style):
-    _run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS), "-i", image,
-          "-i", audio, "-vf", _ken_burns(duration, style),
-          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-          "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
-          "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out])
+# Crossfade between shots INSIDE a scene — quicker than the between-scene 0.5s,
+# because these cuts happen mid-sentence.
+INNER_XFADE = 0.4
+
+
+def _shot_durations(duration: float, n: int, overlap: float = INNER_XFADE):
+    """Play length for each of n shots crossfading inside one scene. Overlaps
+    are shared between neighbours, so each shot runs slightly longer than
+    duration/n and the assembled scene still sums to exactly `duration`."""
+    if n <= 1:
+        return [duration]
+    each = (duration + overlap * (n - 1)) / n
+    return [each] * n
+
+
+def _scene_clip(scene, out, style):
+    """One scene -> one clip. Three shapes:
+    - video_path: real muted b-roll, cover-cropped, looped to the narration.
+    - one image: classic Ken Burns.
+    - several images: Ken Burns per shot, crossfaded inside the scene, so a
+      long narration segment no longer means a frozen frame."""
+    audio, duration = scene["audio_path"], scene["duration"]
+    tail = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
+            "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out]
+
+    if scene.get("video_path"):
+        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+              f"crop={W}:{H},setsar=1,fps={FPS}")
+        _run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", scene["video_path"],
+              "-i", audio, "-map", "0:v", "-map", "1:a", "-vf", vf, *tail])
+        return
+
+    images = scene.get("image_paths") or [scene["image_path"]]
+    if len(images) == 1:
+        _run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS),
+              "-i", images[0], "-i", audio,
+              "-vf", _ken_burns(duration, style), *tail])
+        return
+
+    durs = _shot_durations(duration, len(images))
+    inputs = []
+    for img, d in zip(images, durs):
+        inputs += ["-loop", "1", "-framerate", str(FPS),
+                   "-t", f"{d + 0.1:.3f}", "-i", img]
+    inputs += ["-i", audio]
+
+    fc = [f"[{i}:v]{_ken_burns(d, style + i * 3)}[z{i}]"
+          for i, d in enumerate(durs)]
+    prev, t = "[z0]", 0.0
+    for i in range(1, len(images)):
+        t += durs[i - 1] - INNER_XFADE
+        vout = f"[m{i}]" if i < len(images) - 1 else "[vout]"
+        fc.append(f"{prev}[z{i}]xfade=transition=fade:duration={INNER_XFADE}"
+                  f":offset={t:.3f}{vout}")
+        prev = vout
+    _run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),
+          "-map", "[vout]", "-map", f"{len(images)}:a", *tail])
 
 
 def _xfade_chapter(clips, durations, out, cut_index=0):
@@ -254,8 +351,10 @@ def generate_longform_video(scenes, build_dir="build"):
     # ---- Phase 1: scene clips ----
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
-        print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s)...")
-        _scene_clip(s["image_path"], s["audio_path"], s["duration"], s["_clip"], idx % 4)
+        shots = len(s.get("image_paths") or [1])
+        kind = "b-roll" if s.get("video_path") else f"{shots} shot(s)"
+        print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
+        _scene_clip(s, s["_clip"], idx % 8)
 
     # ---- Phase 2: one reel per chapter, crossfaded inside ----
     chapters, current, current_idx = [], [], None
@@ -270,7 +369,7 @@ def generate_longform_video(scenes, build_dir="build"):
         chapters.append((current_idx, current))
 
     reels, global_offsets, chapter_marks, cursor, cuts = [], [], [], 0.0, 0
-    stat_cues = []
+    stat_cues, chapter_titles = [], []
     for c_idx, group in chapters:
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
@@ -278,15 +377,21 @@ def generate_longform_video(scenes, build_dir="build"):
                                      [g["duration"] for g in group], reel,
                                      cut_index=cuts)
         cuts += max(0, len(group) - 1)
-        chapter_marks.append((group[0].get("chapter_heading", f"Part {c_idx + 1}"), cursor))
+        heading = group[0].get("chapter_heading", f"Part {c_idx + 1}")
+        chapter_marks.append((heading, cursor))
+        chapter_titles.append((cursor + 0.3, group[0]["duration"],
+                               c_idx + 1, heading))
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
 
         # A chapter's headline number, held over whatever frame is on screen.
-        # Costs nothing: it rides the caption pass that already runs.
+        # Scheduled after the first scene so it never lands on top of the
+        # chapter title that opens the chapter.
         stat = group[0].get("key_stat") or {}
-        if stat.get("value") and total > STAT_HOLD + 4:
-            stat_cues.append((cursor + total * 0.45, str(stat["value"]),
+        stat_start = cursor + max(group[0]["duration"] + 1.0, total * 0.35)
+        if (stat.get("value") and total > STAT_HOLD + 4
+                and stat_start + STAT_HOLD < cursor + total - 1.5):
+            stat_cues.append((stat_start, str(stat["value"]),
                               str(stat.get("label", ""))))
 
         cursor += total
@@ -309,15 +414,19 @@ def generate_longform_video(scenes, build_dir="build"):
 
     # ---- Phase 4: single quality pass — grade, captions, music, fades ----
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
-    generate_subtitles(usable, ass_path, global_offsets, stat_cues=stat_cues)
+    generate_subtitles(usable, ass_path, global_offsets, stat_cues=stat_cues,
+                       chapter_titles=chapter_titles)
 
-    print("🔥 Final render: grade, captions, music...")
+    print("🔥 Final render: grade, grain, captions, music...")
     final_output = os.path.join(build_dir, "final_longform.mp4")
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
 
+    # Animated film grain sits under the captions: it makes stills and archival
+    # photos read as footage, and it costs seconds, not minutes, in the encode.
     vf = ("vignette=PI/5,"
           "eq=contrast=1.04:saturation=0.94,"
+          "noise=alls=6:allf=t+u,"
           f"ass='{safe_ass}':fontsdir='{safe_fonts}',"
           f"fade=t=in:st=0:d=0.8,"
           f"fade=t=out:st={max(total_duration - 1.0, 0):.2f}:d=1.0")

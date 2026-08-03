@@ -148,12 +148,11 @@ def make_thumbnail(source_image: str, headline: str, output_path: str,
 
 
 def pick_source_scene(scenes):
-    """The most usable frame for a thumbnail: a real generated image, not a
-    chapter card, taken from the middle of the video where the drama sits."""
-    candidates = [s for s in scenes
-                  if s.get("image_path") and not s.get("card_title")]
-    if not candidates:
-        candidates = [s for s in scenes if s.get("image_path")]
+    """The most usable frame for a thumbnail, from the middle of the video
+    where the drama sits. A real archival photograph is preferred over a
+    generated frame: on a history channel, authenticity earns the click."""
+    with_images = [s for s in scenes if s.get("image_path")]
+    candidates = [s for s in with_images if s.get("is_real")] or with_images
     if not candidates:
         return None
     return candidates[len(candidates) // 2]["image_path"]

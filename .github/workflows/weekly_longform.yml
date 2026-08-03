@@ -62,6 +62,10 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Optional. A free key from https://www.pexels.com/api/ unlocks muted
+          # real b-roll clips between the stills. Absent, the pipeline simply
+          # uses no stock video — nothing fails.
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           # Deliberately NOT public for the first runs. This pipeline has never
           # executed in CI, and an eight-minute video is a much bigger thing to
           # get wrong in public than a 45-second Short. Watch one render, then

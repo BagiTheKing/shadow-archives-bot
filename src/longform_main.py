@@ -69,7 +69,32 @@ def build_chapter_block(chapter_marks, total_duration):
     return "\n".join(lines)
 
 
-def build_metadata(script, chapter_marks, total_duration):
+def build_credit_block(scenes):
+    """Attribution for archival imagery and stock footage. CC-BY imagery from
+    Wikimedia Commons requires credit; public-domain imagery deserves it. Kept
+    within a budget so the block can never crowd out the description itself
+    (YouTube's hard ceiling is 5,000 characters)."""
+    lines = []
+    for s in scenes:
+        for credit in (s.get("credit") or []):
+            if credit not in lines:
+                lines.append(credit)
+    parts = []
+    if lines:
+        block, budget = ["Archival imagery:"], 1800
+        for line in lines:
+            if len(line) + 1 > budget:
+                block.append("…and others via Wikimedia Commons.")
+                break
+            block.append(f"• {line}")
+            budget -= len(line) + 1
+        parts.append("\n".join(block))
+    if any(s.get("video_path") for s in scenes):
+        parts.append("Stock footage courtesy of Pexels.")
+    return "\n\n".join(parts)
+
+
+def build_metadata(script, chapter_marks, total_duration, scenes=None):
     title = sanitize_title(script.get("title") or script.get("topic", "")[:90])
 
     parts = []
@@ -89,10 +114,23 @@ def build_metadata(script, chapter_marks, total_duration):
         f"{CHANNEL_NAME} — one catastrophic decision, examined in full."
         f"{cross_promo}\nSubscribe for the next one."
     )
-    parts.append("Note: visuals in this video are AI-generated illustrations of "
-                 "real historical events.")
+
+    scenes = scenes or []
+    used_archival = any(s.get("credit") for s in scenes)
+    if used_archival:
+        parts.append("Note: this video combines archival photographs with "
+                     "AI-generated illustrations of real historical events.")
+    else:
+        parts.append("Note: visuals in this video are AI-generated "
+                     "illustrations of real historical events.")
+
+    credit_block = build_credit_block(scenes)
+    if credit_block:
+        parts.append(credit_block)
 
     description = "\n\n".join(parts)
+    if len(description) > 4950:          # YouTube rejects past 5,000
+        description = description[:4950].rsplit("\n", 1)[0]
 
     tags = [t.strip() for t in (script.get("tags") or [])
             if isinstance(t, str) and t.strip()][:15]
@@ -220,7 +258,8 @@ def main():
         thumb_path = None
 
     # Phase 5: metadata + upload
-    title, description, tags = build_metadata(script, chapter_marks, total)
+    title, description, tags = build_metadata(script, chapter_marks, total,
+                                              scenes=scenes)
     print(f"📋 Title: {title}")
     print(f"⏱️  Duration: {minutes:.1f} min | {len(chapter_marks)} chapters")
 

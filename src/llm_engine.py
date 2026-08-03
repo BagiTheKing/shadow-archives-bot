@@ -70,9 +70,10 @@ IMAGE PROMPTS:
 (one person, one object, one place). Crowded prompts produce muddy AI images.
 - Vary the shot types across scenes: extreme close-up, wide establishing shot, \
 low-angle, overhead, silhouette. State the shot type first.
-- Every prompt must end with exactly: "dramatic chiaroscuro lighting, dark moody \
-cinematic oil painting, rich texture, muted color palette with one accent color, \
-highly detailed, no text, no watermark"
+- Every prompt must end with exactly: "cinematic film still, shot on 35mm film, \
+dramatic chiaroscuro lighting, photorealistic, deep shadows, volumetric light, \
+muted desaturated palette with one warm accent color, subtle film grain, highly \
+detailed, no text, no watermark"
 
 TITLE RULES (the title is the second filter, after the hook):
 - Under 80 characters, no ALL CAPS words, no clickbait the script does not deliver.
