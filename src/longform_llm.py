@@ -428,9 +428,13 @@ def select_historical_anchor(candidates, client=None, models=None):
         'how this event produced the situation in the headline"}'
     )
 
+    # 3,000 tokens for a four-line JSON object looks absurd, but free reasoning
+    # models spend their ceiling thinking before they emit anything: at 600 this
+    # call truncated on three models in a row on a live run, wasting three
+    # requests from the 50/day budget before a single chapter was written.
     data = _call(client, models,
                  "You choose historical documentary topics. Output only JSON.",
-                 prompt, max_tokens=600)
+                 prompt, max_tokens=3000)
     if not data or not data.get("topic"):
         print("⚠️ No usable anchor returned.")
         return None
@@ -674,7 +678,10 @@ def _packaging_call(client, models, topic, full_text):
                  'Output: {"title": "...", "description": "3 sentences, no hashtags", '
                  '"tags": ["10-14 search tags including proper nouns"], '
                  '"thumbnail_text": "...", "thumbnail_badge": "..."}',
-                 max_tokens=700) or {}
+                 # Same headroom logic as the anchor call: reasoning models
+                 # think inside max_tokens, and a truncated reply costs a
+                 # request from the daily budget and returns nothing.
+                 max_tokens=2500) or {}
 
 
 def flatten_scenes(script: dict) -> list:
