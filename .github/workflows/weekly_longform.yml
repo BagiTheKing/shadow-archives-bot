@@ -85,6 +85,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Raw replies from any model whose output would not parse. A few KB, and
+      # the only way to see what a model actually sent — the run log truncates
+      # the error to a line and throws the reply away.
+      - name: Upload unparseable model replies
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: longform-llm-failures-${{ github.run_number }}
+          path: build/llm_failures/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # NOT uploaded on failure, unlike the Shorts workflow. An eight-minute
       # 1080p render is 200-400 MB against a 500 MB account-wide quota, so one
       # stray copy would refill the wall we just cleared. Dry runs only, one day.

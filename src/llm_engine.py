@@ -95,17 +95,139 @@ OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
 }"""
 
 
+def _strip_fences(raw: str) -> str:
+    """Removes markdown fences, wherever they are.
+
+    Reasoning models often narrate before the JSON ("Okay, the user wants...")
+    and then fence the object, so anchoring the fence pattern to the start of
+    the string — as this used to — misses it entirely.
+    """
+    fenced = re.search(r"```(?:json|JSON)?\s*(.+?)\s*```", raw, re.DOTALL)
+    if fenced:
+        return fenced.group(1).strip()
+    # An opening fence with no closing one means the reply was cut off mid-object.
+    raw = re.sub(r"^\s*```(?:json|JSON)?\s*", "", raw)
+    return re.sub(r"\s*```\s*$", "", raw).strip()
+
+
+def _outermost_object(raw: str) -> str:
+    """The JSON object inside surrounding prose. Tolerates a missing closing
+    brace, which is what a truncated reply looks like."""
+    start = raw.find("{")
+    if start == -1:
+        return raw
+    end = raw.rfind("}")
+    return raw[start:end + 1] if end > start else raw[start:]
+
+
+def _drop_trailing_commas(raw: str) -> str:
+    return re.sub(r",\s*([}\]])", r"\1", raw)
+
+
+def _close_containers(prefix: str):
+    """Appends the brackets needed to close `prefix`, or None if it ends inside
+    a string literal (in which case the caller should cut back further)."""
+    stack, in_string, escaped = [], False, False
+    for ch in prefix:
+        if escaped:
+            escaped = False
+        elif in_string:
+            if ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "[{":
+            stack.append(ch)
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+    if in_string or not stack:
+        return None
+    return prefix + "".join("]" if c == "[" else "}" for c in reversed(stack))
+
+
+def _salvage_truncated(raw: str):
+    """Recovers as much of a cut-off object as is still well-formed.
+
+    A free model that runs out of output tokens mid-chapter leaves something
+    like `{"segments": [{"narration": "...", "image_prompt": "wide sh` —
+    unparseable, but the three complete segments before it are perfectly good
+    narration. Rather than throw the chapter away, cut back to the last element
+    that finished and close the containers that are still open.
+
+    Returns the parsed object, or None if nothing usable survives.
+    """
+    # First try closing what is open without cutting anything: covers a reply
+    # that stopped on a clean boundary, e.g. right after a comma.
+    for candidate in (raw, _drop_trailing_commas(raw.rstrip().rstrip(","))):
+        closed = _close_containers(candidate)
+        if closed:
+            try:
+                return json.loads(closed, strict=False)
+            except ValueError:
+                pass
+
+    # Then walk back through completed values, newest first.
+    for i in range(len(raw) - 1, 0, -1):
+        if raw[i] not in "}]":
+            continue
+        closed = _close_containers(_drop_trailing_commas(raw[:i + 1]))
+        if not closed:
+            continue
+        try:
+            return json.loads(closed, strict=False)
+        except ValueError:
+            continue
+    return None
+
+
 def _extract_json(raw: str):
-    """Models sometimes wrap JSON in fences or add commentary. Pull out the object."""
-    raw = raw.strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    # Last resort: grab the outermost braces
-    if not raw.startswith("{"):
-        start, end = raw.find("{"), raw.rfind("}")
-        if start != -1 and end != -1:
-            raw = raw[start : end + 1]
-    return json.loads(raw, strict=False)
+    """Pulls a JSON object out of a model reply, repairing the damage these
+    models actually produce.
+
+    The strict path handles well-behaved replies. Everything after it exists
+    because free models return fenced JSON wrapped in commentary, trailing
+    commas, smart quotes where straight ones belong, and — most often — output
+    that simply stops mid-sentence when it hits the token ceiling. Each stage
+    is tried in order of how much it assumes, so a clean reply is never
+    "repaired" into something different from what the model said.
+
+    Raises the original decode error if nothing works, so the caller can still
+    tell a parse failure from a refusal.
+    """
+    if not raw or not raw.strip():
+        raise ValueError("empty content")
+
+    cleaned = _outermost_object(_strip_fences(raw.strip()))
+
+    attempts = [
+        cleaned,
+        _drop_trailing_commas(cleaned),
+        # Last resort: a model that used typographic quotes as JSON delimiters.
+        # Tried last because it corrupts curly quotes used legitimately inside
+        # narration, and only helps when the earlier stages have all failed.
+        _drop_trailing_commas(
+            cleaned.replace("“", '"').replace("”", '"')
+                   .replace("‘", "'").replace("’", "'")),
+    ]
+
+    first_error = None
+    for candidate in attempts:
+        try:
+            return json.loads(candidate, strict=False)
+        except ValueError as e:
+            first_error = first_error or e
+
+    for candidate in attempts:
+        salvaged = _salvage_truncated(candidate)
+        if salvaged is not None:
+            print("   🩹 Repaired a truncated JSON reply.")
+            return salvaged
+
+    raise first_error
 
 
 # Openers that turn the first two seconds into setup instead of a hook. The model

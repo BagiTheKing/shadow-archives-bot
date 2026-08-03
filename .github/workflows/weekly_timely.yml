@@ -88,6 +88,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Raw replies from any model whose output would not parse. A few KB, and
+      # the only way to see what a model actually sent — the run log truncates
+      # the error to a line and throws the reply away.
+      - name: Upload unparseable model replies
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: timely-llm-failures-${{ github.run_number }}
+          path: build/llm_failures/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # The thumbnail is a few hundred KB, unlike the 200-400 MB render, so it
       # is cheap to keep and it is the thing most worth eyeballing after a run.
       - name: Upload thumbnail for review
