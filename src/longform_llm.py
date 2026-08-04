@@ -75,6 +75,20 @@ STYLE_SUFFIX = ("cinematic film still, shot on 35mm film, dramatic chiaroscuro "
 # engine additionally splits any scene that still runs past ~13 seconds.
 WORDS_PER_IMAGE = 32
 
+# Photography exists from roughly here. For stories older than this, "real
+# imagery" means period artwork — paintings, engravings, portraits, maps —
+# and every modern photograph is an anachronism. The first live run showed a
+# 2020s aerial of a city over narration about 1415, which viewers rightly
+# called out; the era gates below exist so that cannot recur.
+PHOTOGRAPHY_YEAR = 1840
+
+
+def _era_from_topic(topic: str):
+    """Earliest plausible year named in the topic, or None. Good enough to
+    decide which side of the photography line a story sits on."""
+    years = [int(y) for y in re.findall(r"\b(1[0-9]{3}|20[0-2][0-9])\b", topic or "")]
+    return min(years) if years else None
+
 SYSTEM_PROMPT = f"""You write documentary narration for The Archive Paradox, a YouTube \
 channel about catastrophic decisions: one order, one design flaw, one miscalculation, \
 and the disaster it caused.
@@ -94,8 +108,15 @@ VOICE:
 IMAGE PROMPTS:
 - One clear focal subject each: one person, one object, one place. Crowded prompts \
 produce muddy images.
-- State the shot type first, and vary it: extreme close-up, wide establishing shot, \
-low-angle, overhead, silhouette, over-the-shoulder.
+- State the shot type first, and vary it: wide establishing shot, low-angle, \
+overhead, silhouette, close-up OF AN OBJECT.
+- NEVER put a face or hands near the camera: AI generators ruin faces and hands, \
+and one bad face costs the video its credibility. People appear only as \
+silhouettes, seen from behind, or small in a wide shot. Prefer objects, \
+architecture, landscapes, documents, weather.
+- ANCHOR THE ERA. Name the period's dress, ships, weapons, buildings and light \
+sources explicitly ("15th-century carrack", "torchlit stone hall") so nothing \
+modern can appear in a historical scene.
 - Every prompt must end with exactly: "{STYLE_SUFFIX}"
 """
 
@@ -273,16 +294,50 @@ def _call(client, models, system, user, max_tokens):
     return None
 
 
-def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback=""):
+def _archive_query_rule(era_year):
+    """What archive_query should name depends on which side of the photography
+    line the story sits. Pre-1840 stories were being told to return null, which
+    routed every scene to AI generation or modern stock — the anachronism
+    problem in one line."""
+    if era_year and era_year < PHOTOGRAPHY_YEAR:
+        return (
+            "Each segment also gets archive_query: a 2-6 word phrase naming REAL "
+            "PERIOD ARTWORK or artifacts held on Wikimedia Commons for that "
+            "segment — a specific painting, engraving, tapestry, portrait, "
+            "historic map, illuminated manuscript, or a surviving building or "
+            "object (e.g. \"Conquest of Ceuta painting\", \"John I of Portugal "
+            "portrait\", \"15th century carrack engraving\"). This story predates "
+            "photography, so NEVER name a photograph subject and NEVER a modern "
+            "place name alone. Set it to null only when nothing depictable "
+            "exists."
+        )
+    return (
+        "Each segment also gets archive_query: a 1-6 word search phrase naming the "
+        "REAL, PHOTOGRAPHABLE subject of that segment — the specific ship, person, "
+        "aircraft, building or place, as it would be captioned in an archive "
+        "(e.g. \"HMS Hood 1941\", \"Leonid Kuchma\", \"Chernobyl reactor 4\"). "
+        "It is used to find a genuine historical photograph. Set it to null when "
+        "the segment is abstract or hypothetical."
+    )
+
+
+def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
+                    era_year=None):
     n_images = max(2, round(words / WORDS_PER_IMAGE))
     continuity = (f"\nThe previous chapter ended with: \"{previous_tail}\"\n"
                   "Continue from there without repeating it.\n" if previous_tail else "")
     # Retrying with a byte-identical prompt just reproduces the same rejected
     # output, which is exactly what happened on the first live trending run.
     correction = f"\n{feedback}\n" if feedback else ""
+    era_note = ""
+    if era_year:
+        era_note = (f"\nTHE STORY TAKES PLACE AROUND {era_year}. Every image "
+                    f"prompt must depict that period — the clothing, ships, "
+                    f"weapons, buildings, tools and light sources of "
+                    f"{era_year} — never anything modern.\n")
     return (
         f"Story: {topic}\n"
-        f"{continuity}{correction}\n"
+        f"{continuity}{correction}{era_note}\n"
         f"Write the chapter titled \"{heading}\".\n"
         f"Its job: {brief}\n\n"
         f"Write approximately {words} words of narration, and no fewer than "
@@ -290,13 +345,7 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback=""):
         f"{n_images} consecutive segments; each segment gets its own image prompt. "
         f"Each segment should be roughly {max(20, words // n_images)} words — do not "
         f"write one-line segments.\n\n"
-        "Each segment also gets archive_query: a 1-6 word search phrase naming the "
-        "REAL, PHOTOGRAPHABLE subject of that segment — the specific ship, person, "
-        "aircraft, building or place, as it would be captioned in an archive "
-        "(e.g. \"HMS Hood 1941\", \"Leonid Kuchma\", \"Chernobyl reactor 4\"). "
-        "It is used to find a genuine historical photograph. Set it to null when "
-        "the segment is abstract, hypothetical, or about something that predates "
-        "photography.\n\n"
+        f"{_archive_query_rule(era_year)}\n\n"
         "Also give this chapter's single most striking figure as key_stat — a bare "
         "number or short quantity and a four-word label. If the chapter has no "
         "meaningful figure, set key_stat to null rather than inventing one.\n\n"
@@ -515,12 +564,15 @@ def _validate_chapter(data, expected_words, enforce_history=False):
     return True
 
 
-def generate_longform_script(topic: str = None, enforce_history: bool = False) -> dict:
+def generate_longform_script(topic: str = None, enforce_history: bool = False,
+                             era_year: int = None) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
     unrecoverable — a single weak chapter is retried, not fatal to the run.
 
     enforce_history is set by the trending lane: it rejects any chapter that
     drifts past the cutoff year or slips into present-tense commentary.
+    era_year anchors every visual to the story's period; when the caller does
+    not know it (the rotation lanes), it is read out of the topic text.
     """
     print("🧠 Long-form LLM engine starting...")
 
@@ -531,7 +583,11 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
     if topic is None:
         offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
         topic = pick_topic(offset)
+    era_year = era_year or _era_from_topic(topic)
     print(f"📚 Deep dive topic: {topic}")
+    if era_year:
+        print(f"🕰️  Era anchor: ~{era_year} "
+              f"({'pre' if era_year < PHOTOGRAPHY_YEAR else 'post'}-photography)")
     if enforce_history:
         print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
@@ -546,7 +602,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
             try:
                 candidate = _call(client, models, SYSTEM_PROMPT,
                                   _chapter_prompt(topic, heading, brief, words,
-                                                  tail, feedback),
+                                                  tail, feedback,
+                                                  era_year=era_year),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -648,6 +705,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False) -
         "thumbnail_badge": str(meta.get("thumbnail_badge") or "").strip()[:12],
         "chapters": chapters,
         "word_count": words,
+        "era_year": era_year,
     }
     note = f", {short_chapters} under target" if short_chapters else ""
     print(f"✅ Script complete: {len(chapters)} chapters, {words} words "
@@ -695,6 +753,8 @@ def flatten_scenes(script: dict) -> list:
             s = dict(scene)
             s["chapter_index"] = c_idx
             s["chapter_heading"] = chapter["heading"]
+            # The visual engine gates archival search and b-roll on the era.
+            s["era_year"] = script.get("era_year")
             if s_idx == 0:
                 # longform_video reads key_stat off the chapter's first scene.
                 s["key_stat"] = chapter.get("key_stat") or {}

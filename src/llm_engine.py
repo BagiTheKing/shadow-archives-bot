@@ -68,8 +68,12 @@ will shock you", "to this day", "lost to history", "the rest is history".
 IMAGE PROMPTS:
 - Each scene gets one image_prompt describing a SINGLE clear focal subject \
 (one person, one object, one place). Crowded prompts produce muddy AI images.
-- Vary the shot types across scenes: extreme close-up, wide establishing shot, \
-low-angle, overhead, silhouette. State the shot type first.
+- Vary the shot types across scenes: wide establishing shot, low-angle, \
+overhead, silhouette, close-up OF AN OBJECT. State the shot type first.
+- NEVER put a face or hands near the camera: AI generators ruin faces and hands. \
+People appear only as silhouettes, from behind, or small in a wide shot.
+- ANCHOR THE ERA: name the period's dress, ships, weapons and buildings \
+explicitly so nothing modern appears in a historical scene.
 - Every prompt must end with exactly: "cinematic film still, shot on 35mm film, \
 dramatic chiaroscuro lighting, photorealistic, deep shadows, volumetric light, \
 muted desaturated palette with one warm accent color, subtle film grain, highly \

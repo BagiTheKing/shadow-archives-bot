@@ -148,7 +148,12 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
 
 
 def resolve_topic(lane: str):
-    """Chooses this run's topic. Returns (topic, enforce_history, from_short).
+    """Chooses this run's topic.
+    Returns (topic, enforce_history, from_short, era_year).
+
+    era_year is the story's approximate year when the lane knows it (the
+    trending lane's anchor carries one). The script engine otherwise reads it
+    out of the topic text; it drives the era gates on every visual.
 
     from_short records whether the topic really is one the channel has already
     posted a Short about. Only then may the description say so — on a fallback
@@ -165,11 +170,11 @@ def resolve_topic(lane: str):
             from channel_insights import best_performing_topic
             picked = best_performing_topic()
             if picked:
-                return picked[0], False, True
+                return picked[0], False, True, None
         except Exception as e:
             print(f"⚠️ Encore selection failed ({type(e).__name__}: {e}).")
         print("↩️  Falling back to the date rotation.")
-        return None, False, False
+        return None, False, False, None
 
     if lane == "timely":
         try:
@@ -177,7 +182,7 @@ def resolve_topic(lane: str):
             region, candidates = get_trending_subjects()
             anchor = select_historical_anchor(candidates)
             if anchor:
-                return anchor["topic"], True, False
+                return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
             # Falling back to the rotation here would be pointless: the chapter
             # calls are about to hit the same wall. Let it surface.
@@ -185,9 +190,9 @@ def resolve_topic(lane: str):
         except Exception as e:
             print(f"⚠️ Trending selection failed ({type(e).__name__}: {e}).")
         print("↩️  No anchor cleared the history rule — using the date rotation.")
-        return None, False, False
+        return None, False, False, None
 
-    return None, False, False
+    return None, False, False, None
 
 
 def main():
@@ -200,9 +205,10 @@ def main():
     # the handler used to sit below it, letting the exception escape as a raw
     # traceback instead of the explanation it exists to print.
     try:
-        topic, enforce_history, from_short = resolve_topic(lane)
+        topic, enforce_history, from_short, era_year = resolve_topic(lane)
         script = generate_longform_script(topic=topic,
-                                          enforce_history=enforce_history)
+                                          enforce_history=enforce_history,
+                                          era_year=era_year)
     except QuotaExhausted as e:
         print(f"\n❌ Halted: {e}")
         print("   OpenRouter's free tier allows 50 requests a day across all "

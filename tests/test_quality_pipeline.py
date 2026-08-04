@@ -130,6 +130,47 @@ class TestOnScreenTypography(unittest.TestCase):
         self.assertIn("0:00:02.", event)
 
 
+class TestEraGates(unittest.TestCase):
+    """The 1415-story-with-2020s-footage failure: every visual source is now
+    gated on which side of the photography line the story sits."""
+
+    def test_era_extracted_from_topic(self):
+        self.assertEqual(longform_llm._era_from_topic(
+            "In 1415 the Portuguese captured Ceuta."), 1415)
+        self.assertEqual(longform_llm._era_from_topic(
+            "The 1994 Budapest Memorandum, signed in 1994 after 1991."), 1991)
+        self.assertIsNone(longform_llm._era_from_topic("A story with no year"))
+
+    def test_pre_photography_prompt_asks_for_artwork(self):
+        rule = longform_llm._archive_query_rule(1415)
+        self.assertIn("painting", rule)
+        self.assertIn("predates photography", rule)
+
+    def test_post_photography_prompt_asks_for_photographs(self):
+        rule = longform_llm._archive_query_rule(1941)
+        self.assertIn("PHOTOGRAPHABLE", rule)
+
+    def test_modern_photo_rejected_for_medieval_story(self):
+        modern = {"title": "Gibraltar aerial view 2019.jpg"}
+        self.assertFalse(longform_visual._era_appropriate(modern, 1415))
+
+    def test_period_artwork_accepted_even_with_modern_year_in_title(self):
+        art = {"title": "Conquest of Ceuta painting (1907 azulejo).jpg"}
+        self.assertTrue(longform_visual._era_appropriate(art, 1415))
+
+    def test_anything_goes_for_photographic_eras(self):
+        modern = {"title": "Kyiv skyline 2001.jpg"}
+        self.assertTrue(longform_visual._era_appropriate(modern, 1994))
+
+    def test_broll_only_for_timeless_subjects(self):
+        sea = {"archive_query": "Portuguese fleet 1415", "image_prompt": ""}
+        self.assertEqual(longform_visual._timeless_broll_query(sea),
+                         "dark rough sea waves")
+        soldiers = {"archive_query": None,
+                    "image_prompt": "low-angle, soldiers marching in formation"}
+        self.assertIsNone(longform_visual._timeless_broll_query(soldiers))
+
+
 class TestArchiveQueryCleaning(unittest.TestCase):
 
     def test_normal_query_passes(self):
