@@ -15,6 +15,31 @@ from PIL import Image, ImageDraw, ImageFilter
 
 WIDTH, HEIGHT = 1080, 1920
 
+# Flux is trained around one megapixel. Asking it for a 1920x1080 frame (2.07 MP)
+# is asking it to compose at twice the resolution it learned on, and the
+# classic symptom is duplicated features — the extra hands and fingers that
+# made the long-form frames unusable. Generating at ~1 MP and upscaling with
+# Lanczos gives a coherent image at the same delivery size; the pipeline pushes
+# a 1.2x Ken Burns zoom at most, so the resample is invisible in motion.
+GEN_TARGET_PIXELS = 1_050_000
+
+# Pollinations' `enhance` runs the prompt through an LLM before generating.
+# That helps a three-word prompt and hurts these: every prompt here already
+# carries a shot type, an era and a deliberate style suffix, and the rewrite
+# routinely drops the style. Off by default, still switchable.
+ENHANCE = os.getenv("POLLINATIONS_ENHANCE", "0") == "1"
+
+
+def _generation_size(width: int, height: int):
+    """The nearest ~1 MP size with the requested aspect ratio, rounded to the
+    multiples of 16 that diffusion models expect."""
+    scale = (GEN_TARGET_PIXELS / (width * height)) ** 0.5
+    if scale >= 1.0:
+        return width, height          # already at or under native — leave it
+    gen_w = max(512, int(round(width * scale / 16)) * 16)
+    gen_h = max(512, int(round(height * scale / 16)) * 16)
+    return gen_w, gen_h
+
 
 def _is_valid_image(content: bytes) -> bool:
     """Pollinations sometimes returns HTML error pages with status 200.
@@ -35,9 +60,11 @@ def download_image(prompt: str, output_path: str, max_retries: int = 4,
     on desktop and TV, where search traffic actually lands."""
     encoded = urllib.parse.quote(prompt)
     seed = random.randint(0, 999_999)  # new seed per scene -> no duplicate frames
+    gen_w, gen_h = _generation_size(width, height)
     api_url = (
         f"https://image.pollinations.ai/prompt/{encoded}"
-        f"?width={width}&height={height}&model=flux&nologo=true&enhance=true&seed={seed}"
+        f"?width={gen_w}&height={gen_h}&model=flux&nologo=true"
+        f"&enhance={'true' if ENHANCE else 'false'}&seed={seed}"
     )
 
     for attempt in range(1, max_retries + 1):

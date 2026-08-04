@@ -61,14 +61,16 @@ ARC = [
      180),
 ]
 
-# Photorealistic film-still language, not "oil painting": the painterly suffix
-# produced exactly the muddy, obviously-AI frames viewers bounce off. A frame
-# that reads as a cinematic photograph sits far more comfortably next to the
-# real archival photos this pipeline now mixes in.
-STYLE_SUFFIX = ("cinematic film still, shot on 35mm film, dramatic chiaroscuro "
-                "lighting, photorealistic, deep shadows, volumetric light, "
-                "muted desaturated palette with one warm accent color, subtle "
-                "film grain, highly detailed, no text, no watermark")
+# Painterly, NOT photorealistic. This was briefly switched to a "35mm film
+# still" treatment and the results got visibly worse: free image models render
+# convincing paint, but photoreal skin and hands land in the uncanny valley,
+# where every anatomical mistake reads as a mistake. In an illustration the
+# same brushwork reads as style. The channel's best-looking frames have always
+# come from this suffix, so it stays.
+STYLE_SUFFIX = ("dramatic chiaroscuro lighting, dark moody cinematic oil "
+                "painting, visible expressive brushwork, rich texture, muted "
+                "color palette with one accent color, highly detailed, "
+                "no text, no watermark")
 
 # One image per ~32 spoken words — a cut roughly every 11 seconds. The old 45
 # produced 13-frame nine-minute videos that reviewed as slideshows; the video
@@ -108,12 +110,14 @@ VOICE:
 IMAGE PROMPTS:
 - One clear focal subject each: one person, one object, one place. Crowded prompts \
 produce muddy images.
-- State the shot type first, and vary it: wide establishing shot, low-angle, \
-overhead, silhouette, close-up OF AN OBJECT.
-- NEVER put a face or hands near the camera: AI generators ruin faces and hands, \
-and one bad face costs the video its credibility. People appear only as \
-silhouettes, seen from behind, or small in a wide shot. Prefer objects, \
-architecture, landscapes, documents, weather.
+- State the shot type first, and vary it: extreme close-up, wide establishing \
+shot, low-angle, overhead, silhouette, over-the-shoulder.
+- ONE FIGURE AT MOST, and commit to a distance. A single face filling the frame \
+works. A lone silhouette works. An object or a landscape works. What fails is \
+two or three half-size people around a table: the model has too little canvas \
+per figure and renders them as smudges with broken hands. If a scene involves \
+several people, choose one of them and frame that one.
+- Never make hands the subject of the shot.
 - ANCHOR THE ERA. Name the period's dress, ships, weapons, buildings and light \
 sources explicitly ("15th-century carrack", "torchlit stone hall") so nothing \
 modern can appear in a historical scene.

@@ -68,16 +68,16 @@ will shock you", "to this day", "lost to history", "the rest is history".
 IMAGE PROMPTS:
 - Each scene gets one image_prompt describing a SINGLE clear focal subject \
 (one person, one object, one place). Crowded prompts produce muddy AI images.
-- Vary the shot types across scenes: wide establishing shot, low-angle, \
-overhead, silhouette, close-up OF AN OBJECT. State the shot type first.
-- NEVER put a face or hands near the camera: AI generators ruin faces and hands. \
-People appear only as silhouettes, from behind, or small in a wide shot.
+- Vary the shot types across scenes: extreme close-up, wide establishing shot, \
+low-angle, overhead, silhouette. State the shot type first.
+- ONE FIGURE AT MOST, and commit to a distance: one face filling the frame, one \
+silhouette, one object, or a landscape. Two or three half-size people in one \
+frame render as smudges with broken hands. Never make hands the subject.
 - ANCHOR THE ERA: name the period's dress, ships, weapons and buildings \
 explicitly so nothing modern appears in a historical scene.
-- Every prompt must end with exactly: "cinematic film still, shot on 35mm film, \
-dramatic chiaroscuro lighting, photorealistic, deep shadows, volumetric light, \
-muted desaturated palette with one warm accent color, subtle film grain, highly \
-detailed, no text, no watermark"
+- Every prompt must end with exactly: "dramatic chiaroscuro lighting, dark moody \
+cinematic oil painting, visible expressive brushwork, rich texture, muted color \
+palette with one accent color, highly detailed, no text, no watermark"
 
 TITLE RULES (the title is the second filter, after the hook):
 - Under 80 characters, no ALL CAPS words, no clickbait the script does not deliver.

@@ -13,9 +13,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from PIL import Image                                       # noqa: E402
 
 import archive_engine                                       # noqa: E402
+import llm_engine                                           # noqa: E402
 import longform_llm                                         # noqa: E402
 import longform_video                                       # noqa: E402
 import longform_visual                                      # noqa: E402
+import visual_engine                                        # noqa: E402
 
 
 def _info(width=1600, height=1000, mime="image/jpeg"):
@@ -128,6 +130,43 @@ class TestOnScreenTypography(unittest.TestCase):
         event = longform_video._chapter_title_event(0.0, 2.6, 2, "The Chain")
         # start 0:00:00.00, end must be within the 2.6s scene
         self.assertIn("0:00:02.", event)
+
+
+class TestGenerationResolution(unittest.TestCase):
+    """Asking flux for 2 MP when it was trained on 1 MP is what produced the
+    duplicated hands and fingers. Generate at native, upscale after."""
+
+    def test_oversized_request_is_scaled_to_about_one_megapixel(self):
+        w, h = visual_engine._generation_size(1920, 1080)
+        self.assertLess(w * h, 1_200_000)
+        self.assertGreater(w * h, 800_000)
+
+    def test_aspect_ratio_is_preserved(self):
+        w, h = visual_engine._generation_size(1920, 1080)
+        self.assertAlmostEqual(w / h, 1920 / 1080, places=1)
+        pw, ph = visual_engine._generation_size(1080, 1920)
+        self.assertAlmostEqual(pw / ph, 1080 / 1920, places=1)
+
+    def test_sizes_are_multiples_of_sixteen(self):
+        for size in (visual_engine._generation_size(1920, 1080)
+                     + visual_engine._generation_size(1080, 1920)):
+            self.assertEqual(size % 16, 0)
+
+    def test_already_small_requests_are_left_alone(self):
+        self.assertEqual(visual_engine._generation_size(768, 768), (768, 768))
+
+
+class TestPaintedStyle(unittest.TestCase):
+    """The painterly suffix hides what free models get wrong; photorealism
+    exposes it. Both pipelines must keep asking for paint."""
+
+    def test_longform_suffix_is_painterly(self):
+        self.assertIn("oil painting", longform_llm.STYLE_SUFFIX)
+        self.assertNotIn("photorealistic", longform_llm.STYLE_SUFFIX)
+
+    def test_shorts_prompt_requests_the_same_style(self):
+        self.assertIn("oil painting", llm_engine.SYSTEM_PROMPT)
+        self.assertNotIn("35mm", llm_engine.SYSTEM_PROMPT)
 
 
 class TestEraGates(unittest.TestCase):
