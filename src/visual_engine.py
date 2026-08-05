@@ -29,6 +29,18 @@ GEN_TARGET_PIXELS = 1_050_000
 # routinely drops the style. Off by default, still switchable.
 ENHANCE = os.getenv("POLLINATIONS_ENHANCE", "0") == "1"
 
+# Identify the client. Anonymous requests from CI ranges are the first thing a
+# free service sheds when it is under load.
+GEN_HEADERS = {
+    "User-Agent": ("ArchiveParadoxBot/1.1 "
+                   "(https://github.com/BagiTheKing/shadow-archives-bot)"),
+}
+
+# Raise this and every generated frame costs another five attempts. Five
+# variants cycle across five attempts, so a real outage is detected but a
+# transient 500 no longer produces a black screen.
+GEN_MAX_RETRIES = 5
+
 
 def _generation_size(width: int, height: int):
     """The nearest ~1 MP size with the requested aspect ratio, rounded to the
@@ -53,7 +65,7 @@ def _is_valid_image(content: bytes) -> bool:
         return False
 
 
-def download_image(prompt: str, output_path: str, max_retries: int = 4,
+def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RETRIES,
                    width: int = WIDTH, height: int = HEIGHT) -> bool:
     """Defaults to the 1080x1920 Shorts frame. The long-form pipeline passes
     16:9 dimensions instead — a vertical eight-minute documentary is a bad watch
@@ -61,15 +73,26 @@ def download_image(prompt: str, output_path: str, max_retries: int = 4,
     encoded = urllib.parse.quote(prompt)
     seed = random.randint(0, 999_999)  # new seed per scene -> no duplicate frames
     gen_w, gen_h = _generation_size(width, height)
-    api_url = (
-        f"https://image.pollinations.ai/prompt/{encoded}"
+
+    # A live run once returned HTTP 500 to all thirty generation requests,
+    # because every attempt reused one parameter combination. Each attempt now
+    # uses a different one — falling back through models and finally to
+    # Pollinations' defaults — so a single unhappy option cannot cost the video
+    # every generated frame.
+    variants = [
         f"?width={gen_w}&height={gen_h}&model=flux&nologo=true"
-        f"&enhance={'true' if ENHANCE else 'false'}&seed={seed}"
-    )
+        f"&enhance={'true' if ENHANCE else 'false'}&seed={seed}",
+        f"?width={gen_w}&height={gen_h}&model=flux&nologo=true&seed={seed}",
+        f"?width={gen_w}&height={gen_h}&nologo=true&seed={seed}",
+        f"?width={gen_w}&height={gen_h}&model=turbo&nologo=true&seed={seed}",
+        f"?nologo=true&seed={seed}",
+    ]
 
     for attempt in range(1, max_retries + 1):
+        api_url = (f"https://image.pollinations.ai/prompt/{encoded}"
+                   f"{variants[(attempt - 1) % len(variants)]}")
         try:
-            response = requests.get(api_url, timeout=90)
+            response = requests.get(api_url, timeout=90, headers=GEN_HEADERS)
             if response.status_code == 200 and _is_valid_image(response.content):
                 img = Image.open(io.BytesIO(response.content)).convert("RGB")
                 if (img.width, img.height) != (width, height):

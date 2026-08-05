@@ -34,8 +34,9 @@ import time
 
 from PIL import Image
 
-from archive_engine import (search_commons, download_archival_image,
-                            format_credit, pexels_available, fetch_broll_video,
+from archive_engine import (search_archives, search_commons,
+                            download_archival_image, format_credit,
+                            pexels_available, fetch_broll_video,
                             extract_poster_frame)
 from visual_engine import download_image, make_fallback_image
 
@@ -108,6 +109,34 @@ def _to_kb_size(path: str):
     img.save(path, "JPEG", quality=92)
 
 
+def _reuse_real_frame(pool, output_path: str, variant: int) -> bool:
+    """Re-frames an already-downloaded archival image as a stand-in for a
+    failed generation. Punched in and offset so it reads as a different shot
+    of the same material rather than a repeat.
+
+    Not mirrored on purpose: flipping an archival photograph reverses insignia,
+    signage and text, which on a history channel is worse than reusing it.
+    """
+    if not pool:
+        return False
+    source = pool[variant % len(pool)]
+    try:
+        img = Image.open(source).convert("RGB")
+    except Exception:
+        return False
+
+    # 78% centre-ish crop, nudged by the variant so successive reuses of the
+    # same source frame different parts of it.
+    scale = 0.78
+    cw, ch = int(img.width * scale), int(img.height * scale)
+    max_dx, max_dy = img.width - cw, img.height - ch
+    dx = int(max_dx * (0.25 + 0.5 * ((variant % 3) / 2.0)))
+    dy = int(max_dy * (0.25 + 0.5 * ((variant % 2) / 1.0)))
+    img = img.crop((dx, dy, dx + cw, dy + ch)).resize((KB_W, KB_H), Image.LANCZOS)
+    img.save(output_path, "JPEG", quality=92)
+    return True
+
+
 def _vary_prompt(prompt: str, shot: int) -> str:
     """A second AI shot of the same segment should not be the same picture.
     Re-angling the prompt (plus Pollinations' per-call random seed) gives the
@@ -125,6 +154,14 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
 
     api_calls, archival_used, broll_used = 0, 0, 0
     last_broll_idx = -BROLL_MIN_GAP - 1
+    # Nothing real may appear twice: one live run used the same C-130
+    # photograph for two scenes and the same stock clip four times, which is
+    # what "repetitive" looked like on screen.
+    used_urls, used_broll_queries = set(), set()
+    # Every real frame obtained so far. When generation fails, a re-framed
+    # archival image stands in — infinitely better than the black screen the
+    # designed fallback produces.
+    real_pool = []
 
     for idx, scene in enumerate(scenes):
         wanted = _shots_for(scene.get("duration", 0))
@@ -137,12 +174,14 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
         # of the place can never stand in for its fifteenth-century self.
         query = (scene.get("archive_query") or "").strip()
         if query:
-            candidates = [c for c in search_commons(query)
-                          if _era_appropriate(c, era)]
+            candidates = [c for c in search_archives(query)
+                          if _era_appropriate(c, era)
+                          and c.get("url") not in used_urls]
             if (not candidates and era and era < PHOTOGRAPHY_YEAR
                     and not any(a in query.lower() for a in ART_WORDS)):
                 candidates = [c for c in search_commons(f"{query} painting")
-                              if _era_appropriate(c, era)]
+                              if _era_appropriate(c, era)
+                              and c.get("url") not in used_urls]
             for cand in candidates:
                 if len(images) >= wanted:
                     break
@@ -151,9 +190,11 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
                 if download_archival_image(cand, path, KB_W, KB_H):
                     images.append(path)
                     credits.append(format_credit(cand))
+                    used_urls.add(cand.get("url"))
             if images:
                 archival_used += len(images)
                 scene["is_real"] = True
+                real_pool.extend(images)
                 print(f"📜 Scene {idx}: {len(images)} archival image(s) "
                       f"for {query!r}")
 
@@ -163,7 +204,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
         if (not images and pexels_available() and broll_used < MAX_BROLL_CLIPS
                 and idx - last_broll_idx > BROLL_MIN_GAP
                 and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
-            broll_query = _timeless_broll_query(scene)
+            broll_query = _timeless_broll_query(scene, used_broll_queries)
             video_path = os.path.join(output_dir, f"lf_broll_{idx:03d}.mp4")
             if broll_query and fetch_broll_video(broll_query, video_path,
                                                  min_duration=4.0):
@@ -174,6 +215,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
                     scene["image_paths"] = [poster]
                     broll_used += 1
                     last_broll_idx = idx
+                    used_broll_queries.add(broll_query)
                     print(f"🎥 Scene {idx}: muted b-roll for {broll_query!r}")
                     continue
                 os.remove(video_path)
@@ -191,6 +233,14 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
             if download_image(_vary_prompt(prompt, shot), path,
                               width=LF_W, height=LF_H):
                 _to_kb_size(path)
+            elif _reuse_real_frame(real_pool, path, len(images) + idx):
+                # The generator being down must not turn the video into black
+                # screens with subtitles, which is exactly what a run of thirty
+                # HTTP 500s produced. A real photograph from elsewhere in the
+                # video, punched in so it does not read as the same shot, keeps
+                # something honest and watchable on screen.
+                print(f"♻️  Scene {idx}: generation failed — re-framed an "
+                      f"archival photo instead of a black frame.")
             else:
                 print(f"⚠️  Scene {idx}: generation failed — designed fallback.")
                 make_fallback_image(path, seed=idx * 10 + shot,
@@ -238,13 +288,14 @@ TIMELESS_BROLL = [
 ]
 
 
-def _timeless_broll_query(scene) -> str:
-    """The Pexels query for a scene, or None when the scene has no timeless
-    subject. None is the common and correct case: no b-roll beats wrong
-    b-roll."""
+def _timeless_broll_query(scene, used=()) -> str:
+    """The Pexels query for a scene, or None when the scene has no unused
+    timeless subject. None is the common and correct case: no b-roll beats
+    wrong b-roll, and a repeat of one already on screen is the worst of all —
+    'antique map parchment' was picked four times in one video."""
     text = (f"{scene.get('archive_query') or ''} "
             f"{scene.get('image_prompt') or ''}").lower()
     for keys, query in TIMELESS_BROLL:
-        if any(k in text for k in keys):
+        if query not in used and any(k in text for k in keys):
             return query
     return None

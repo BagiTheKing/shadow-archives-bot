@@ -28,16 +28,53 @@ import io
 import os
 import re
 import subprocess
+import time
 
 import requests
 from PIL import Image, ImageEnhance, ImageFilter
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+LOC_API = "https://www.loc.gov/photos/"
 
-# Commons policy asks for a descriptive User-Agent; the default python-requests
-# UA is throttled aggressively.
-HEADERS = {"User-Agent": "ArchiveParadoxBot/1.0 (documentary pipeline; "
-                         "contact via github)"}
+# Wikimedia's User-Agent policy wants a real contact URL, and enforces it: a
+# vague UA plus back-to-back downloads earned a run full of
+# "429 ... does not comply with our robot policy". This UA identifies the bot
+# and points at the repository, which is what the policy asks for.
+HEADERS = {
+    "User-Agent": ("ArchiveParadoxBot/1.1 "
+                   "(https://github.com/BagiTheKing/shadow-archives-bot; "
+                   "automated documentary pipeline)"),
+    "Accept": "image/jpeg,image/png,image/*;q=0.8",
+}
+
+# Wikimedia asks well-behaved clients to serialise their requests. The first
+# live run fired ten image downloads with no pause and was rate-limited off the
+# service for the rest of the video; one request at a time with a short gap
+# costs a couple of minutes and actually returns pictures.
+DOWNLOAD_GAP_SECONDS = 1.2
+_last_request_at = 0.0
+
+# How long to wait after a 429 before trying the next candidate.
+RATE_LIMIT_BACKOFF = (4, 9, 16)
+
+
+def _polite_get(url, **kwargs):
+    """A GET that respects the archives' rate limits: serialised, identified,
+    and backing off when told to."""
+    global _last_request_at
+    kwargs.setdefault("headers", HEADERS)
+    kwargs.setdefault("timeout", 60)
+    for attempt, backoff in enumerate((0,) + RATE_LIMIT_BACKOFF):
+        if backoff:
+            time.sleep(backoff)
+        gap = time.time() - _last_request_at
+        if gap < DOWNLOAD_GAP_SECONDS:
+            time.sleep(DOWNLOAD_GAP_SECONDS - gap)
+        _last_request_at = time.time()
+        response = requests.get(url, **kwargs)
+        if response.status_code != 429:
+            return response
+    return response
 
 PEXELS_VIDEO_API = "https://api.pexels.com/videos/search"
 
@@ -97,12 +134,13 @@ def search_commons(query: str, limit: int = 10) -> list:
         "gsrsearch": f"filetype:bitmap {query}", "gsrnamespace": 6,
         "gsrlimit": limit, "prop": "imageinfo",
         "iiprop": "url|size|mime|extmetadata",
-        # Ask the server for a 2200px-wide derivative so a 90 MB scan of an
-        # 1890s plate arrives as a 1 MB JPEG.
-        "iiurlwidth": 2200,
+        # Ask the server for a 1600px-wide derivative so a 90 MB scan of an
+        # 1890s plate arrives as a sub-MB JPEG. Above the 1440px the pipeline
+        # actually needs, bigger only buys rate-limiting.
+        "iiurlwidth": 1600,
     }
     try:
-        r = requests.get(COMMONS_API, params=params, headers=HEADERS, timeout=25)
+        r = _polite_get(COMMONS_API, params=params, timeout=25)
         r.raise_for_status()
         pages = r.json().get("query", {}).get("pages", {})
     except Exception as e:
@@ -171,7 +209,7 @@ def download_archival_image(candidate: dict, output_path: str,
                             width: int, height: int) -> bool:
     """Downloads one Commons candidate and saves it fitted to width x height."""
     try:
-        r = requests.get(candidate["url"], headers=HEADERS, timeout=60)
+        r = _polite_get(candidate["url"])
         r.raise_for_status()
         if len(r.content) > 40 * 1024 * 1024:
             return False
@@ -183,13 +221,64 @@ def download_archival_image(candidate: dict, output_path: str,
     return True
 
 
+def search_loc(query: str, limit: int = 8) -> list:
+    """The Library of Congress photo archive — free, no key, and far deeper
+    than Commons on American military and political history, which is most of
+    this channel. Returns candidates in the same shape as search_commons.
+
+    One Commons search per scene was leaving whole chapters with nothing real
+    to show; a second independent archive roughly doubles the hit rate and
+    means a rate-limited Wikimedia no longer empties the video."""
+    try:
+        r = _polite_get(LOC_API, params={"q": query, "fo": "json", "c": limit,
+                                         "at": "results"}, timeout=25)
+        r.raise_for_status()
+        results = (r.json() or {}).get("results", []) or []
+    except Exception as e:
+        print(f"⚠️ Library of Congress search failed for {query!r}: {e}")
+        return []
+
+    out = []
+    for item in results:
+        urls = item.get("image_url") or []
+        if not isinstance(urls, list) or not urls:
+            continue
+        url = urls[-1]                      # last entry is the largest render
+        if not isinstance(url, str) or not url.startswith("http"):
+            continue
+        title = item.get("title") or "Library of Congress photograph"
+        low = title.lower()
+        if any(j in low for j in JUNK_TITLE_WORDS):
+            continue
+        out.append({
+            "url": url, "width": None, "height": None,
+            "title": str(title)[:120],
+            "artist": "", "license": "Library of Congress",
+            "source": "Library of Congress",
+        })
+    return out
+
+
+def search_archives(query: str, limit: int = 10) -> list:
+    """Every free archive we have, best candidates first.
+
+    Commons leads because its metadata is richer and its licensing explicit;
+    the Library of Congress follows and covers the gaps — including whenever
+    Wikimedia is rate-limiting us."""
+    results = search_commons(query, limit=limit)
+    if len(results) < 3:
+        results += search_loc(query)
+    return results
+
+
 def format_credit(candidate: dict) -> str:
     parts = [candidate.get("title", "").strip() or "Untitled"]
     if candidate.get("artist"):
         parts.append(candidate["artist"][:60])
     if candidate.get("license"):
         parts.append(candidate["license"])
-    return " — ".join(parts) + " (via Wikimedia Commons)"
+    source = candidate.get("source") or "Wikimedia Commons"
+    return " — ".join(parts) + f" (via {source})"
 
 
 # ---------------------------------------------------------------------------

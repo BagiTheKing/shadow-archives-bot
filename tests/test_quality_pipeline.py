@@ -5,7 +5,9 @@ in-memory Pillow.
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -208,6 +210,108 @@ class TestEraGates(unittest.TestCase):
         soldiers = {"archive_query": None,
                     "image_prompt": "low-angle, soldiers marching in formation"}
         self.assertIsNone(longform_visual._timeless_broll_query(soldiers))
+
+
+class TestNoRepeatedFootage(unittest.TestCase):
+    """A live run reused one stock clip four times and one photo twice."""
+
+    def test_broll_query_is_not_reused(self):
+        """A scene whose only timeless subject is already on screen gets no
+        clip at all, rather than the same one again."""
+        scene = {"archive_query": "surveyor's map", "image_prompt": ""}
+        first = longform_visual._timeless_broll_query(scene, used=set())
+        self.assertEqual(first, "antique map parchment")
+        self.assertIsNone(
+            longform_visual._timeless_broll_query(scene, used={first}))
+
+    def test_scene_with_a_second_subject_falls_through_to_it(self):
+        """'treaty' and 'map' both qualify: once the map clip is spent, the
+        scene may still take the document clip instead of going without."""
+        scene = {"archive_query": "old treaty map", "image_prompt": ""}
+        self.assertEqual(
+            longform_visual._timeless_broll_query(
+                scene, used={"antique map parchment"}),
+            "old handwritten letter candlelight")
+
+    def test_a_second_subject_still_gets_its_own_clip(self):
+        used = {"antique map parchment"}
+        storm = {"archive_query": "", "image_prompt": "wide shot of a storm"}
+        self.assertEqual(
+            longform_visual._timeless_broll_query(storm, used),
+            "dark storm clouds timelapse")
+
+
+class TestGenerationOutageFallback(unittest.TestCase):
+    """Thirty consecutive HTTP 500s turned a video into black screens with
+    subtitles. A real frame already on disk is always the better stand-in."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.source = os.path.join(self.dir, "real.jpg")
+        img = Image.new("RGB", (longform_visual.KB_W, longform_visual.KB_H))
+        for x in range(0, img.width, 64):        # gradient, so crops differ
+            for y in range(0, img.height, 64):
+                img.paste((x % 256, y % 256, 120), (x, y, x + 64, y + 64))
+        img.save(self.source, quality=90)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_reuse_produces_a_full_size_frame(self):
+        out = os.path.join(self.dir, "out.jpg")
+        self.assertTrue(longform_visual._reuse_real_frame([self.source], out, 0))
+        self.assertEqual(Image.open(out).size,
+                         (longform_visual.KB_W, longform_visual.KB_H))
+
+    def test_reuse_is_not_the_same_framing_twice(self):
+        a = os.path.join(self.dir, "a.jpg")
+        b = os.path.join(self.dir, "b.jpg")
+        longform_visual._reuse_real_frame([self.source], a, 0)
+        longform_visual._reuse_real_frame([self.source], b, 1)
+        self.assertNotEqual(open(a, "rb").read(), open(b, "rb").read())
+
+    def test_reuse_declines_when_nothing_real_exists_yet(self):
+        out = os.path.join(self.dir, "out.jpg")
+        self.assertFalse(longform_visual._reuse_real_frame([], out, 0))
+
+
+class TestPoliteArchiveRequests(unittest.TestCase):
+    """Wikimedia answered a whole run with 'does not comply with our robot
+    policy'. The client must identify itself and serialise its requests."""
+
+    def test_user_agent_names_the_project_and_a_contact_url(self):
+        ua = archive_engine.HEADERS["User-Agent"]
+        self.assertIn("http", ua)
+        self.assertIn("ArchiveParadoxBot", ua)
+
+    def test_requests_are_spaced_and_back_off(self):
+        self.assertGreater(archive_engine.DOWNLOAD_GAP_SECONDS, 0)
+        self.assertTrue(archive_engine.RATE_LIMIT_BACKOFF)
+
+    def test_thumbnails_are_not_requested_larger_than_needed(self):
+        import inspect
+        self.assertIn("\"iiurlwidth\": 1600",
+                      inspect.getsource(archive_engine.search_commons))
+
+    def test_credit_names_the_archive_it_came_from(self):
+        loc = {"title": "Desert One wreckage", "license": "Library of Congress",
+               "source": "Library of Congress"}
+        self.assertIn("via Library of Congress", archive_engine.format_credit(loc))
+        commons = {"title": "C-130", "license": "Public domain"}
+        self.assertIn("via Wikimedia Commons",
+                      archive_engine.format_credit(commons))
+
+
+class TestGenerationVariants(unittest.TestCase):
+
+    def test_every_attempt_uses_a_different_parameter_set(self):
+        import inspect
+        source = inspect.getsource(visual_engine.download_image)
+        self.assertIn("variants[", source)
+        self.assertIn("model=turbo", source)
+
+    def test_generator_identifies_itself(self):
+        self.assertIn("http", visual_engine.GEN_HEADERS["User-Agent"])
 
 
 class TestArchiveQueryCleaning(unittest.TestCase):
