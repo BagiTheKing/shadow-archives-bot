@@ -46,6 +46,14 @@ jobs:
         id: pipeline
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional, and the biggest available quality upgrade: a free
+          # Cloudflare account unlocks FLUX-1-schnell via Workers AI, which
+          # renders the same prompts far more cleanly than the keyless
+          # endpoint. Absent, the pipeline falls back to Pollinations exactly
+          # as before. Create a token with the "Workers AI" template at
+          # https://dash.cloudflare.com/profile/api-tokens
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           PRIVACY_STATUS: public   # flip to 'public' once you're happy with quality

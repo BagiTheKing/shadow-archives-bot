@@ -4,6 +4,8 @@ on-screen typography fixes. No network — everything here is pure logic or
 in-memory Pillow.
 """
 
+import base64
+import io
 import os
 import shutil
 import sys
@@ -232,6 +234,73 @@ class TestEraIsStampedOnEveryFrame(unittest.TestCase):
 
     def test_longform_and_shorts_share_one_style_definition(self):
         self.assertEqual(longform_llm.STYLE_SUFFIX, visual_engine.CANONICAL_STYLE)
+
+
+class TestCloudflareProvider(unittest.TestCase):
+    """Workers AI is the quality upgrade, but it must stay strictly optional:
+    with no credentials the pipeline has to behave exactly as it did before."""
+
+    def setUp(self):
+        for k in ("CF_ACCOUNT_ID", "CF_API_TOKEN",
+                  "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"):
+            os.environ.pop(k, None)
+
+    tearDown = setUp
+
+    def test_disabled_without_credentials(self):
+        self.assertFalse(visual_engine.cloudflare_available())
+        self.assertIsNone(visual_engine.cloudflare_generate("x", 1024, 576))
+
+    def test_partial_credentials_do_not_enable_it(self):
+        os.environ["CF_ACCOUNT_ID"] = "acct"
+        self.assertFalse(visual_engine.cloudflare_available())
+
+    def test_enabled_with_both_halves(self):
+        os.environ["CF_ACCOUNT_ID"] = "acct"
+        os.environ["CF_API_TOKEN"] = "tok"
+        self.assertTrue(visual_engine.cloudflare_available())
+
+    def test_legacy_variable_names_also_work(self):
+        os.environ["CLOUDFLARE_ACCOUNT_ID"] = "acct"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "tok"
+        self.assertTrue(visual_engine.cloudflare_available())
+
+    def test_decodes_base64_json_replies(self):
+        raw = io.BytesIO()
+        Image.new("RGB", (8, 8), (10, 20, 30)).save(raw, "PNG")
+        encoded = base64.b64encode(raw.getvalue()).decode()
+
+        class Reply:
+            headers = {"content-type": "application/json"}
+            def json(self):
+                return {"success": True, "result": {"image": encoded}}
+
+        self.assertEqual(visual_engine._decode_cf_response(Reply()),
+                         raw.getvalue())
+
+    def test_decodes_raw_image_replies(self):
+        class Reply:
+            headers = {"content-type": "image/png"}
+            content = b"\x89PNG-bytes"
+
+        self.assertEqual(visual_engine._decode_cf_response(Reply()),
+                         b"\x89PNG-bytes")
+
+    def test_reports_an_unsuccessful_reply(self):
+        class Reply:
+            headers = {"content-type": "application/json"}
+            def json(self):
+                return {"success": False, "errors": [{"message": "quota"}]}
+
+        with self.assertRaises(ValueError):
+            visual_engine._decode_cf_response(Reply())
+
+    def test_square_output_is_cropped_not_stretched(self):
+        """flux-1-schnell may ignore the requested ratio. Stretching a square
+        to 16:9 distorts every face in it, so it must be cropped."""
+        square = Image.new("RGB", (1024, 1024))
+        out = visual_engine._fit_cover(square, 1920, 1080)
+        self.assertEqual(out.size, (1920, 1080))
 
 
 class TestEraGates(unittest.TestCase):

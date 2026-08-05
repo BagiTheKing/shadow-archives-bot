@@ -4,6 +4,7 @@ full 1080x1920 resolution, real image validation, and a designed fallback frame
 so a failed download never kills the video or shows an error page as a "photo".
 """
 
+import base64
 import io
 import os
 import random
@@ -131,6 +132,99 @@ def _generation_size(width: int, height: int):
     return gen_w, gen_h
 
 
+# ---------------------------------------------------------------------------
+# Cloudflare Workers AI — the preferred generator when it is configured.
+#
+# Pollinations is keyless, which is why the channel started there, but its
+# free flux endpoint is the quality ceiling everything else keeps running into.
+# Workers AI serves FLUX-1-schnell on a free daily allowance that comfortably
+# covers a daily Short plus two weekly long-forms, and the same painterly
+# prompt renders visibly cleaner through it.
+#
+# Entirely optional: with no credentials the pipeline behaves exactly as
+# before. Set CF_ACCOUNT_ID and CF_API_TOKEN to switch it on.
+# ---------------------------------------------------------------------------
+
+CF_MODEL = os.getenv("CF_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
+
+# schnell is distilled for very few steps; past ~8 it costs allowance without
+# improving the picture, and Workers AI rejects more than 8.
+CF_STEPS = int(os.getenv("CF_IMAGE_STEPS", "6"))
+
+
+def _cf_credentials():
+    account = os.getenv("CF_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
+    token = os.getenv("CF_API_TOKEN") or os.getenv("CLOUDFLARE_API_TOKEN")
+    return (account, token) if account and token else (None, None)
+
+
+def cloudflare_available() -> bool:
+    return all(_cf_credentials())
+
+
+def _decode_cf_response(response) -> bytes:
+    """Workers AI returns either raw image bytes or JSON carrying base64,
+    depending on the model and the day. Handle both rather than betting."""
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("image/"):
+        return response.content
+    payload = response.json()
+    if not payload.get("success", True):
+        raise ValueError(str(payload.get("errors"))[:200])
+    image = (payload.get("result") or {}).get("image")
+    if not image:
+        raise ValueError("no image in Workers AI response")
+    return base64.b64decode(image)
+
+
+def cloudflare_generate(prompt: str, width: int, height: int):
+    """One image from Workers AI, or None so the caller falls back to
+    Pollinations. Never raises: a generator outage must not end a run."""
+    account, token = _cf_credentials()
+    if not account:
+        return None
+    url = (f"https://api.cloudflare.com/client/v4/accounts/{account}"
+           f"/ai/run/{CF_MODEL}")
+    try:
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+            json={"prompt": prompt, "steps": CF_STEPS,
+                  "width": width, "height": height},
+            timeout=120)
+        if response.status_code != 200:
+            print(f"⚠️ Workers AI {response.status_code}: "
+                  f"{response.text[:160]}")
+            return None
+        return _decode_cf_response(response)
+    except Exception as e:
+        print(f"⚠️ Workers AI failed ({type(e).__name__}: {e}) — "
+              f"falling back to Pollinations.")
+        return None
+
+
+def _fit_cover(img: Image.Image, width: int, height: int) -> Image.Image:
+    """Scale-and-crop to exactly width x height without distorting.
+
+    Needed because flux-1-schnell may ignore the requested aspect ratio and
+    hand back a square. Stretching a square to 16:9 makes every face wrong,
+    so it is cropped instead.
+    """
+    if (img.width, img.height) == (width, height):
+        return img
+    src, dst = img.width / img.height, width / height
+    if src > dst:
+        new_w = int(img.height * dst)
+        img = img.crop(((img.width - new_w) // 2, 0,
+                        (img.width - new_w) // 2 + new_w, img.height))
+    elif src < dst:
+        new_h = int(img.width / dst)
+        img = img.crop((0, (img.height - new_h) // 2,
+                        img.width, (img.height - new_h) // 2 + new_h))
+    return img.resize((width, height), Image.LANCZOS)
+
+
 def _is_valid_image(content: bytes) -> bool:
     """Pollinations sometimes returns HTML error pages with status 200.
     Verify the bytes actually decode as a real image of a sane size."""
@@ -151,10 +245,27 @@ def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RET
 
     era_year dates the frame. Passing it here, rather than trusting the prompt
     to still carry the period, is what stops a 1928 story rendering in 2020s
-    dress."""
-    encoded = urllib.parse.quote(build_generation_prompt(prompt, era_year))
+    dress.
+
+    Cloudflare Workers AI is tried first when configured, because its
+    FLUX-1-schnell renders the same prompt visibly better than the keyless
+    endpoint; Pollinations remains the fallback and the default."""
+    final_prompt = build_generation_prompt(prompt, era_year)
+    encoded = urllib.parse.quote(final_prompt)
     seed = random.randint(0, 999_999)  # new seed per scene -> no duplicate frames
     gen_w, gen_h = _generation_size(width, height)
+
+    if cloudflare_available():
+        for cf_attempt in range(2):
+            blob = cloudflare_generate(final_prompt, gen_w, gen_h)
+            if blob and _is_valid_image(blob):
+                img = Image.open(io.BytesIO(blob)).convert("RGB")
+                _fit_cover(img, width, height).save(output_path, "JPEG",
+                                                    quality=93)
+                return True
+            if cf_attempt == 0:
+                time.sleep(4)
+        print("   ↩️ Workers AI unavailable — using Pollinations for this frame.")
 
     # A live run once returned HTTP 500 to all thirty generation requests,
     # because every attempt reused one parameter combination. Each attempt now
