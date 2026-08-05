@@ -7,6 +7,7 @@ so a failed download never kills the video or shows an error page as a "photo".
 import io
 import os
 import random
+import re
 import time
 import urllib.parse
 
@@ -14,6 +15,83 @@ import requests
 from PIL import Image, ImageDraw, ImageFilter
 
 WIDTH, HEIGHT = 1080, 1920
+
+# The channel's look, and the single source of truth for it. The script engines
+# ask their models to end every prompt with this, but a model that ignores the
+# instruction used to decide the channel's art direction by itself: the prompt
+# went to the generator with whatever style words the model preferred, and
+# "photorealistic, 8k" beats a painterly suffix appended after it. Style is now
+# imposed here, on the way out, so the model cannot vote on it.
+CANONICAL_STYLE = ("dramatic chiaroscuro lighting, dark moody cinematic oil "
+                   "painting, visible expressive brushwork, rich texture, "
+                   "muted color palette with one accent color, highly "
+                   "detailed, no text, no watermark")
+
+# Style directions that fight the painterly look. Any comma-clause containing
+# one of these is dropped from the prompt before CANONICAL_STYLE is applied —
+# photoreal tokens in particular drag a free model straight back into the
+# uncanny valley this channel keeps landing in.
+_CONFLICTING_STYLE = re.compile(
+    r"\b("
+    r"photo\s?-?\s?realistic|photorealism|hyper\s?-?\s?realistic|realistic photo|"
+    r"photograph|photography|photo|35\s?mm|film still|dslr|bokeh|lens|"
+    r"3d\s?render|octane|unreal engine|blender|cgi|"
+    r"digital art|concept art|vector|isometric|anime|manga|cartoon|comic|"
+    r"studio shot|stock photo|"
+    r"4k|8k|uhd|hdr|ultra\s?-?\s?detailed photo"
+    r")\b", re.IGNORECASE)
+
+
+def era_from_text(text: str):
+    """Earliest four-digit year mentioned, or None. Used to date a story from
+    its topic line when no explicit year was passed down."""
+    years = [int(y) for y in re.findall(r"\b(1[0-9]{3}|20[0-2][0-9])\b", text or "")]
+    return min(years) if years else None
+
+
+def _era_clause(era_year) -> str:
+    """The period instruction attached to every generated frame.
+
+    Telling the script model 'this story happens in 1928' is a request it can
+    forget by the time it writes the ninth image prompt — and a forgotten era
+    is how a fifteenth-century invasion ended up illustrated with modern
+    footage. Stamping the year onto the prompt at generation time is not a
+    request, so it cannot be forgotten.
+    """
+    if not era_year:
+        return ""
+    decade = (int(era_year) // 10) * 10
+    return (f"set in the year {era_year}, historically accurate {decade}s "
+            f"period detail, period-accurate clothing architecture vehicles "
+            f"weapons and technology, nothing modern anywhere in frame")
+
+
+def build_generation_prompt(prompt: str, era_year=None) -> str:
+    """The subject the model described, dated to its period, in exactly one
+    style — ours.
+
+    Splits on commas, drops any clause carrying a competing style direction,
+    removes a canonical suffix the model may already have appended, then
+    re-applies the era and the style once each. Subject wording is never
+    touched, so the shot type and the described action all survive.
+    """
+    body = (prompt or "").replace(CANONICAL_STYLE, " ")
+    kept = []
+    for clause in body.split(","):
+        clause = clause.strip()
+        if not clause or _CONFLICTING_STYLE.search(clause):
+            continue
+        # Drop an era clause we stamped on a previous pass, so repeated
+        # normalisation cannot stack "set in the year 1928" three times.
+        if clause.lower().startswith(("set in the year", "historically accurate",
+                                      "period-accurate", "nothing modern")):
+            continue
+        kept.append(clause)
+    subject = ", ".join(kept).strip(" .,") or "dark historical scene"
+
+    era = _era_clause(era_year)
+    return f"{subject}, {era}, {CANONICAL_STYLE}" if era \
+        else f"{subject}, {CANONICAL_STYLE}"
 
 # Flux is trained around one megapixel. Asking it for a 1920x1080 frame (2.07 MP)
 # is asking it to compose at twice the resolution it learned on, and the
@@ -66,34 +144,50 @@ def _is_valid_image(content: bytes) -> bool:
 
 
 def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RETRIES,
-                   width: int = WIDTH, height: int = HEIGHT) -> bool:
+                   width: int = WIDTH, height: int = HEIGHT, era_year=None) -> bool:
     """Defaults to the 1080x1920 Shorts frame. The long-form pipeline passes
     16:9 dimensions instead — a vertical eight-minute documentary is a bad watch
-    on desktop and TV, where search traffic actually lands."""
-    encoded = urllib.parse.quote(prompt)
+    on desktop and TV, where search traffic actually lands.
+
+    era_year dates the frame. Passing it here, rather than trusting the prompt
+    to still carry the period, is what stops a 1928 story rendering in 2020s
+    dress."""
+    encoded = urllib.parse.quote(build_generation_prompt(prompt, era_year))
     seed = random.randint(0, 999_999)  # new seed per scene -> no duplicate frames
     gen_w, gen_h = _generation_size(width, height)
 
     # A live run once returned HTTP 500 to all thirty generation requests,
     # because every attempt reused one parameter combination. Each attempt now
-    # uses a different one — falling back through models and finally to
-    # Pollinations' defaults — so a single unhappy option cannot cost the video
+    # uses a different one, so a single unhappy option cannot cost the video
     # every generated frame.
+    #
+    # ORDER MATTERS FOR THE LOOK, not just for reliability. flux is the model
+    # the channel's art direction is built around; turbo is a different model
+    # with a different, cheaper look, so it sits last and only rescues a frame
+    # that flux would otherwise not produce at all. Four flux shapes are tried
+    # before the look is allowed to change.
     variants = [
-        f"?width={gen_w}&height={gen_h}&model=flux&nologo=true"
-        f"&enhance={'true' if ENHANCE else 'false'}&seed={seed}",
-        f"?width={gen_w}&height={gen_h}&model=flux&nologo=true&seed={seed}",
-        f"?width={gen_w}&height={gen_h}&nologo=true&seed={seed}",
-        f"?width={gen_w}&height={gen_h}&model=turbo&nologo=true&seed={seed}",
-        f"?nologo=true&seed={seed}",
+        (f"?width={gen_w}&height={gen_h}&model=flux&nologo=true"
+         f"&enhance={'true' if ENHANCE else 'false'}&seed={seed}", "flux"),
+        (f"?width={gen_w}&height={gen_h}&model=flux&nologo=true&seed={seed}",
+         "flux"),
+        (f"?width=1024&height={int(1024 * height / width) // 16 * 16}"
+         f"&model=flux&nologo=true&seed={seed}", "flux@1024"),
+        (f"?width={gen_w}&height={gen_h}&nologo=true&seed={seed}", "default"),
+        (f"?width={gen_w}&height={gen_h}&model=turbo&nologo=true&seed={seed}",
+         "turbo"),
     ]
 
     for attempt in range(1, max_retries + 1):
-        api_url = (f"https://image.pollinations.ai/prompt/{encoded}"
-                   f"{variants[(attempt - 1) % len(variants)]}")
+        query, label = variants[(attempt - 1) % len(variants)]
+        api_url = f"https://image.pollinations.ai/prompt/{encoded}{query}"
         try:
             response = requests.get(api_url, timeout=90, headers=GEN_HEADERS)
             if response.status_code == 200 and _is_valid_image(response.content):
+                if label != "flux":
+                    # Surfaced because it changes how the frame looks, and the
+                    # run log is the only place that shows it.
+                    print(f"   ℹ️ rendered by '{label}' (flux unavailable)")
                 img = Image.open(io.BytesIO(response.content)).convert("RGB")
                 if (img.width, img.height) != (width, height):
                     img = img.resize((width, height), Image.LANCZOS)
@@ -144,12 +238,21 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
     os.makedirs(output_dir, exist_ok=True)
 
     scenes = script_data.get("scenes", [])
+
+    # Date the Short from its own topic line, so a story about 1928 is not
+    # illustrated in modern dress. The long-form pipeline carries an explicit
+    # era_year; here the topic string is the only thing that knows the period.
+    era_year = era_from_text(f"{script_data.get('topic', '')} "
+                             f"{script_data.get('title', '')}")
+    if era_year:
+        print(f"🕰️  Era anchor: ~{era_year}")
+
     for idx, scene in enumerate(scenes):
         image_path = os.path.join(output_dir, f"scene_{idx}.jpg")
         prompt = scene.get("image_prompt", "dark atmospheric historical scene, cinematic")
 
         print(f"🖼️ Generating image for scene {idx}...")
-        if download_image(prompt, image_path):
+        if download_image(prompt, image_path, era_year=era_year):
             print(f"📸 Saved {image_path}")
         else:
             print(f"⚠️ Scene {idx}: all attempts failed — using designed fallback frame.")

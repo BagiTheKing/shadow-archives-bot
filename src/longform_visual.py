@@ -231,7 +231,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
             print(f"🖼️  Scene {idx}: generating shot {shot + 1}/{wanted} "
                   f"(call {api_calls + 1})...")
             if download_image(_vary_prompt(prompt, shot), path,
-                              width=LF_W, height=LF_H):
+                              width=LF_W, height=LF_H, era_year=era):
                 _to_kb_size(path)
             elif _reuse_real_frame(real_pool, path, len(images) + idx):
                 # The generator being down must not turn the video into black

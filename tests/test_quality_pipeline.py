@@ -171,6 +171,69 @@ class TestPaintedStyle(unittest.TestCase):
         self.assertNotIn("35mm", llm_engine.SYSTEM_PROMPT)
 
 
+class TestStyleIsEnforcedNotRequested(unittest.TestCase):
+    """The style used to be an instruction to the script model. A model that
+    wrote its own ('photorealistic, 8k') kept it and had ours appended after,
+    so the generator received two styles and the photoreal half won."""
+
+    def test_competing_style_words_are_stripped(self):
+        out = visual_engine.build_generation_prompt(
+            "wide shot of a bank lobby, photorealistic, 8k, shot on 35mm film")
+        for banned in ("photorealistic", "8k", "35mm"):
+            self.assertNotIn(banned, out.lower())
+        self.assertIn("oil painting", out)
+
+    def test_subject_survives_intact(self):
+        out = visual_engine.build_generation_prompt(
+            "low-angle, 15th-century carrack under torchlight, photograph")
+        self.assertIn("15th-century carrack under torchlight", out)
+
+    def test_style_applied_exactly_once(self):
+        once = visual_engine.build_generation_prompt("a ship")
+        twice = visual_engine.build_generation_prompt(once)
+        self.assertEqual(twice.count("oil painting"), 1)
+        self.assertEqual(once, twice)
+
+    def test_empty_prompt_still_yields_something_renderable(self):
+        self.assertIn("oil painting", visual_engine.build_generation_prompt(""))
+
+    def test_flux_is_tried_before_any_other_model(self):
+        """turbo renders in a different look, so it must only ever rescue a
+        frame flux could not produce at all."""
+        import inspect
+        src = inspect.getsource(visual_engine.download_image)
+        self.assertLess(src.index("model=flux"), src.index("model=turbo"))
+
+
+class TestEraIsStampedOnEveryFrame(unittest.TestCase):
+    """Telling the script model 'this is 1928' is a request it can forget by
+    the ninth image prompt. The year is stamped on at generation instead."""
+
+    def test_era_clause_names_year_and_decade(self):
+        out = visual_engine.build_generation_prompt("a bank lobby", era_year=1928)
+        self.assertIn("set in the year 1928", out)
+        self.assertIn("1920s", out)
+        self.assertIn("nothing modern", out)
+
+    def test_era_clause_is_not_stacked_on_renormalisation(self):
+        once = visual_engine.build_generation_prompt("a lobby", 1928)
+        twice = visual_engine.build_generation_prompt(once, 1928)
+        self.assertEqual(twice.count("set in the year"), 1)
+        self.assertEqual(once, twice)
+
+    def test_no_era_leaves_prompt_undated(self):
+        self.assertNotIn("set in the year",
+                         visual_engine.build_generation_prompt("a ship"))
+
+    def test_era_read_from_a_topic_line(self):
+        self.assertEqual(visual_engine.era_from_text(
+            "Operation Eagle Claw (1980), the Iran hostage rescue"), 1980)
+        self.assertIsNone(visual_engine.era_from_text("no year here"))
+
+    def test_longform_and_shorts_share_one_style_definition(self):
+        self.assertEqual(longform_llm.STYLE_SUFFIX, visual_engine.CANONICAL_STYLE)
+
+
 class TestEraGates(unittest.TestCase):
     """The 1415-story-with-2020s-footage failure: every visual source is now
     gated on which side of the photography line the story sits."""

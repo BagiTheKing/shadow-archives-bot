@@ -21,6 +21,8 @@ import time
 from openai import OpenAI
 
 from llm_engine import get_free_models, _extract_json
+from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
+                           era_from_text)
 from topics import pick_topic
 
 # Words per chapter. edge-tts at +8% rate lands around 165 wpm, so ~1,200 words
@@ -65,12 +67,11 @@ ARC = [
 # still" treatment and the results got visibly worse: free image models render
 # convincing paint, but photoreal skin and hands land in the uncanny valley,
 # where every anatomical mistake reads as a mistake. In an illustration the
-# same brushwork reads as style. The channel's best-looking frames have always
-# come from this suffix, so it stays.
-STYLE_SUFFIX = ("dramatic chiaroscuro lighting, dark moody cinematic oil "
-                "painting, visible expressive brushwork, rich texture, muted "
-                "color palette with one accent color, highly detailed, "
-                "no text, no watermark")
+# same brushwork reads as style.
+#
+# Defined once in visual_engine and imported here so the instruction given to
+# the model and the style actually sent to the generator can never drift apart.
+STYLE_SUFFIX = CANONICAL_STYLE
 
 # One image per ~32 spoken words — a cut roughly every 11 seconds. The old 45
 # produced 13-frame nine-minute videos that reviewed as slideshows; the video
@@ -88,8 +89,7 @@ PHOTOGRAPHY_YEAR = 1840
 def _era_from_topic(topic: str):
     """Earliest plausible year named in the topic, or None. Good enough to
     decide which side of the photography line a story sits on."""
-    years = [int(y) for y in re.findall(r"\b(1[0-9]{3}|20[0-2][0-9])\b", topic or "")]
-    return min(years) if years else None
+    return era_from_text(topic)
 
 SYSTEM_PROMPT = f"""You write documentary narration for The Archive Paradox, a YouTube \
 channel about catastrophic decisions: one order, one design flaw, one miscalculation, \
@@ -656,8 +656,14 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
         segs = data["segments"]
         for s in segs:
-            if STYLE_SUFFIX not in s["image_prompt"]:
-                s["image_prompt"] = s["image_prompt"].rstrip(". ") + ", " + STYLE_SUFFIX
+            # Normalise rather than append. The old rule only added the style
+            # when it was absent, so a model that wrote its own
+            # ("photorealistic, 8k, cinematic photo") kept it and simply had
+            # ours bolted on after — two styles in one prompt, and the
+            # photoreal half won. build_generation_prompt strips competing
+            # directions and applies the channel's style exactly once.
+            s["image_prompt"] = build_generation_prompt(s["image_prompt"],
+                                                        era_year=era_year)
             s["archive_query"] = _clean_archive_query(s.get("archive_query"))
 
         stat = data.get("key_stat") or {}
