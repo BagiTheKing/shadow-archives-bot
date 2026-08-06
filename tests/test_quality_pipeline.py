@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from PIL import Image                                       # noqa: E402
 
 import archive_engine                                       # noqa: E402
+import audio_engine                                         # noqa: E402
 import llm_engine                                           # noqa: E402
 import longform_llm                                         # noqa: E402
 import longform_video                                       # noqa: E402
@@ -234,6 +235,36 @@ class TestEraIsStampedOnEveryFrame(unittest.TestCase):
 
     def test_longform_and_shorts_share_one_style_definition(self):
         self.assertEqual(longform_llm.STYLE_SUFFIX, visual_engine.CANONICAL_STYLE)
+
+
+class TestUnspeakableNarration(unittest.TestCase):
+    """A punctuation-only segment reached gTTS, which asserts rather than
+    raising a normal error, and killed a run 27 minutes in with a finished
+    script already on disk."""
+
+    def test_real_narration_is_speakable(self):
+        self.assertTrue(audio_engine.is_speakable("Eight helicopters took off."))
+        self.assertTrue(audio_engine.is_speakable("114 died"))
+
+    def test_punctuation_and_blanks_are_not(self):
+        for junk in ("", "   ", "—", "...", "-- , .", "\n\t", None):
+            self.assertFalse(audio_engine.is_speakable(junk), repr(junk))
+
+    def test_non_latin_narration_still_counts_as_speakable(self):
+        self.assertTrue(audio_engine.is_speakable("Прип'ять"))
+
+    def test_chapter_with_an_unsayable_segment_is_rejected(self):
+        chapter = {"segments": [
+            {"narration": "A real sentence.", "image_prompt": "wide shot"},
+            {"narration": " — ", "image_prompt": "close-up"},
+        ]}
+        self.assertFalse(longform_llm._chapter_usable(chapter))
+
+    def test_ordinary_chapter_still_passes(self):
+        chapter = {"segments": [
+            {"narration": "A real sentence.", "image_prompt": "wide shot"},
+        ]}
+        self.assertTrue(longform_llm._chapter_usable(chapter))
 
 
 class TestCloudflareProvider(unittest.TestCase):

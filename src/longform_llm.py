@@ -20,6 +20,7 @@ import time
 
 from openai import OpenAI
 
+from audio_engine import is_speakable
 from llm_engine import get_free_models, _extract_json
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -528,6 +529,13 @@ def _chapter_usable(data, enforce_history=False):
         return False
     for s in segs:
         if not s.get("narration") or not s.get("image_prompt"):
+            return False
+        # A truthy narration is not necessarily a sayable one: " " and "—"
+        # both pass the check above and then break the TTS engines. This is
+        # where such a segment should die, not twenty-seven minutes later.
+        if not is_speakable(s["narration"]):
+            print(f"⚠️ Chapter rejected: a segment has no speakable "
+                  f"narration ({s['narration'][:30]!r}).")
             return False
     if enforce_history:
         reason = _violates_history_rule(" ".join(s["narration"] for s in segs))
