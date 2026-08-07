@@ -329,10 +329,11 @@ def generate_video_script(max_retries_per_model: int = 2):
     """Generates the daily script. Rotates topic by date, falls through free models."""
     print("🧠 Initializing LLM Engine...")
 
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
+    # Same writer as the long-form lanes: Gemini's free tier when a key is
+    # present, OpenRouter's free models otherwise.
+    from llm_provider import get_provider, describe_provider
+    client, models, _ = get_provider()
+    print(f"🤖 Writer: {describe_provider()}")
 
     topic = pick_topic()
     print(f"📚 Today's topic: {topic}")
@@ -350,7 +351,7 @@ def generate_video_script(max_retries_per_model: int = 2):
         "Output ONLY the JSON object."
     )
 
-    for model in get_free_models():
+    for model in models:
         for attempt in range(1, max_retries_per_model + 1):
             print(f"🤖 Trying {model} (attempt {attempt}/{max_retries_per_model})...")
             try:

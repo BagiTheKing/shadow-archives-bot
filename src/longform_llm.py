@@ -22,6 +22,7 @@ from openai import OpenAI
 
 from audio_engine import is_speakable
 from llm_engine import get_free_models, _extract_json
+from llm_provider import get_provider, describe_provider
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
 from topics import pick_topic
@@ -304,14 +305,19 @@ def _archive_query_rule(era_year):
     line the story sits. Pre-1840 stories were being told to return null, which
     routed every scene to AI generation or modern stock — the anachronism
     problem in one line."""
+    # Shapes, not specimens. Naming real subjects here — this once offered
+    # "HMS Hood 1941" — invites a model to reuse them in a story they have
+    # nothing to do with, which is exactly how a casualty figure from the
+    # key_stat example ended up published as another battle's death toll.
     if era_year and era_year < PHOTOGRAPHY_YEAR:
         return (
             "Each segment also gets archive_query: a 2-6 word phrase naming REAL "
             "PERIOD ARTWORK or artifacts held on Wikimedia Commons for that "
             "segment — a specific painting, engraving, tapestry, portrait, "
             "historic map, illuminated manuscript, or a surviving building or "
-            "object (e.g. \"Conquest of Ceuta painting\", \"John I of Portugal "
-            "portrait\", \"15th century carrack engraving\"). This story predates "
+            "object, drawn from THIS story. Use the shapes "
+            "\"<event name> painting\", \"<ruler's name> portrait\", "
+            "\"<century> <vessel type> engraving\". This story predates "
             "photography, so NEVER name a photograph subject and NEVER a modern "
             "place name alone. Set it to null only when nothing depictable "
             "exists."
@@ -319,18 +325,35 @@ def _archive_query_rule(era_year):
     return (
         "Each segment also gets archive_query: a 1-6 word search phrase naming the "
         "REAL, PHOTOGRAPHABLE subject of that segment — the specific ship, person, "
-        "aircraft, building or place, as it would be captioned in an archive "
-        "(e.g. \"HMS Hood 1941\", \"Leonid Kuchma\", \"Chernobyl reactor 4\"). "
+        "aircraft, building or place FROM THIS STORY, as it would be captioned in "
+        "an archive. Use the shapes \"<ship name> <year>\", "
+        "\"<person's full name>\", \"<site name> <year>\". "
         "It is used to find a genuine historical photograph. Set it to null when "
         "the segment is abstract or hypothetical."
     )
 
 
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
-                    era_year=None):
+                    era_year=None, covered=None):
     n_images = max(2, round(words / WORDS_PER_IMAGE))
-    continuity = (f"\nThe previous chapter ended with: \"{previous_tail}\"\n"
-                  "Continue from there without repeating it.\n" if previous_tail else "")
+
+    # A 160-character tail was the whole of a chapter's memory, so every
+    # chapter re-summarised the story from the top: one live video spent its
+    # fourth chapter repeating "The port stayed open. The dead could not be
+    # recovered." Handing over the actual sentences already spoken, and
+    # forbidding them, is what stops that.
+    continuity = ""
+    if covered:
+        recent = "\n".join(f"- {line}" for line in covered[-24:])
+        continuity = (
+            "\nTHESE POINTS HAVE ALREADY BEEN NARRATED EARLIER IN THIS VIDEO:\n"
+            f"{recent}\n"
+            "Do not restate any of them, do not paraphrase them, and do not "
+            "summarise the story so far. This chapter must add new information "
+            "only, moving the account forward.\n")
+    elif previous_tail:
+        continuity = (f"\nThe previous chapter ended with: \"{previous_tail}\"\n"
+                      "Continue from there without repeating it.\n")
     # Retrying with a byte-identical prompt just reproduces the same rejected
     # output, which is exactly what happened on the first live trending run.
     correction = f"\n{feedback}\n" if feedback else ""
@@ -352,12 +375,23 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
         f"write one-line segments.\n\n"
         f"{_archive_query_rule(era_year)}\n\n"
         "Also give this chapter's single most striking figure as key_stat — a bare "
-        "number or short quantity and a four-word label. If the chapter has no "
-        "meaningful figure, set key_stat to null rather than inventing one.\n\n"
-        "Output ONLY a JSON object, no markdown fences:\n"
-        '{"key_stat": {"value": "1,415", "label": "men lost with Hood"}, '
-        '"segments": [{"narration": "...", "image_prompt": "...", '
-        '"archive_query": "HMS Hood 1941"}]}'
+        "number or short quantity and a four-word label, taken from THIS story. "
+        "If the chapter has no meaningful figure, set key_stat to null rather "
+        "than inventing one.\n\n"
+        "Every sentence must carry information the viewer did not have a "
+        "sentence ago. Never pad by restating an earlier line in new words.\n\n"
+        # The placeholders below are deliberately not plausible facts. This
+        # example once read {"value": "1,415", "label": "men lost with Hood"},
+        # and a model copied 1,415 into a video about a different battle
+        # entirely, as its casualty figure. An example that looks like an
+        # answer will be used as one.
+        "Output ONLY a JSON object, no markdown fences. Replace every "
+        "placeholder below with material from this story:\n"
+        '{"key_stat": {"value": "<figure from this story>", '
+        '"label": "<four word label>"}, '
+        '"segments": [{"narration": "<narration>", '
+        '"image_prompt": "<shot type, subject, setting>", '
+        '"archive_query": "<real subject to search for, or null>"}]}'
     )
 
 
@@ -445,9 +479,10 @@ def select_historical_anchor(candidates, client=None, models=None):
     if not candidates:
         return None
 
-    client = client or OpenAI(base_url="https://openrouter.ai/api/v1",
-                              api_key=os.getenv("OPENROUTER_API_KEY"))
-    models = models or get_free_models()
+    if client is None or models is None:
+        default_client, default_models, _ = get_provider()
+        client = client or default_client
+        models = models or default_models
 
     listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
     prompt = (
@@ -549,6 +584,70 @@ def _chapter_words(data):
     return sum(len(s["narration"].split()) for s in (data or {}).get("segments", []))
 
 
+# ---------------------------------------------------------------------------
+# Repetition control
+#
+# The failure this exists to catch, verbatim from a published run:
+#
+#   "The plan failed. The German fleet had the open canal. The port stayed
+#    open. The dead could not be recovered. ... The plan failed. The German
+#    fleet had the open canal. The port stayed open. The dead could not be
+#    recovered."
+#
+# Seven minutes of that is not a documentary, and no amount of good imagery
+# rescues it. Nothing in the pipeline noticed, because every individual check
+# it faced — valid JSON, enough segments, enough words — passed.
+# ---------------------------------------------------------------------------
+
+# Below this share of distinct sentences, a chapter is padding.
+MIN_UNIQUE_SENTENCE_RATIO = 0.72
+
+# A chapter may echo a little of what came before; a third is far too much.
+MAX_ECHO_RATIO = 0.25
+
+# A finished script this repetitive is not worth publishing at all.
+MIN_SCRIPT_UNIQUE_RATIO = 0.70
+
+
+def _sentences(text: str):
+    """Normalised sentences: lowercased, punctuation-stripped, trivial
+    fragments dropped, so 'The plan failed.' and 'the plan failed' match."""
+    out = []
+    for raw in re.split(r"[.!?]+", text or ""):
+        s = re.sub(r"[^\w\s]", "", raw.lower()).strip()
+        s = re.sub(r"\s+", " ", s)
+        if len(s.split()) >= 3:          # 'yes' or 'he did' are not padding
+            out.append(s)
+    return out
+
+
+def _unique_ratio(sentences) -> float:
+    return len(set(sentences)) / len(sentences) if sentences else 1.0
+
+
+def _chapter_repetition(data, previous_sentences=()):
+    """Returns a reason string if this chapter is padding, else None."""
+    text = " ".join(s.get("narration", "")
+                    for s in (data or {}).get("segments", []))
+    sentences = _sentences(text)
+    if len(sentences) < 4:
+        return None                      # too short to judge fairly
+
+    ratio = _unique_ratio(sentences)
+    if ratio < MIN_UNIQUE_SENTENCE_RATIO:
+        return (f"only {ratio:.0%} of its sentences are distinct — it is "
+                f"repeating itself")
+
+    if previous_sentences:
+        seen = set(previous_sentences)
+        echoed = sum(1 for s in sentences if s in seen)
+        echo = echoed / len(sentences)
+        if echo > MAX_ECHO_RATIO:
+            return (f"{echo:.0%} of it repeats sentences from earlier "
+                    f"chapters")
+    return None
+
+
 def _clean_archive_query(value):
     """Normalises a segment's archive_query, or returns None when the model
     sent nothing usable. A null here simply means the scene will be generated
@@ -563,8 +662,9 @@ def _clean_archive_query(value):
     return q
 
 
-def _validate_chapter(data, expected_words, enforce_history=False):
-    """Full check: usable AND long enough."""
+def _validate_chapter(data, expected_words, enforce_history=False,
+                      previous_sentences=()):
+    """Full check: usable, long enough, and not padding."""
     if not _chapter_usable(data, enforce_history):
         return False
     words = _chapter_words(data)
@@ -572,6 +672,10 @@ def _validate_chapter(data, expected_words, enforce_history=False):
     # is still usable. Below that the pacing collapses.
     if words < expected_words * 0.55:
         print(f"⚠️ Chapter too short: {words} words, wanted ~{expected_words}.")
+        return False
+    reason = _chapter_repetition(data, previous_sentences)
+    if reason:
+        print(f"⚠️ Chapter rejected: {reason}.")
         return False
     return True
 
@@ -588,9 +692,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     """
     print("🧠 Long-form LLM engine starting...")
 
-    client = OpenAI(base_url="https://openrouter.ai/api/v1",
-                    api_key=os.getenv("OPENROUTER_API_KEY"))
-    models = get_free_models()
+    client, models, provider = get_provider()
+    print(f"🤖 Writer: {describe_provider()}")
 
     if topic is None:
         offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
@@ -604,6 +707,10 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
     chapters, tail, short_chapters, dropped = [], "", 0, []
+    # Everything already narrated, as normalised sentences and as plain lines.
+    # The first feeds the repetition gate, the second is handed to the model so
+    # it knows what not to say again.
+    said_sentences, said_lines = [], []
     for heading, brief, words in ARC:
         print(f"✍️  Chapter: {heading} (~{words} words)...")
         data, best, feedback = None, None, ""
@@ -615,7 +722,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                 candidate = _call(client, models, SYSTEM_PROMPT,
                                   _chapter_prompt(topic, heading, brief, words,
                                                   tail, feedback,
-                                                  era_year=era_year),
+                                                  era_year=era_year,
+                                                  covered=said_lines),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -623,9 +731,26 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                 # the remaining chapters against a wall.
                 raise
 
-            if _validate_chapter(candidate, words, enforce_history=enforce_history):
+            if _validate_chapter(candidate, words,
+                                 enforce_history=enforce_history,
+                                 previous_sentences=said_sentences):
                 data = candidate
                 break
+
+            # Repetition needs its own correction. Telling a padding model to
+            # "write more words" is how it padded in the first place.
+            repetition = _chapter_repetition(candidate, said_sentences)
+            if repetition and _chapter_usable(candidate, enforce_history):
+                feedback = (
+                    "Your previous attempt repeated itself: "
+                    f"{repetition}. Write this chapter again with no repeated "
+                    "or reworded sentences. Every sentence must add a fact the "
+                    "viewer does not already have — a name, a time, a "
+                    "measurement, or an action someone took. Do not summarise "
+                    "what has already been said.")
+                if attempt < 1:
+                    print(f"   retrying chapter {heading!r} (2/2)...")
+                continue
 
             # Keep the longest structurally sound attempt as a fallback. The
             # history rule is checked here too, so it can never be bypassed.
@@ -674,6 +799,12 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                                         era_year=era_year)
             s["archive_query"] = _clean_archive_query(s.get("archive_query"))
 
+        chapter_text = " ".join(x["narration"] for x in segs)
+        said_sentences.extend(_sentences(chapter_text))
+        said_lines.extend(
+            line.strip() for line in re.split(r"(?<=[.!?])\s+", chapter_text)
+            if len(line.split()) >= 4)
+
         stat = data.get("key_stat") or {}
         if isinstance(stat, dict) and stat.get("value"):
             # The on-screen callout is ~10 characters wide before it looks silly.
@@ -695,9 +826,23 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print(f"⚠️ Publishing without {len(dropped)} chapter(s): "
               f"{', '.join(dropped)}.")
 
-    # Packaging pass: title, description and tags, written against the finished
-    # script rather than guessed up front.
     full_text = " ".join(s["narration"] for c in chapters for s in c["scenes"])
+
+    # Last gate before anything is rendered. A video that repeats itself for
+    # seven minutes earns no watch time and teaches the algorithm the channel
+    # is not worth showing, so publishing it is worse for the channel than
+    # publishing nothing. Better to burn the run and try again tomorrow.
+    script_sentences = _sentences(full_text)
+    script_ratio = _unique_ratio(script_sentences)
+    if len(script_sentences) >= 12 and script_ratio < MIN_SCRIPT_UNIQUE_RATIO:
+        print(f"❌ Halted: only {script_ratio:.0%} of the finished script's "
+              f"sentences are distinct (need {MIN_SCRIPT_UNIQUE_RATIO:.0%}). "
+              f"The models padded instead of writing.")
+        print("   Publishing this would cost the channel more than skipping "
+              "the run. Try again once the free models recover, or set "
+              "GEMINI_API_KEY for a stronger writer.")
+        return None
+    print(f"🔎 Script variety: {script_ratio:.0%} distinct sentences.")
     try:
         meta = _packaging_call(client, models, topic, full_text)
     except QuotaExhausted:

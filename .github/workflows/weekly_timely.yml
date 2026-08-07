@@ -65,6 +65,11 @@ jobs:
         id: pipeline
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional and the biggest script-quality upgrade available: a free
+          # Google AI Studio key (https://aistudio.google.com/apikey) switches
+          # the writer from OpenRouter's free models to Gemini's free tier.
+          # Absent, the pipeline uses OpenRouter exactly as before.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # Optional, and the biggest available quality upgrade: a free
           # Cloudflare account unlocks FLUX-1-schnell via Workers AI, which
           # renders the same prompts far more cleanly than the keyless

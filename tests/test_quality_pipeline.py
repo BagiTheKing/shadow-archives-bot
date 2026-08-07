@@ -19,6 +19,7 @@ from PIL import Image                                       # noqa: E402
 import archive_engine                                       # noqa: E402
 import audio_engine                                         # noqa: E402
 import llm_engine                                           # noqa: E402
+import llm_provider                                         # noqa: E402
 import longform_llm                                         # noqa: E402
 import longform_video                                       # noqa: E402
 import longform_visual                                      # noqa: E402
@@ -235,6 +236,101 @@ class TestEraIsStampedOnEveryFrame(unittest.TestCase):
 
     def test_longform_and_shorts_share_one_style_definition(self):
         self.assertEqual(longform_llm.STYLE_SUFFIX, visual_engine.CANONICAL_STYLE)
+
+
+class TestRepetitionGate(unittest.TestCase):
+    """Built against a real published script. Chapter 4 of the Zeebrugge video
+    was almost entirely these sentences on a loop, and every existing check
+    passed it: valid JSON, enough segments, enough words."""
+
+    PUBLISHED_PADDING = (
+        "The plan failed. The German fleet had the open canal. The port stayed "
+        "open. The dead could not be recovered. The archive holds the wreck. "
+        "The plan failed. The German fleet had the open canal. The port stayed "
+        "open. The dead could not be recovered. The decision was a mistake. "
+        "The story ends with the wreck. The plan failed. The German fleet had "
+        "the open canal. The port stayed open. The dead could not be recovered."
+    )
+
+    REAL_WRITING = (
+        "Thetis hit the net defence, lost steering and grounded early. "
+        "Intrepid and Iphigenia followed but drifted off course in the smoke. "
+        "After-action reports cited inadequate channel marking. "
+        "Buoys had shifted by tidal currents. "
+        "Motor launches failed to illuminate the critical turn. "
+        "Three weeks later a second raid used Vindictive as a block ship. "
+        "She grounded five hundred yards short of the lock gates."
+    )
+
+    def _chapter(self, text):
+        return {"segments": [{"narration": text, "image_prompt": "wide shot"}]}
+
+    def test_the_published_padding_is_now_rejected(self):
+        reason = longform_llm._chapter_repetition(
+            self._chapter(self.PUBLISHED_PADDING))
+        self.assertIsNotNone(reason)
+        self.assertIn("repeating itself", reason)
+
+    def test_real_writing_passes(self):
+        self.assertIsNone(
+            longform_llm._chapter_repetition(self._chapter(self.REAL_WRITING)))
+
+    def test_a_chapter_echoing_an_earlier_one_is_rejected(self):
+        earlier = longform_llm._sentences(self.REAL_WRITING)
+        reason = longform_llm._chapter_repetition(
+            self._chapter(self.REAL_WRITING), previous_sentences=earlier)
+        self.assertIsNotNone(reason)
+        self.assertIn("earlier chapters", reason)
+
+    def test_short_chapters_are_not_judged(self):
+        self.assertIsNone(longform_llm._chapter_repetition(
+            self._chapter("A single line. And one more.")))
+
+    def test_sentence_normalisation_ignores_case_and_punctuation(self):
+        a = longform_llm._sentences("The plan failed.")
+        b = longform_llm._sentences("the plan failed")
+        self.assertEqual(a, b)
+
+    def test_validate_chapter_rejects_padding(self):
+        self.assertFalse(longform_llm._validate_chapter(
+            self._chapter(self.PUBLISHED_PADDING), expected_words=20))
+
+    def test_prompt_no_longer_ships_a_copyable_casualty_figure(self):
+        """'1,415' was an example value and a model published it as this
+        story's death toll."""
+        prompt = longform_llm._chapter_prompt(
+            "Some disaster", "The Cost", "brief", 200, "")
+        self.assertNotIn("1,415", prompt)
+        self.assertNotIn("Hood", prompt)
+
+    def test_prompt_hands_over_what_was_already_said(self):
+        prompt = longform_llm._chapter_prompt(
+            "Some disaster", "The Chain", "brief", 200, "",
+            covered=["The port stayed open."])
+        self.assertIn("ALREADY BEEN NARRATED", prompt)
+        self.assertIn("The port stayed open.", prompt)
+
+
+class TestWriterProvider(unittest.TestCase):
+
+    def setUp(self):
+        self._saved = os.environ.pop("GEMINI_API_KEY", None)
+
+    def tearDown(self):
+        if self._saved:
+            os.environ["GEMINI_API_KEY"] = self._saved
+
+    def test_defaults_to_openrouter_without_a_key(self):
+        self.assertFalse(llm_provider.gemini_available())
+        self.assertIn("OpenRouter", llm_provider.describe_provider())
+
+    def test_prefers_gemini_when_configured(self):
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        self.assertTrue(llm_provider.gemini_available())
+        client, models, name = llm_provider.get_provider()
+        self.assertEqual(name, "gemini")
+        self.assertTrue(models)
+        self.assertIn("gemini", models[0])
 
 
 class TestUnspeakableNarration(unittest.TestCase):
