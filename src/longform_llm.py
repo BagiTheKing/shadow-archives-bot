@@ -22,7 +22,7 @@ from openai import OpenAI
 
 from audio_engine import is_speakable
 from llm_engine import get_free_models, _extract_json
-from llm_provider import get_pool, describe_provider
+from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
 from topics import pick_topic
@@ -165,6 +165,24 @@ FAILURE_LOG_DIR = os.path.join("build", "llm_failures")
 # should sit well clear of the longest chapter rather than just above it.
 CHAPTER_MAX_TOKENS = 4000
 
+# Gemini's 3.x flash models think before they answer, and the thinking is
+# charged against the same output ceiling as the reply. At 4,000 tokens every
+# single chapter of a live run came back "Repaired a truncated JSON reply" and
+# the video finished at 5.0 minutes instead of 7.5 — "The Decision", the
+# chapter the whole format is built around, arrived with 56 words of its 260.
+#
+# Free-tier output limits on these models are far above this, so the ceiling
+# was pure self-harm. Thinking is also switched off below, which returns the
+# whole budget to the actual script.
+GEMINI_CHAPTER_MAX_TOKENS = 16000
+
+# "none" keeps flash from spending the reply budget on reasoning it does not
+# need for a 280-word chapter. Set GEMINI_REASONING to low/medium to restore it.
+GEMINI_REASONING = os.getenv("GEMINI_REASONING", "none")
+
+CHAPTER_ATTEMPTS_GEMINI = 3
+CHAPTER_ATTEMPTS_OPENROUTER = 2
+
 # The arc has six chapters. Losing one late is survivable; losing three means
 # the video no longer has a shape worth publishing.
 MIN_PUBLISHABLE_CHAPTERS = 4
@@ -248,6 +266,14 @@ def _log_raw_failure(model, content, error, finish_reason):
         pass                            # diagnostics must never break a run
 
 
+def _max_tokens_for(provider: str, requested: int) -> int:
+    """Gemini gets real headroom; OpenRouter's free models keep the tight
+    ceiling they need to stay inside a 50-request day."""
+    if provider == "gemini":
+        return max(requested, GEMINI_CHAPTER_MAX_TOKENS)
+    return requested
+
+
 def _call(pool, system, user, max_tokens):
     """Runs a prompt down the model chain, one attempt per model.
 
@@ -273,15 +299,25 @@ def _call(pool, system, user, max_tokens):
         if model in exhausted:
             continue
         client = pool.client_for(model)
+        provider = pool.provider_for(model)
         try:
             _request_count += 1
-            r = client.chat.completions.create(
+            kwargs = dict(
                 model=model,
                 messages=[{"role": "system", "content": system},
                           {"role": "user", "content": user}],
                 temperature=0.7,
-                max_tokens=max_tokens,
+                max_tokens=_max_tokens_for(provider, max_tokens),
             )
+            if provider == "gemini" and GEMINI_REASONING:
+                kwargs["reasoning_effort"] = GEMINI_REASONING
+            try:
+                r = client.chat.completions.create(**kwargs)
+            except TypeError:
+                # An SDK or endpoint that does not know reasoning_effort must
+                # not cost the run a chapter.
+                kwargs.pop("reasoning_effort", None)
+                r = client.chat.completions.create(**kwargs)
             finish_reason = getattr(r.choices[0], "finish_reason", "")
             content = _reply_text(r)
             if not content:
@@ -742,9 +778,13 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print(f"✍️  Chapter: {heading} (~{words} words)...")
         data, best, feedback = None, None, ""
 
-        # Two attempts, not three: every attempt costs requests from a 50/day
-        # budget that eight successful calls already have to fit inside.
-        for attempt in range(2):
+        # Three attempts on Gemini, two on OpenRouter. The old flat two was
+        # sized for a 50-request day; Gemini's free tier is far larger, and a
+        # chapter arriving at 56 words of its 260 — as "The Decision" did — is
+        # exactly the case worth spending one more request on.
+        attempts = CHAPTER_ATTEMPTS_GEMINI if gemini_available() \
+            else CHAPTER_ATTEMPTS_OPENROUTER
+        for attempt in range(attempts):
             try:
                 candidate = _call(pool, SYSTEM_PROMPT,
                                   _chapter_prompt(topic, heading, brief, words,
@@ -775,8 +815,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                     "viewer does not already have — a name, a time, a "
                     "measurement, or an action someone took. Do not summarise "
                     "what has already been said.")
-                if attempt < 1:
-                    print(f"   retrying chapter {heading!r} (2/2)...")
+                if attempt < attempts - 1:
+                    print(f"   retrying chapter {heading!r} "
+                          f"({attempt + 2}/{attempts})...")
                 continue
 
             # Keep the longest structurally sound attempt as a fallback. The
@@ -789,8 +830,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                             f"too short. Write at least {int(words * 0.8)} words "
                             f"this time, with more specific detail — names, dates, "
                             f"figures, and what people actually did.")
-            if attempt < 1:
-                print(f"   retrying chapter {heading!r} (2/2)...")
+            if attempt < attempts - 1:
+                print(f"   retrying chapter {heading!r} "
+                      f"({attempt + 2}/{attempts})...")
 
         if data is None and best is not None:
             # A short chapter costs pacing. Abandoning the run costs the video.
@@ -900,7 +942,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     note = f", {short_chapters} under target" if short_chapters else ""
     print(f"✅ Script complete: {len(chapters)} chapters, {words} words "
           f"(~{words / 165:.1f} min narrated{note})")
-    print(f"📊 Used {_request_count} OpenRouter requests this run.")
+    print(f"📊 Used {_request_count} model request(s) this run.")
     if words < 700:
         print(f"⚠️ {words} words is well under the ~1,220 target — the video will "
               f"run short. Usually means the free models were degraded today.")
