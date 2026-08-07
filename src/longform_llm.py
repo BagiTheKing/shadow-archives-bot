@@ -22,7 +22,7 @@ from openai import OpenAI
 
 from audio_engine import is_speakable
 from llm_engine import get_free_models, _extract_json
-from llm_provider import get_provider, describe_provider
+from llm_provider import get_pool, describe_provider
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
 from topics import pick_topic
@@ -152,6 +152,10 @@ _request_count = 0
 MAX_PARSE_FAILURES = 2
 _parse_failures = {}
 
+# Models this key cannot use today: retired (404) or out of quota (429).
+# Cleared only by starting a new run.
+_retired = set()
+
 FAILURE_LOG_DIR = os.path.join("build", "llm_failures")
 
 # A 280-word chapter with six image prompts is around 1,200 tokens of JSON, and
@@ -191,7 +195,8 @@ def _quota_reset(err: str) -> str:
 def _usable_models(models):
     """Drops models that have already proved they cannot return JSON today."""
     live = [m for m in models
-            if _parse_failures.get(m, 0) < MAX_PARSE_FAILURES]
+            if _parse_failures.get(m, 0) < MAX_PARSE_FAILURES
+            and m not in _retired]
     # If every model has been written off, try them all again rather than
     # returning nothing: a degraded reply still beats no reply.
     return live or list(models)
@@ -243,15 +248,31 @@ def _log_raw_failure(model, content, error, finish_reason):
         pass                            # diagnostics must never break a run
 
 
-def _call(client, models, system, user, max_tokens):
-    """Runs a prompt down the free-model chain, one attempt per model.
+def _call(pool, system, user, max_tokens):
+    """Runs a prompt down the model chain, one attempt per model.
 
-    Raises QuotaExhausted the moment the daily allowance is gone, instead of
+    The chain spans providers: Gemini's models first, then OpenRouter's free
+    ones, each with its own client. A run used to die outright when Gemini
+    answered 404 and 429, despite a working OpenRouter key being configured.
+
+    Raises QuotaExhausted the moment a daily allowance is gone, instead of
     walking the remaining models to collect identical 429s.
     """
     global _preferred_model, _request_count
 
-    for model in _order_models(models):
+    if not pool:
+        raise RuntimeError("No LLM provider configured: set GEMINI_API_KEY "
+                           "or OPENROUTER_API_KEY.")
+
+    # A model that is out of quota is out for the run, not just this call.
+    # Without this every chapter re-tried the same exhausted model first and
+    # paid the same 429 before moving on.
+    exhausted = set()
+
+    for model in _order_models(pool.models):
+        if model in exhausted:
+            continue
+        client = pool.client_for(model)
         try:
             _request_count += 1
             r = client.chat.completions.create(
@@ -295,8 +316,16 @@ def _call(client, models, system, user, max_tokens):
             if _parse_failures.get(model, 0) >= MAX_PARSE_FAILURES:
                 print(f"   ⛔ dropping {model} for the rest of this run "
                       f"({MAX_PARSE_FAILURES} unparseable replies).")
-            if "429" in err:
-                time.sleep(10)          # per-minute throttle, worth one pause
+            # A retired model never comes back mid-run, and a model out of its
+            # daily quota will not recover either. Retiring both here is what
+            # keeps six chapters from each paying the same two failures.
+            if "404" in err or "no longer available" in err.lower():
+                _retired.add(model)
+                print(f"   ⛔ {model} is not available to this key — dropped.")
+            elif "429" in err or "quota" in err.lower():
+                _retired.add(model)
+                print(f"   ⛔ {model} is out of quota — dropped for this run.")
+                time.sleep(5)
     return None
 
 
@@ -469,7 +498,7 @@ def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
     return False
 
 
-def select_historical_anchor(candidates, client=None, models=None):
+def select_historical_anchor(candidates, pool=None):
     """Maps a trending subject onto a historical event old enough to be settled.
 
     Returns {"subject", "topic", "anchor_year", "why"} or None. None is not a
@@ -479,10 +508,7 @@ def select_historical_anchor(candidates, client=None, models=None):
     if not candidates:
         return None
 
-    if client is None or models is None:
-        default_client, default_models, _ = get_provider()
-        client = client or default_client
-        models = models or default_models
+    pool = pool or get_pool()
 
     listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
     prompt = (
@@ -521,7 +547,7 @@ def select_historical_anchor(candidates, client=None, models=None):
     # models spend their ceiling thinking before they emit anything: at 600 this
     # call truncated on three models in a row on a live run, wasting three
     # requests from the 50/day budget before a single chapter was written.
-    data = _call(client, models,
+    data = _call(pool,
                  "You choose historical documentary topics. Output only JSON.",
                  prompt, max_tokens=3000)
     if not data or not data.get("topic"):
@@ -692,8 +718,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     """
     print("🧠 Long-form LLM engine starting...")
 
-    client, models, provider = get_provider()
+    pool = get_pool()
     print(f"🤖 Writer: {describe_provider()}")
+    print(f"   model chain: {', '.join(pool.models) or 'none'}")
 
     if topic is None:
         offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
@@ -719,7 +746,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # budget that eight successful calls already have to fit inside.
         for attempt in range(2):
             try:
-                candidate = _call(client, models, SYSTEM_PROMPT,
+                candidate = _call(pool, SYSTEM_PROMPT,
                                   _chapter_prompt(topic, heading, brief, words,
                                                   tail, feedback,
                                                   era_year=era_year,
@@ -844,7 +871,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         return None
     print(f"🔎 Script variety: {script_ratio:.0%} distinct sentences.")
     try:
-        meta = _packaging_call(client, models, topic, full_text)
+        meta = _packaging_call(pool, topic, full_text)
     except QuotaExhausted:
         # Six chapters are already written. Losing the video over its title
         # would be absurd — fall back to topic-derived metadata.
@@ -880,10 +907,10 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     return script
 
 
-def _packaging_call(client, models, topic, full_text):
+def _packaging_call(pool, topic, full_text):
     """Title, description, tags and thumbnail text, written against the finished
     script rather than guessed up front."""
-    return _call(client, models,
+    return _call(pool,
                  "You write YouTube metadata. Output only JSON, no fences.",
                  f"This is the narration of a documentary about:\n{topic}\n\n"
                  f"{full_text[:3000]}\n\n"

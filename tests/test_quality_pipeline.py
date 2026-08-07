@@ -324,13 +324,56 @@ class TestWriterProvider(unittest.TestCase):
         self.assertFalse(llm_provider.gemini_available())
         self.assertIn("OpenRouter", llm_provider.describe_provider())
 
-    def test_prefers_gemini_when_configured(self):
+    def test_gemini_detected_when_configured(self):
         os.environ["GEMINI_API_KEY"] = "test-key"
         self.assertTrue(llm_provider.gemini_available())
-        client, models, name = llm_provider.get_provider()
-        self.assertEqual(name, "gemini")
-        self.assertTrue(models)
-        self.assertIn("gemini", models[0])
+
+    def test_model_names_are_discovered_not_hardcoded(self):
+        """Two hand-written Gemini IDs went stale and returned 404 'no longer
+        available to new users', killing a run. The list comes from the API."""
+        class FakeModel:
+            def __init__(self, i): self.id = i
+
+        class FakeClient:
+            class models:
+                @staticmethod
+                def list():
+                    return [FakeModel("models/gemini-2.0-flash"),
+                            FakeModel("models/gemini-flash-latest"),
+                            FakeModel("models/text-embedding-004"),
+                            FakeModel("models/imagen-3.0"),
+                            FakeModel("models/gemini-2.5-pro")]
+
+        found = llm_provider.discover_gemini_models(FakeClient())
+        self.assertNotIn("text-embedding-004", found)
+        self.assertNotIn("imagen-3.0", found)
+        self.assertTrue(all("gemini" in m for m in found))
+        self.assertNotIn("/", found[0])          # the 'models/' prefix is gone
+        self.assertIn("flash", found[0])         # flash outranks pro
+
+    def test_discovery_failure_falls_back_to_generic_aliases(self):
+        class Broken:
+            class models:
+                @staticmethod
+                def list():
+                    raise RuntimeError("network down")
+
+        self.assertEqual(llm_provider.discover_gemini_models(Broken()),
+                         llm_provider.GEMINI_FALLBACK_MODELS)
+
+    def test_pool_chains_gemini_then_openrouter(self):
+        """Gemini answering 404 and 429 must not end a run when an OpenRouter
+        key is sitting right there — which is exactly what happened."""
+        pool = llm_provider.ModelPool([
+            ("gemini-flash-latest", "gclient", "gemini"),
+            ("some/model:free", "orclient", "openrouter"),
+        ])
+        self.assertEqual(pool.models[0], "gemini-flash-latest")
+        self.assertEqual(pool.client_for("some/model:free"), "orclient")
+        self.assertIn("gemini -> openrouter", pool.describe())
+
+    def test_empty_pool_is_falsey(self):
+        self.assertFalse(llm_provider.ModelPool([]))
 
 
 class TestUnspeakableNarration(unittest.TestCase):
