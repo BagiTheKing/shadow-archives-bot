@@ -112,6 +112,11 @@ def fetch_recent_videos(limit=50):
                 out.append({
                     "videoId": v["id"],
                     "title": v["snippet"]["title"],
+                    # match_topic's exact-match path reads the topic line that
+                    # main.py writes into every description. It was never
+                    # given one, so the reliable path was dead code and every
+                    # match fell through to fuzzy title overlap.
+                    "description": v["snippet"].get("description", ""),
                     "likes": int(stats.get("likeCount", 0) or 0),
                     "views": int(stats.get("viewCount", 0) or 0),
                     "duration": v["contentDetails"].get("duration", ""),
@@ -119,8 +124,17 @@ def fetch_recent_videos(limit=50):
         return out
     except Exception as e:
         print(f"⚠️ Channel insights unavailable ({type(e).__name__}: {e}).")
-        print("   The refresh token probably lacks a read scope "
-              "(youtube.readonly). Falling back to the date rotation.")
+        if "insufficient" in str(e).lower() or "403" in str(e):
+            # Scopes are frozen when a refresh token is minted, so this can
+            # only be fixed by creating the token again — no amount of code
+            # changes will grant it.
+            print("   YT_REFRESH_TOKEN was minted without "
+                  "'youtube.readonly', so this lane cannot read the channel's "
+                  "own numbers and is falling back to the date rotation.")
+            print("   Fix: run tools/get_youtube_refresh_token.py locally and "
+                  "replace the YT_REFRESH_TOKEN secret.")
+        else:
+            print("   Falling back to the date rotation.")
         return None
 
 
@@ -154,7 +168,7 @@ def best_performing_topic(min_likes=2):
     for v in ranked:
         if v["likes"] < min_likes:
             break
-        topic = match_topic(v["title"])
+        topic = match_topic(v["title"], v.get("description", ""))
         if topic:
             print(f"🏆 Encore pick: {v['title'][:70]!r} ({v['likes']} likes)")
             print(f"   -> {topic[:100]}")

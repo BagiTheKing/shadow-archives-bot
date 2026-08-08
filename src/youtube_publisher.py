@@ -5,6 +5,14 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+# Everything the pipeline does with the channel. Mint a refresh token covering
+# all of these with tools/get_youtube_refresh_token.py.
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",     # publishing
+    "https://www.googleapis.com/auth/youtube.readonly",   # encore lane's stats
+    "https://www.googleapis.com/auth/youtube.force-ssl",  # thumbnails, captions
+]
+
 
 def get_authenticated_service():
     print("🔐 Authenticating with YouTube API...")
@@ -24,6 +32,12 @@ def get_authenticated_service():
         token_uri=client_info["token_uri"],
         client_id=client_info["client_id"],
         client_secret=client_info["client_secret"],
+        # Declared so the refreshed access token carries read permission as
+        # well as upload. This does NOT grant anything the refresh token was
+        # not minted with — scopes are fixed at consent time — so a token
+        # created for upload only still cannot read the channel. Regenerate it
+        # with tools/get_youtube_refresh_token.py when that happens.
+        scopes=SCOPES,
     )
     return build("youtube", "v3", credentials=credentials)
 

@@ -635,3 +635,52 @@ class TestArchiveQueryCleaning(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEncoreTopicMatching(unittest.TestCase):
+    """The encore lane picks the topic from the channel's own numbers, so a
+    published video has to map back to a pool entry reliably."""
+
+    def setUp(self):
+        import channel_insights
+        self.ci = channel_insights
+        self.topic = self.ci.ALL_TOPICS[0]
+
+    def test_exact_match_via_description_beats_guessing(self):
+        """main.py writes the topic verbatim into every description. That path
+        existed but was never given a description to read."""
+        matched = self.ci.match_topic("A totally unrelated title",
+                                      f"Some blurb\n\n{self.topic}\n\nSubscribe.")
+        self.assertEqual(matched, self.topic)
+
+    def test_fetched_videos_carry_the_description(self):
+        import inspect
+        src = inspect.getsource(self.ci.fetch_recent_videos)
+        self.assertIn('"description"', src)
+
+    def test_best_performing_topic_passes_the_description_through(self):
+        import inspect
+        src = inspect.getsource(self.ci.best_performing_topic)
+        self.assertIn('v.get("description"', src)
+
+    def test_unmatchable_video_returns_none_rather_than_a_wrong_topic(self):
+        self.assertIsNone(self.ci.match_topic("zzz qqq", ""))
+
+
+class TestYouTubeScopes(unittest.TestCase):
+
+    def test_all_three_scopes_are_declared(self):
+        import youtube_publisher as yp
+        joined = " ".join(yp.SCOPES)
+        for needed in ("youtube.upload", "youtube.readonly", "youtube.force-ssl"):
+            self.assertIn(needed, joined)
+
+    def test_helper_requests_the_same_scopes(self):
+        import importlib.util, os as _os
+        path = _os.path.join(_os.path.dirname(__file__), "..", "tools",
+                             "get_youtube_refresh_token.py")
+        spec = importlib.util.spec_from_file_location("tok", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        import youtube_publisher as yp
+        self.assertEqual(set(mod.SCOPES), set(yp.SCOPES))
