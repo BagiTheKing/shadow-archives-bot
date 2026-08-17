@@ -684,3 +684,62 @@ class TestYouTubeScopes(unittest.TestCase):
         spec.loader.exec_module(mod)
         import youtube_publisher as yp
         self.assertEqual(set(mod.SCOPES), set(yp.SCOPES))
+
+
+class TestCloudflarePayload(unittest.TestCase):
+    """Workers AI rejected every request for as long as this integration
+    existed, because flux-1-schnell's schema has no width/height:
+
+        AiError: Bad input: Error: Additional or unevaluated properties
+        '/width, /height' at '/' not allowed
+
+    Every frame silently fell back to Pollinations, so the configured
+    upgrade never rendered anything. These tests assert the wire payload,
+    which is the only thing that would have caught it.
+    """
+
+    def setUp(self):
+        os.environ["CF_ACCOUNT_ID"] = "acct"
+        os.environ["CF_API_TOKEN"] = "tok"
+        self._real_post = visual_engine.requests.post
+        self.sent = {}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            self.sent.clear()
+            self.sent.update(json or {})
+            raise RuntimeError("stop here, the payload is what matters")
+
+        visual_engine.requests.post = fake_post
+
+    def tearDown(self):
+        visual_engine.requests.post = self._real_post
+        for k in ("CF_ACCOUNT_ID", "CF_API_TOKEN"):
+            os.environ.pop(k, None)
+
+    def test_flux_payload_omits_dimensions(self):
+        visual_engine.cloudflare_generate("a ship", 1080, 1920)
+        self.assertIn("prompt", self.sent)
+        self.assertIn("steps", self.sent)
+        self.assertNotIn("width", self.sent)
+        self.assertNotIn("height", self.sent)
+
+    def test_sdxl_style_models_do_get_dimensions(self):
+        original = visual_engine.CF_MODEL
+        visual_engine.CF_MODEL = "@cf/bytedance/stable-diffusion-xl-lightning"
+        try:
+            visual_engine.cloudflare_generate("a ship", 1080, 1920)
+            self.assertEqual(self.sent.get("width"), 1080)
+            self.assertEqual(self.sent.get("height"), 1920)
+        finally:
+            visual_engine.CF_MODEL = original
+
+    def test_model_capability_detection(self):
+        self.assertFalse(visual_engine._cf_accepts_dimensions(
+            "@cf/black-forest-labs/flux-1-schnell"))
+        self.assertTrue(visual_engine._cf_accepts_dimensions(
+            "@cf/bytedance/stable-diffusion-xl-lightning"))
+        self.assertTrue(visual_engine._cf_accepts_dimensions(
+            "@cf/lykon/dreamshaper-8-lcm"))
+
+    def test_a_failure_returns_none_so_pollinations_takes_over(self):
+        self.assertIsNone(visual_engine.cloudflare_generate("x", 1080, 1920))

@@ -151,6 +151,26 @@ CF_MODEL = os.getenv("CF_IMAGE_MODEL", "@cf/black-forest-labs/flux-1-schnell")
 # improving the picture, and Workers AI rejects more than 8.
 CF_STEPS = int(os.getenv("CF_IMAGE_STEPS", "6"))
 
+# Which Workers AI models accept width and height.
+#
+# flux-1-schnell does NOT. Sending them does not get them ignored, it fails
+# the whole request:
+#
+#   AiError: Bad input: Error: Additional or unevaluated properties
+#   '/width, /height' at '/' not allowed
+#
+# Which is what every single generation did for as long as this integration
+# has existed — silently falling back to Pollinations on every frame, so the
+# configured upgrade never rendered one pixel. flux returns a square; the
+# caller crops it to frame.
+CF_MODELS_ACCEPTING_DIMENSIONS = ("stable-diffusion", "dreamshaper",
+                                  "lightning", "sdxl")
+
+
+def _cf_accepts_dimensions(model: str) -> bool:
+    low = model.lower()
+    return any(family in low for family in CF_MODELS_ACCEPTING_DIMENSIONS)
+
 
 def _cf_credentials():
     account = os.getenv("CF_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
@@ -185,13 +205,15 @@ def cloudflare_generate(prompt: str, width: int, height: int):
         return None
     url = (f"https://api.cloudflare.com/client/v4/accounts/{account}"
            f"/ai/run/{CF_MODEL}")
+    payload = {"prompt": prompt, "steps": CF_STEPS}
+    if _cf_accepts_dimensions(CF_MODEL):
+        payload["width"], payload["height"] = width, height
     try:
         response = requests.post(
             url,
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": "application/json"},
-            json={"prompt": prompt, "steps": CF_STEPS,
-                  "width": width, "height": height},
+            json=payload,
             timeout=120)
         if response.status_code != 200:
             print(f"⚠️ Workers AI {response.status_code}: "
