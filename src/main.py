@@ -3,6 +3,8 @@ import os
 import re
 import shutil
 
+import formats
+
 from caption_track import SRT_NAME
 from llm_engine import generate_video_script
 from thumbnail_engine import make_thumbnail, pick_source_scene
@@ -89,8 +91,9 @@ def build_metadata(script_data: dict, episode=None):
     series_line = ""
     if SERIES_NAME:
         numbered = f" #{episode}" if episode else ""
-        series_line = (f"\n\n{SERIES_NAME}{numbered} — every episode is one "
-                       "decision and what it cost.")
+        fmt = formats.get(script_data.get("format"))
+        series_line = (f"\n\n{SERIES_NAME}{numbered} · {fmt['name']} — "
+                       f"{fmt['promise']}.")
     description += series_line
     description += (
         f"\n\n{CHANNEL_NAME} — one catastrophic decision, explained, {UPLOAD_CADENCE}."
@@ -101,6 +104,7 @@ def build_metadata(script_data: dict, episode=None):
 
     tags = script_data.get("tags") or []
     tags = [t.strip() for t in tags if isinstance(t, str) and t.strip()][:15]
+    tags += formats.tags_of(script_data.get("format"))
     tags += BASE_TAGS
     tags = list(dict.fromkeys(tags))  # dedupe, keep order
 
@@ -181,9 +185,15 @@ def build_thumbnail(script_data: dict, build_dir: str):
         if not headline.strip():
             return None
         path = os.path.join(build_dir, "thumbnail.jpg")
-        make_thumbnail(source, headline, path,
-                       badge=script_data.get("thumbnail_badge", ""))
-        print(f"🖼️  Thumbnail: {headline!r} "
+        episode_format = script_data.get("format")
+        # The badge carries the format before the year, so the three episode
+        # types are legible as a set even before the colour registers.
+        year = (script_data.get("thumbnail_badge") or "").strip()
+        badge = f"{formats.name_of(episode_format)} · {year}" if year \
+            else formats.name_of(episode_format)
+        make_thumbnail(source, headline, path, badge=badge,
+                       accent=formats.accent_of(episode_format))
+        print(f"🖼️  Thumbnail: {headline!r} [{badge}] "
               f"({os.path.getsize(path) / 1024:.0f} KB)")
         return path
     except Exception as e:

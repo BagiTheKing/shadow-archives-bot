@@ -77,9 +77,16 @@ def _left_scrim(size, strength=238):
 
 
 def make_thumbnail(source_image: str, headline: str, output_path: str,
-                   accent_line: int = -1, badge: str = "") -> str:
+                   accent_line: int = -1, badge: str = "",
+                   accent: tuple = None) -> str:
     """headline: 3-5 words. accent_line: which wrapped line gets the accent
-    colour (-1 = last). badge: optional small tag, e.g. a year."""
+    colour (-1 = last). badge: optional small tag, e.g. a year.
+
+    accent overrides the channel colour, and is how the three episode formats
+    are told apart at thumbnail size: amber for THE ORDER, red for THE DESIGN,
+    cyan for THE UNSOLVED. Three of a format in a row should read as a set.
+    """
+    accent = accent or ACCENT
     base = Image.open(source_image).convert("RGB")
     base = _cover(base, TW, TH)
 
@@ -119,21 +126,21 @@ def make_thumbnail(source_image: str, headline: str, output_path: str,
 
     hit = accent_line if accent_line >= 0 else len(lines) - 1
     for i, line in enumerate(lines):
-        colour = ACCENT if i == hit else WHITE
+        colour = accent if i == hit else WHITE
         # Manual drop shadow: survives being scaled to 210px wide.
         d.text((margin + 4, y + i * line_h + 4), line, font=font, fill=(0, 0, 0))
         d.text((margin, y + i * line_h), line, font=font, fill=colour)
 
     # Accent rule above the headline.
     d.rectangle([margin, y - int(TH * 0.045), margin + int(TW * 0.10),
-                 y - int(TH * 0.045) + 8], fill=ACCENT)
+                 y - int(TH * 0.045) + 8], fill=accent)
 
     if badge:
         bf = _font(int(TH * 0.052))
         bw = d.textlength(badge.upper(), font=bf)
         bx, by = margin, y + total_h + int(TH * 0.035)
         d.rectangle([bx, by, bx + bw + 28, by + int(TH * 0.082)], fill=(0, 0, 0))
-        d.rectangle([bx, by, bx + 6, by + int(TH * 0.082)], fill=ACCENT)
+        d.rectangle([bx, by, bx + 6, by + int(TH * 0.082)], fill=accent)
         d.text((bx + 18, by + int(TH * 0.041)), badge.upper(), font=bf,
                fill=WHITE, anchor="lm")
 

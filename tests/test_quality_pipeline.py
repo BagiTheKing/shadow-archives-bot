@@ -20,6 +20,7 @@ from PIL import Image                                       # noqa: E402
 import archive_engine                                       # noqa: E402
 import audio_engine                                         # noqa: E402
 import caption_track                                        # noqa: E402
+import formats                                              # noqa: E402
 import llm_engine                                           # noqa: E402
 import llm_provider                                         # noqa: E402
 import longform_llm                                         # noqa: E402
@@ -27,7 +28,9 @@ import longform_main                                        # noqa: E402
 import longform_video                                       # noqa: E402
 import longform_visual                                      # noqa: E402
 import main                                                 # noqa: E402
+import thumbnail_engine                                     # noqa: E402
 import video_engine                                         # noqa: E402
+import topics                                               # noqa: E402
 import visual_engine                                        # noqa: E402
 import youtube_publisher                                    # noqa: E402
 
@@ -1620,11 +1623,12 @@ class TestTheOpeningIsNotInterrupted(unittest.TestCase):
         self.assertNotIn("cold open", heading.lower())
 
     def test_the_arc_still_starts_where_the_code_thinks_it_does(self):
-        """generate_longform_script treats ARC[0] as the one unrecoverable
-        chapter. If the arc is reordered, that check must follow it."""
+        """generate_longform_script treats the arc's first chapter as the one
+        unrecoverable one. If the arc is reordered — or swapped for a
+        format-specific variant — that check must follow it."""
         import inspect
         src = inspect.getsource(longform_llm.generate_longform_script)
-        self.assertIn("opening_heading = ARC[0][0]", src)
+        self.assertIn("opening_heading = arc[0][0]", src)
         self.assertIn("if heading == opening_heading:", src)
 
 
@@ -1931,6 +1935,140 @@ class TestLongformRetitles(unittest.TestCase):
         src = inspect.getsource(longform_llm._packaging_call)
         self.assertIn("NEVER HEARD OF", src)
         self.assertIn("Dogger Bank", src)   # the worked example of the failure
+
+
+class TestEpisodeFormats(unittest.TestCase):
+    """The pool is varied — the Emu War, the Dancing Plague, a Bronze Age
+    computer — and every one was narrated as 'one decision and what it cost'."""
+
+    def test_every_pool_topic_has_a_format(self):
+        for topic in topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS:
+            self.assertIn(topics.format_of(topic), formats.FORMATS, topic)
+
+    def test_the_two_core_groups_map_to_their_formats(self):
+        self.assertEqual(topics.format_of(topics._ORDERS[0][0]), "order")
+        self.assertEqual(topics.format_of(topics._DESIGNS[0][0]), "design")
+        self.assertEqual(topics.format_of(topics._EXPERIMENT[0][0]), "unsolved")
+
+    def test_published_topics_are_tagged_by_hand_not_by_keyword(self):
+        """A keyword pass put the Ghost Army under DESIGN because its decoys
+        were inflatable tanks, and the Battle of Los Angeles under DESIGN
+        because the guns 'fired'."""
+        ghost = next(t for t in topics.PUBLISHED_TOPICS if "Ghost Army" in t)
+        la = next(t for t in topics.PUBLISHED_TOPICS if "Battle of Los Angeles" in t)
+        self.assertEqual(topics.format_of(ghost), "order")
+        self.assertEqual(topics.format_of(la), "unsolved")
+
+    def test_the_mysteries_among_the_published_are_unsolved(self):
+        for fragment in ("Jim Twins", "Dancing Plague", "Antikythera",
+                         "Dyatlov", "Dennis the Menace"):
+            topic = next(t for t in topics.PUBLISHED_TOPICS if fragment in t)
+            self.assertEqual(topics.format_of(topic), "unsolved", fragment)
+
+    def test_an_unknown_topic_still_gets_a_format(self):
+        """The trending lane invents its own topics from free text."""
+        self.assertEqual(topics.format_of("something nobody listed"), "order")
+        self.assertEqual(topics.format_of(""), "order")
+        self.assertEqual(topics.format_of(None), "order")
+
+    def test_each_format_is_visually_distinct(self):
+        accents = [f["accent"] for f in formats.FORMATS.values()]
+        self.assertEqual(len(accents), len(set(accents)))
+
+    def test_an_unknown_format_key_falls_back_rather_than_raising(self):
+        self.assertEqual(formats.get("nonsense"), formats.FORMATS["order"])
+        self.assertEqual(formats.name_of(None), "THE ORDER")
+        self.assertTrue(formats.accent_of(""))
+
+    def test_every_format_carries_what_the_pipeline_reads(self):
+        for key, cfg in formats.FORMATS.items():
+            for field in ("name", "accent", "promise", "brief", "tags"):
+                self.assertIn(field, cfg, key)
+            self.assertEqual(len(cfg["accent"]), 3, key)
+            self.assertTrue(cfg["tags"], key)
+
+
+class TestFormatAwareArc(unittest.TestCase):
+    """An UNSOLVED story has no decision to put at the middle of the arc. The
+    Antikythera Mechanism already became a long-form video that had to pretend
+    a shipwreck was somebody's fault."""
+
+    def test_order_and_design_keep_the_standard_arc(self):
+        self.assertIs(longform_llm.arc_for("order"), longform_llm.ARC)
+        self.assertIs(longform_llm.arc_for("design"), longform_llm.ARC)
+
+    def test_unsolved_replaces_the_decision_chapter(self):
+        headings = [h for h, _, _ in longform_llm.arc_for("unsolved")]
+        self.assertNotIn("The Decision", headings)
+        self.assertIn("What Has Been Ruled Out", headings)
+
+    def test_unsolved_replaces_the_counterfactual(self):
+        headings = [h for h, _, _ in longform_llm.arc_for("unsolved")]
+        self.assertNotIn("What Would Have Stopped It", headings)
+        self.assertIn("What Is Still Open", headings)
+
+    def test_the_arc_keeps_its_length_and_opening(self):
+        standard, unsolved = longform_llm.ARC, longform_llm.arc_for("unsolved")
+        self.assertEqual(len(standard), len(unsolved))
+        self.assertEqual(standard[0][0], unsolved[0][0])
+
+    def test_the_substituted_chapters_keep_their_word_budgets(self):
+        by_heading = {h: w for h, _, w in longform_llm.ARC}
+        for heading, (_, _, words) in longform_llm._UNSOLVED_SUBSTITUTIONS.items():
+            self.assertEqual(words, by_heading[heading], heading)
+
+    def test_an_unknown_format_gets_the_standard_arc(self):
+        self.assertIs(longform_llm.arc_for(None), longform_llm.ARC)
+
+
+class TestFormatReachesTheViewer(unittest.TestCase):
+    """A format only exists if it can be seen."""
+
+    def test_the_thumbnail_takes_a_format_accent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "s.jpg")
+            Image.new("RGB", (1080, 1920), (20, 20, 30)).save(src)
+            outs = []
+            for key in ("order", "design", "unsolved"):
+                out = os.path.join(tmp, f"{key}.jpg")
+                thumbnail_engine.make_thumbnail(
+                    src, "ONE MISSING BOLT", out,
+                    badge=formats.name_of(key),
+                    accent=formats.accent_of(key))
+                outs.append(open(out, "rb").read())
+            # Three different accents must produce three different images.
+            self.assertEqual(len(set(outs)), 3)
+
+    def test_the_thumbnail_still_works_without_a_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "s.jpg")
+            Image.new("RGB", (1080, 1920), (20, 20, 30)).save(src)
+            out = os.path.join(tmp, "o.jpg")
+            thumbnail_engine.make_thumbnail(src, "A HEADLINE", out)
+            self.assertTrue(os.path.getsize(out) > 0)
+
+    def test_the_format_reaches_the_tags(self):
+        script = {"title": "A Title", "description": "Two sentences.",
+                  "topic": "A topic", "tags": ["x"], "format": "unsolved",
+                  "scenes": [{"narration": "n"}]}
+        _, _, tags = main.build_metadata(script, episode=9)
+        self.assertIn("unsolved mysteries", tags)
+
+    def test_the_description_states_the_promise(self):
+        script = {"title": "A Title", "description": "Two sentences.",
+                  "topic": "A topic", "tags": ["x"], "format": "design",
+                  "scenes": [{"narration": "n"}]}
+        _, description, _ = main.build_metadata(script, episode=9)
+        self.assertIn("THE DESIGN", description)
+        self.assertIn(formats.get("design")["promise"], description)
+
+    def test_metadata_survives_a_script_with_no_format(self):
+        script = {"title": "A Title", "description": "Two sentences.",
+                  "topic": "A topic", "tags": ["x"],
+                  "scenes": [{"narration": "n"}]}
+        _, description, tags = main.build_metadata(script, episode=1)
+        self.assertIn("THE ORDER", description)
+        self.assertTrue(tags)
 
 
 if __name__ == "__main__":

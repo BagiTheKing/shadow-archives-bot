@@ -117,8 +117,11 @@ SATURATED = "saturated"
 REACH_ORDER = [WIDE, NARROW, SATURATED]
 REACH_FLOOR = os.getenv("REACH_FLOOR", WIDE)
 
-_CORE = [
-    # --- Orders and decisions that destroyed armies ---
+# The pool is grouped by episode format, not just by subject. Each group is a
+# different promise to the viewer — see src/formats.py — and the grouping is
+# what routes a topic to the right writer brief, accent colour and thumbnail
+# kicker. Adding a topic means putting it in the group whose promise it keeps.
+_ORDERS = [
     ("The Battle of Karansebes (1788), where the Austrian army attacked itself in the dark and took hundreds of casualties without ever meeting the enemy", SATURATED),
     ("Operation Cottage (1943), where Allied troops stormed Kiska island and took over 300 casualties fighting each other, because the Japanese had left two weeks earlier", WIDE),
     ("The Battle of Isandlwana (1879), where a British force with rifles and artillery was destroyed by Zulu infantry after the camp was left unfortified", WIDE),
@@ -140,7 +143,9 @@ _CORE = [
     ("The Bay of Pigs invasion (1961) and the assumptions about a popular uprising that never came", WIDE),
     ("The Zeebrugge Raid (1918), the blockships that were scuttled in the wrong position and left the canal usable", NARROW),
 
-    # --- Engineering decisions that killed ---
+]
+
+_DESIGNS = [
     ("The Challenger disaster (1986) and the engineers who argued against launching in the cold the night before", WIDE),
     ("The Chernobyl safety test (1986), the experiment that disabled the protections it was meant to verify", SATURATED),
     ("The Tacoma Narrows Bridge (1940), the span designed for wind loads that destroyed itself in a 40 mph breeze", SATURATED),
@@ -162,6 +167,8 @@ _CORE = [
     ("The Texas City disaster (1947), started by a cargo fire that spectators gathered on the docks to watch", NARROW),
     ("The Halifax harbour collision (1917) and the twenty minutes when both crews knew what was coming and the city did not", WIDE),
 ]
+
+_CORE = _ORDERS + _DESIGNS
 
 _EXPERIMENT = [
     ("The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck", WIDE),
@@ -233,6 +240,63 @@ EXPERIMENT_TOPICS = [t for t, _ in _EXPERIMENT]
 REACH = {t: r for t, r in _CORE + _EXPERIMENT}
 
 ALL_TOPICS = CORE_TOPICS + EXPERIMENT_TOPICS + PUBLISHED_TOPICS
+
+# Which episode format a topic belongs to. The three pool groups are the source
+# of truth; see src/formats.py for what each promises.
+FORMAT_BY_TOPIC = {}
+for _topic, _ in _ORDERS:
+    FORMAT_BY_TOPIC[_topic] = "order"
+for _topic, _ in _DESIGNS:
+    FORMAT_BY_TOPIC[_topic] = "design"
+for _topic, _ in _EXPERIMENT:
+    FORMAT_BY_TOPIC[_topic] = "unsolved"
+
+# PUBLISHED_TOPICS predates the formats and is not grouped, but the long-form
+# encore lane picks from it, so those need an answer too. Listed by hand rather
+# than guessed: a keyword pass put the Ghost Army under DESIGN because its
+# decoys were inflatable tanks, and the Battle of Los Angeles under DESIGN
+# because the guns "fired". Only the exceptions are here — anything absent is
+# an ORDER story, which is what the channel treated all of them as anyway.
+_PUBLISHED_FORMATS = {
+    "The sinking of the Vasa (1628), Sweden's mightiest warship that sank 20 minutes into its maiden voyage": "design",
+    "The Halifax Explosion (1917), the largest man-made blast before the atomic bomb": "design",
+    "The Millennium Bridge wobble and other engineering marvels that failed on day one": "design",
+    "The novel 'Futility' (1898) that described the Titanic disaster 14 years before it happened": "unsolved",
+    "Lincoln and Kennedy assassination parallels, and which ones are actually true": "unsolved",
+    "The Jim Twins, separated at birth, who lived nearly identical lives without knowing each other": "unsolved",
+    "The curious case of the two Dennis the Menace comics debuting the same week on opposite sides of the Atlantic": "unsolved",
+    "The Dyatlov Pass incident (1959) and the leading scientific explanation for the hikers' deaths": "unsolved",
+    "The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck": "unsolved",
+    "The Dancing Plague of 1518, when hundreds of people danced themselves to exhaustion in Strasbourg": "unsolved",
+    "Tsutomu Yamaguchi, the man who survived both Hiroshima and Nagasaki": "unsolved",
+    "The Battle of Los Angeles (1942), when the US fired 1,400 shells at nothing": "unsolved",
+}
+
+# Only for topics that are in no list at all: the trending lane invents its own
+# from free text. Strong signals only — a weak hint is worse than the default,
+# because a mis-formatted episode promises one thing and delivers another.
+_UNSOLVED_HINTS = (
+    "unsolved", "unidentified", "never explained", "never recovered",
+    "never traced", "no surviving explanation", "disappearance", "mystery",
+)
+_DESIGN_HINTS = (
+    "design flaw", "structural", "boiler", "engineering", "software",
+    "collapsed", "dam failure", "bridge collapse",
+)
+
+
+def format_of(topic: str) -> str:
+    """The episode format for a topic. Never raises and never returns None: an
+    untagged topic must still produce a video."""
+    known = FORMAT_BY_TOPIC.get(topic) or _PUBLISHED_FORMATS.get(topic)
+    if known:
+        return known
+    low = (topic or "").lower()
+    if any(h in low for h in _UNSOLVED_HINTS):
+        return "unsolved"
+    if any(h in low for h in _DESIGN_HINTS):
+        return "design"
+    return "order"
 
 
 def reach_of(topic: str) -> str:

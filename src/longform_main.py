@@ -13,6 +13,8 @@ import os
 import re
 import shutil
 
+import formats
+
 from caption_track import SRT_NAME
 from longform_llm import (generate_longform_script, flatten_scenes,
                           select_historical_anchor, QuotaExhausted)
@@ -127,8 +129,9 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
     # Only claim a companion Short exists when the topic actually came from one.
     cross_promo = ("\nThe 60-second version of this story is on the channel."
                    if script.get("has_short") else "")
-    series_line = (f"\nThe {SERIES_NAME} series covers one decision and what it "
-                   "cost, in full length here and in 60 seconds on Shorts."
+    fmt = formats.get(script.get("format"))
+    series_line = (f"\n{SERIES_NAME} · {fmt['name']} — {fmt['promise']}."
+                   "\nIn full length here, and in 60 seconds on Shorts."
                    if SERIES_NAME else "")
     parts.append(
         f"{CHANNEL_NAME} — one catastrophic decision, examined in full."
@@ -154,6 +157,7 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
 
     tags = [t.strip() for t in (script.get("tags") or [])
             if isinstance(t, str) and t.strip()][:15]
+    tags += formats.tags_of(script.get("format"))
     tags += BASE_TAGS
     tags = list(dict.fromkeys(tags))
 
@@ -312,9 +316,13 @@ def main():
         source = pick_source_scene(scenes)
         if source:
             thumb_path = os.path.join(BUILD_DIR, "thumbnail.jpg")
+            year = (script.get("thumbnail_badge") or "").strip()
+            name = formats.name_of(script.get("format"))
+            badge = f"{name} · {year}" if year else name
             make_thumbnail(source, script.get("thumbnail_text") or script["title"],
-                           thumb_path, badge=script.get("thumbnail_badge", ""))
-            print(f"🖼️  Thumbnail: {script.get('thumbnail_text')!r} "
+                           thumb_path, badge=badge,
+                           accent=formats.accent_of(script.get("format")))
+            print(f"🖼️  Thumbnail: {script.get('thumbnail_text')!r} [{badge}] "
                   f"({os.path.getsize(thumb_path) / 1024:.0f} KB)")
     except Exception as e:
         print(f"⚠️ Thumbnail generation failed ({type(e).__name__}: {e}) — "

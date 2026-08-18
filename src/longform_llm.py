@@ -26,7 +26,9 @@ from llm_engine import (get_free_models, normalize_thumbnail_fields,
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
-from topics import pick_topic
+from topics import pick_topic, format_of
+
+import formats
 
 # Words per chapter. edge-tts at +8% rate lands around 165 wpm, so ~1,200 words
 # is roughly 7.5 minutes — inside the 6-9 minute target.
@@ -87,6 +89,41 @@ ARC = [
      "actually changed afterwards as a result. End on the detail that lingers, not a moral.",
      180),
 ]
+
+# THE UNSOLVED stories have no decision to sit at the middle of the arc and no
+# counterfactual to close it, and the encore lane can absolutely send one here —
+# the channel's most-liked Short is the Antikythera Mechanism, and it already
+# became a long-form video that had to pretend a shipwreck was somebody's fault.
+# Two chapters are replaced; the rest of the arc carries over unchanged, because
+# "what was supposed to happen" and "what it cost" are true of a mystery too.
+_UNSOLVED_SUBSTITUTIONS = {
+    "The Decision": (
+        "What Has Been Ruled Out",
+        "The explanations that have been tested and failed, and why each one does not "
+        "fit the evidence. Be specific about what the evidence actually is. This is "
+        "where the channel earns its credibility, so never present a theory as settled "
+        "and never invent a consensus that does not exist.",
+        260),
+    "What Would Have Stopped It": (
+        "What Is Still Open",
+        "The single detail that keeps this unresolved, and what would have to be found "
+        "to settle it. State plainly what is known versus what is speculated. End on "
+        "the open question — do NOT supply an answer the record does not support.",
+        180),
+}
+
+
+def arc_for(episode_format: str):
+    """The chapter arc for this episode format.
+
+    Only THE UNSOLVED diverges. An ORDER and a DESIGN story are both a decision
+    and its consequences; a mystery is an absence of one, and forcing it through
+    the same six chapters is what the format split exists to stop.
+    """
+    if episode_format != "unsolved":
+        return ARC
+    return [_UNSOLVED_SUBSTITUTIONS.get(heading, (heading, brief, words))
+            for heading, brief, words in ARC]
 
 # Painterly, NOT photorealistic. This was briefly switched to a "35mm film
 # still" treatment and the results got visibly worse: free image models render
@@ -422,8 +459,14 @@ def _archive_query_rule(era_year):
 
 
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
-                    era_year=None, covered=None):
+                    era_year=None, covered=None, episode_format=None):
     n_images = max(2, round(words / WORDS_PER_IMAGE))
+
+    # The channel's promise for this episode type. Stated on every chapter
+    # rather than once at the top, because each chapter is its own request
+    # and the model has no memory of the others.
+    format_line = (f"THIS EPISODE IS {formats.name_of(episode_format)}: "
+                   f"{formats.brief_of(episode_format)}\n\n")
 
     # A 160-character tail was the whole of a chapter's memory, so every
     # chapter re-summarised the story from the top: one live video spent its
@@ -454,6 +497,7 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
     return (
         f"Story: {topic}\n"
         f"{continuity}{correction}{era_note}\n"
+        f"{format_line}"
         f"Write the chapter titled \"{heading}\".\n"
         f"Its job: {brief}\n\n"
         f"Write approximately {words} words of narration, and no fewer than "
@@ -898,13 +942,18 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     if enforce_history:
         print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
-    opening_heading = ARC[0][0]
+    episode_format = format_of(topic)
+    arc = arc_for(episode_format)
+    print(f"🏷️  Format: {formats.name_of(episode_format)} — "
+          f"{formats.get(episode_format)['promise']}")
+
+    opening_heading = arc[0][0]
     chapters, tail, short_chapters, dropped = [], "", 0, []
     # Everything already narrated, as normalised sentences and as plain lines.
     # The first feeds the repetition gate, the second is handed to the model so
     # it knows what not to say again.
     said_sentences, said_lines = [], []
-    for heading, brief, words in ARC:
+    for heading, brief, words in arc:
         print(f"✍️  Chapter: {heading} (~{words} words)...")
         data, best, feedback = None, None, ""
 
@@ -920,7 +969,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                   _chapter_prompt(topic, heading, brief, words,
                                                   tail, feedback,
                                                   era_year=era_year,
-                                                  covered=said_lines),
+                                                  covered=said_lines,
+                                                  episode_format=episode_format),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -1038,7 +1088,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print(f"   ✅ {len(segs)} segments, {total} words")
 
     if len(chapters) < MIN_PUBLISHABLE_CHAPTERS:
-        print(f"❌ Only {len(chapters)} of {len(ARC)} chapters survived — below "
+        print(f"❌ Only {len(chapters)} of {len(arc)} chapters survived — below "
               f"the {MIN_PUBLISHABLE_CHAPTERS} needed for a publishable arc.")
         return None
     if dropped:
@@ -1100,6 +1150,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         "chapters": chapters,
         "word_count": words,
         "era_year": era_year,
+        "format": episode_format,
     }
     normalize_thumbnail_fields(script)
 
