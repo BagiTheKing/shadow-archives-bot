@@ -84,7 +84,7 @@ jobs:
           # 0 = catastrophe-decision stories only. A 30-day single-identity
           # test; set to 7 to bring the experiment lane back (see src/topics.py
           # for the numbers on both sides of that call).
-          EXPERIMENT_EVERY: '0'
+          EXPERIMENT_EVERY: '5'
           # Overrides the duplicate guard. Only ever set from the dispatch
           # input, never on the schedule.
           FORCE_PUBLISH: ${{ inputs.force_publish && '1' || '0' }}
