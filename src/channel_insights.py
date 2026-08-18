@@ -16,7 +16,7 @@ missing insight must never cost a week's video.
 import os
 import re
 
-from topics import ALL_TOPICS
+from topics import ALL_TOPICS, MIN_RATING_AGE_DAYS
 
 STOPWORDS = {
     "the", "that", "this", "with", "from", "into", "when", "what", "which",
@@ -184,6 +184,30 @@ def fetch_recent_videos(limit=50):
         return None
 
 
+def age_days(video) -> float:
+    """How long a video has been live, or None when it does not say."""
+    from published_history import _published_at
+    when = _published_at(video)
+    if not when:
+        return None
+    import datetime
+    delta = datetime.datetime.now(datetime.timezone.utc) - when
+    return delta.total_seconds() / 86400
+
+
+def is_mature(video) -> bool:
+    """Whether this upload has been live long enough for its numbers to mean
+    anything. A one-day-old Short has few views because it is one day old, not
+    because nobody wants the subject — reading the second thing into the first
+    is how the Great Fire of London got rated SATURATED on a 24-hour-old video.
+
+    Unknown age counts as mature: the ~29 uploads from before publishedAt was
+    read back are all months old, and dropping them would cost more than it
+    protects."""
+    age = age_days(video)
+    return age is None or age >= MIN_RATING_AGE_DAYS
+
+
 def _is_short(duration_iso: str) -> bool:
     """PT#M#S under three minutes. Shorts are the only thing on the channel now,
     but this keeps the encore lane from selecting a previous long-form video."""
@@ -220,6 +244,14 @@ def best_performing_topic(min_likes=2, exclude=None):
         print(f"🚫 {len(already)} topic(s) already covered in long form — skipping.")
 
     shorts = [v for v in videos if _is_short(v["duration"])]
+    # Rank only what has settled. A Short published yesterday cannot be compared
+    # with one published a month ago, in either direction — raw totals favour
+    # the old one and views-per-hour favours the new one.
+    settled = [v for v in shorts if is_mature(v)]
+    if len(settled) < len(shorts):
+        print(f"⏳ Ignoring {len(shorts) - len(settled)} Short(s) under "
+              f"{MIN_RATING_AGE_DAYS} days old — too young to rank.")
+    shorts = settled or shorts
     ranked = sorted(shorts, key=lambda v: (-v["likes"], -v["views"]))
     print(f"📊 {len(shorts)} Shorts examined; top by likes:")
     for v in ranked[:5]:

@@ -88,6 +88,16 @@ jobs:
           # Overrides the duplicate guard. Only ever set from the dispatch
           # input, never on the schedule.
           FORCE_PUBLISH: ${{ inputs.force_publish && '1' || '0' }}
+          # Checks the live catalogue before committing to a topic: how many
+          # Shorts on the same subject already cleared 100k views this year.
+          # Costs ~101 Data API units per candidate (search.list is 100) and is
+          # capped at 3 candidates a run, against a 10,000/day allowance shared
+          # with the upload itself. Set to 0 to run on the static ratings alone.
+          MEASURE_SATURATION: '1'
+          # The closing question is spoken and captioned, not just posted as a
+          # comment. This is the one change that can cost retention — set to 0
+          # if the last-second drop-off gets worse.
+          SPEAK_QUESTION: '1'
         run: python src/main.py
 
       # ---- Artifacts, sized for the 0.5 GB Actions storage allowance ----

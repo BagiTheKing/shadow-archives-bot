@@ -8,6 +8,7 @@ from topics import pick_topic
 from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
                                load_published, next_episode_number,
                                published_within, recent_titles, series_prefix)
+from topic_reach import vet
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
 from video_engine import generate_video_pipeline
@@ -100,6 +101,41 @@ def build_metadata(script_data: dict, episode=None):
     return title, description, trimmed
 
 
+# The question is asked out loud at the end of the video, not only under it.
+# An unpinned channel comment sits below the fold and nobody scrolls to it; the
+# last two seconds of the video are the only place every viewer is guaranteed to
+# be. Set SPEAK_QUESTION=0 if retention drops — the narration is what pays for
+# everything else, so this is the one knob worth watching.
+SPEAK_QUESTION = os.getenv("SPEAK_QUESTION", "1") == "1"
+
+
+def append_question_to_script(script_data: dict) -> str:
+    """Adds the question to the last scene's narration, in place.
+
+    Deliberately after validation, never before: the hook rules and the 130-150
+    word budget are checked against what the writer produced, and a question
+    bolted on afterwards must not push a good script out of range.
+
+    Going through the narration — rather than drawing a separate end card — is
+    what puts it on screen as well as in the audio. Captions are word-synced
+    from narration, so the spoken question is subtitled automatically, over the
+    same seconds the subscribe overlay is already using.
+    """
+    question = build_first_comment(script_data)
+    if not (SPEAK_QUESTION and question):
+        return question
+    scenes = script_data.get("scenes") or []
+    if not scenes:
+        return question
+    last = scenes[-1]
+    narration = (last.get("narration") or "").rstrip()
+    if question.lower() in narration.lower():
+        return question
+    last["narration"] = f"{narration} {question}".strip()
+    print(f"🗣️  Question added to the final scene: {question}")
+    return question
+
+
 def build_first_comment(script_data: dict) -> str:
     """The question posted under the video. Falls back to naming the subject,
     because a generic prompt is still better than the silence the channel has
@@ -148,7 +184,13 @@ def plan_run():
 
     used = covered_topics(history)
     print(f"📕 {len(used)} pool topic(s) already published — excluded.")
-    topic = pick_topic(exclude=used)
+
+    # The static reach ratings are a prior; this checks the live catalogue.
+    # A topic the feed is already full of is skipped for the next candidate.
+    topic, rejected = vet(lambda excl: pick_topic(exclude=excl), used)
+    for r in rejected:
+        print(f"   ↩︎ skipped as saturated: {r[:70]}")
+
     episode = next_episode_number(history, SERIES_NAME)
     return topic, recent_titles(history), episode
 
@@ -177,6 +219,10 @@ def main():
         print("❌ Pipeline halted: script generation failed.")
         raise SystemExit(1)
 
+    # The question goes into the narration before any audio is rendered, so it
+    # is spoken and captioned rather than only sitting in the comment field.
+    first_comment = append_question_to_script(script_data)
+
     # Save the script for review/debugging (uploaded as a workflow artifact)
     with open(os.path.join(build_dir, "script.json"), "w", encoding="utf-8") as f:
         json.dump(script_data, f, indent=2, ensure_ascii=False)
@@ -202,7 +248,7 @@ def main():
         print("⏭️ SKIP_UPLOAD=1 — video rendered but not uploaded (dry run).")
     else:
         upload_video_to_youtube(final_video_path, title, description, tags,
-                                first_comment=build_first_comment(script_data))
+                                first_comment=first_comment)
 
     print("🎉 Pipeline complete.")
 

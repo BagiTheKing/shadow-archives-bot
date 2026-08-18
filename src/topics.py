@@ -70,20 +70,44 @@ EXPERIMENT_EVERY = int(os.getenv("EXPERIMENT_EVERY", "0"))
 #              not already a Shorts cliché. HMS Hood 605, Ariane 5 529, the
 #              Crater 1,054, the Light Brigade 1,059.
 #   NARROW     Real, well documented, and nobody is searching for it. The hook
-#              has to do all the work and usually cannot. Zeebrugge 65,
-#              General Slocum 10, Anjouan 19, the Meknes siege 29.
+#              has to do all the work and usually cannot. Zeebrugge 65 views in
+#              18 days, Gimli Glider 85 in 8, Anjouan 19, the Meknes siege 29.
 #   SATURATED  Famous, and done a thousand times by better-funded channels.
 #              Recognition does not help when the feed already has fifty
-#              versions. Dyatlov Pass 5, Voynich 12, Chernobyl 38, and the Great
-#              Fire of London at 25 and 8 despite being the most recognisable
-#              subject on this list.
+#              versions. Chernobyl 38 views in 15 days, Voynich 12 in 16,
+#              Dyatlov Pass 5 in 20 — all maximally famous, all dead on arrival.
 #
-# Honesty about where these ratings come from: the tiers on topics the channel
-# has already published are measurements. The rest are editorial judgement —
-# my read of how recognisable a subject is and how heavily Shorts already covers
-# it — and the Darien Scheme (obscure, 725 views) is a standing reminder that
-# the rule has exceptions. Re-rate an entry whenever the channel proves it
-# wrong; that is the point of keeping the rating next to the topic.
+# HOW A TOPIC MAY BE RATED FROM THE CHANNEL'S OWN NUMBERS
+# ------------------------------------------------------
+# Only from a video at least MIN_RATING_AGE_DAYS old. This rule exists because
+# the first version of this file broke it: the Great Fire of London was rated
+# SATURATED — and called the strongest evidence for the whole idea — on two
+# uploads that were TWENTY-FOUR HOURS OLD. A day-old video has barely any views
+# yet by definition, so rating on raw totals stamps SATURATED on everything the
+# channel just published, and the pool decays toward NARROW on its own. The gate
+# would poison its own inputs. The Great Fire is WIDE again on recognition
+# alone, and it will not be re-rated until its uploads are old enough to mean
+# something.
+#
+# Views-per-hour does not rescue an immature video either, despite looking like
+# the age-neutral fix. It is a LIFETIME average and Shorts front-load their
+# views, so it decays as a video ages: HMS Hood (605 views, 5.8 days) reads 4.35
+# vph and the Antikythera Mechanism (588 views, 18.8 days) reads 1.30, for the
+# same audience. VPH is biased by age too, just in the opposite direction from
+# raw views. Compare within an age band or wait; do not mix.
+#
+# So: the ratings on Chernobyl, Voynich, Zeebrugge, Gimli, Ariane 5, Hyatt
+# Regency and Challenger are measurements from mature uploads. Everything else
+# is editorial judgement — my read of how recognisable a subject is and how
+# heavily Shorts already covers it — and the Darien Scheme (obscure, 725 views)
+# is the standing reminder that the rule has exceptions. topic_reach.py measures
+# the saturation half properly at run time; these ratings are the offline prior
+# for when it cannot.
+
+# A video younger than this says nothing about its topic. Nothing in this
+# repository may rate, rank or judge a subject on an upload below this age.
+MIN_RATING_AGE_DAYS = 7
+
 WIDE = "wide"
 NARROW = "narrow"
 SATURATED = "saturated"
@@ -130,7 +154,7 @@ _CORE = [
     ("The loss of the Kursk (2000), the submarine sunk by its own torpedo propellant leaking in the tube", WIDE),
     ("The General Slocum fire (1904), where 1,021 people died beside life preservers that had rotted in place for thirteen years", NARROW),
     ("The Sultana explosion (1865), the worst maritime disaster in American history, caused by a boiler patched overnight on a ship carrying six times its legal capacity", NARROW),
-    ("The Great Fire of London (1666) and the Lord Mayor who looked at the first burning street and went back to bed", SATURATED),
+    ("The Great Fire of London (1666) and the Lord Mayor who looked at the first burning street and went back to bed", WIDE),
     ("The Boston Molasses Flood (1919), the storage tank that had been leaking so visibly it was painted brown to hide it", SATURATED),
     ("The London Beer Flood (1814), when a single failed iron hoop released a wave of porter through a London parish", NARROW),
     ("The Vajont Dam disaster (1963), where a perfect dam held and the mountain beside it did not", WIDE),

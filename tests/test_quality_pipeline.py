@@ -886,13 +886,22 @@ class TestReachGate(unittest.TestCase):
             published.add(picked)
 
     def test_measured_flops_are_rated_below_the_floor(self):
-        """These are not guesses — the channel published them and they died."""
+        """Not guesses — the channel published these and they died, and every
+        one of them had been live long enough for that to mean something:
+        Chernobyl 38 views in 15 days, Voynich 12 in 16, Zeebrugge 65 in 18."""
         for fragment, expected in (("Zeebrugge Raid (1918)", topics.NARROW),
-                                   ("General Slocum", topics.NARROW),
-                                   ("Chernobyl safety test", topics.SATURATED),
-                                   ("Great Fire of London", topics.SATURATED)):
+                                   ("Gimli Glider", topics.NARROW),
+                                   ("Chernobyl safety test", topics.SATURATED)):
             topic = next(t for t in topics.CORE_TOPICS if fragment in t)
             self.assertEqual(topics.reach_of(topic), expected, fragment)
+
+    def test_a_day_old_upload_never_rates_its_topic(self):
+        """The Great Fire of London was rated SATURATED on two uploads that were
+        24 hours old. A day-old Short has few views because it is a day old.
+        The rating is back to what recognition alone supports."""
+        great_fire = next(t for t in topics.CORE_TOPICS
+                          if "Great Fire of London" in t)
+        self.assertEqual(topics.reach_of(great_fire), topics.WIDE)
 
     def test_measured_winners_are_rated_wide(self):
         for fragment in ("HMS Hood", "Ariane 5 Flight 501", "Hyatt Regency"):
@@ -913,6 +922,148 @@ class TestReachGate(unittest.TestCase):
                     if topics.reach_of(t) != topics.SATURATED]
         self.assertIsNone(topics.pick_topic(exclude=holdback))
         self.assertIsNotNone(topics.pick_topic(exclude=holdback, floor="all"))
+
+
+class TestMaturityRule(unittest.TestCase):
+    """Nothing may judge a subject on an upload that has not settled."""
+
+    def setUp(self):
+        import channel_insights
+        self.ci = channel_insights
+        self._fetch = channel_insights.fetch_recent_videos
+
+    def tearDown(self):
+        self.ci.fetch_recent_videos = self._fetch
+
+    def test_a_young_upload_is_not_mature(self):
+        self.assertFalse(self.ci.is_mature(_video("yesterday", 24)))
+        self.assertTrue(self.ci.is_mature(_video("last month", 24 * 30)))
+
+    def test_unknown_age_counts_as_mature(self):
+        self.assertTrue(self.ci.is_mature({"title": "x", "publishedAt": ""}))
+
+    def test_the_encore_lane_ignores_unsettled_shorts(self):
+        """A Short published yesterday cannot out-rank a month-old one on likes
+        it has not had time to collect — in either direction."""
+        young, old = topics.ALL_TOPICS[0], topics.ALL_TOPICS[1]
+        self.ci.fetch_recent_videos = lambda *a, **k: [
+            _video("Published yesterday", 20, likes=40,
+                   description=f"x\n\n{young}\n"),
+            _video("Published last month", 24 * 30, likes=25,
+                   description=f"x\n\n{old}\n"),
+        ]
+        self.assertEqual(self.ci.best_performing_topic()[0], old)
+
+    def test_an_all_young_channel_still_produces_a_pick(self):
+        """Holding the rule so hard that a new channel gets nothing would be
+        worse than the problem it prevents."""
+        topic = topics.ALL_TOPICS[0]
+        self.ci.fetch_recent_videos = lambda *a, **k: [
+            _video("Brand new", 20, likes=9, description=f"x\n\n{topic}\n")]
+        self.assertEqual(self.ci.best_performing_topic()[0], topic)
+
+
+class TestMeasuredSaturation(unittest.TestCase):
+    """The static ratings are a prior; this is the live catalogue."""
+
+    def setUp(self):
+        import topic_reach
+        self.tr = topic_reach
+
+    def test_the_search_query_is_what_someone_would_type(self):
+        self.assertEqual(
+            self.tr.search_query("The Ariane 5 Flight 501 explosion (1996), "
+                                 "destroyed 39 seconds after launch"),
+            "Ariane 5 Flight 501 explosion")
+
+    def test_long_videos_are_not_counted_as_shorts(self):
+        """videoDuration=short means under FOUR MINUTES, not 'is a Short'."""
+        self.assertGreater(self.tr._iso_duration_seconds("PT3M30S"),
+                           self.tr.SHORTS_MAX_SECONDS)
+        self.assertLessEqual(self.tr._iso_duration_seconds("PT58S"),
+                             self.tr.SHORTS_MAX_SECONDS)
+
+    def test_a_failed_measurement_is_not_an_objection(self):
+        """No scope, no quota, no API: keep the static rating, never reject."""
+        self.tr.ENABLED = True
+        try:
+            self.assertFalse(self.tr.is_saturated("Anything", youtube=None))
+        finally:
+            self.tr.ENABLED = True
+
+    def test_vetting_moves_on_from_a_saturated_candidate(self):
+        pool = ["saturated one", "clean one"]
+        original = self.tr.is_saturated
+        self.tr.is_saturated = lambda t, y=None: t == "saturated one"
+        try:
+            picked, rejected = self.tr.vet(
+                lambda excl: next((t for t in pool if t not in excl), None), set())
+            self.assertEqual(picked, "clean one")
+            self.assertEqual(rejected, ["saturated one"])
+        finally:
+            self.tr.is_saturated = original
+
+    def test_vetting_stops_before_burning_the_api_quota(self):
+        """search.list is 100 units a call against 10,000/day. Three checks."""
+        original = self.tr.is_saturated
+        self.tr.is_saturated = lambda t, y=None: True
+        calls = []
+        try:
+            self.tr.vet(lambda excl: calls.append(1) or f"topic {len(calls)}", set())
+        finally:
+            self.tr.is_saturated = original
+        self.assertLessEqual(len(calls), self.tr.MAX_CHECKS + 1)
+
+
+class TestQuestionIsInTheVideo(unittest.TestCase):
+    """A comment nobody scrolls to is not shipped. The question is spoken in the
+    last seconds and captioned there, which is the only place every viewer is."""
+
+    def setUp(self):
+        import main
+        self.main = main
+
+    def _script(self, **extra):
+        data = {"topic": "The sinking of HMS Hood (1941), the battlecruiser lost",
+                "scenes": [{"narration": "The shell found the magazine."},
+                           {"narration": "Three men survived."}]}
+        data.update(extra)
+        return data
+
+    def test_the_question_lands_in_the_final_narration(self):
+        script = self._script(comment_question="Whose call sank her?")
+        self.main.append_question_to_script(script)
+        self.assertTrue(
+            script["scenes"][-1]["narration"].endswith("Whose call sank her?"))
+
+    def test_earlier_scenes_are_untouched(self):
+        script = self._script(comment_question="Whose call sank her?")
+        self.main.append_question_to_script(script)
+        self.assertEqual(script["scenes"][0]["narration"],
+                         "The shell found the magazine.")
+
+    def test_it_returns_the_same_text_the_comment_uses(self):
+        script = self._script(comment_question="Whose call sank her?")
+        self.assertEqual(self.main.append_question_to_script(script),
+                         "Whose call sank her?")
+
+    def test_running_twice_does_not_duplicate_it(self):
+        script = self._script(comment_question="Whose call sank her?")
+        self.main.append_question_to_script(script)
+        self.main.append_question_to_script(script)
+        self.assertEqual(script["scenes"][-1]["narration"].count("Whose call"), 1)
+
+    def test_the_switch_leaves_the_narration_alone(self):
+        original = self.main.SPEAK_QUESTION
+        self.main.SPEAK_QUESTION = False
+        try:
+            script = self._script(comment_question="Whose call sank her?")
+            returned = self.main.append_question_to_script(script)
+            self.assertEqual(script["scenes"][-1]["narration"],
+                             "Three men survived.")
+            self.assertEqual(returned, "Whose call sank her?")
+        finally:
+            self.main.SPEAK_QUESTION = original
 
 
 class TestFirstComment(unittest.TestCase):

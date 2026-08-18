@@ -271,6 +271,14 @@ def main():
     scenes = flatten_scenes(script)
     print(f"🎬 {len(scenes)} scenes across {len(script['chapters'])} chapters")
 
+    # Asked out loud at the end, not only in the comment field. Same reasoning
+    # as the Shorts pipeline: an unpinned comment sits below the fold.
+    first_comment = build_first_comment(script)
+    if first_comment and scenes and os.getenv("SPEAK_QUESTION", "1") == "1":
+        scenes[-1]["narration"] = (
+            f"{(scenes[-1].get('narration') or '').rstrip()} {first_comment}".strip())
+        print(f"🗣️  Question added to the closing narration: {first_comment}")
+
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
     scenes = generate_longform_visuals(scenes, BUILD_DIR)
@@ -317,7 +325,7 @@ def main():
     else:
         upload_video_to_youtube(video_path, title, description, tags,
                                 thumbnail_path=thumb_path,
-                                first_comment=build_first_comment(script))
+                                first_comment=first_comment)
 
     print("🎉 Long-form pipeline complete.")
 
