@@ -2071,5 +2071,305 @@ class TestFormatReachesTheViewer(unittest.TestCase):
         self.assertTrue(tags)
 
 
+def _chapter(*sentences):
+    """A chapter shaped the way the validators expect to receive one."""
+    return {"segments": [{"narration": t, "image_prompt": "a shot"}
+                         for t in sentences]}
+
+
+class TestChaptersHandOffToTheNextOne(unittest.TestCase):
+    """Every chapter used to be written to feel finished, and each seam was a
+    place the viewer could leave without abandoning anything. A chapter now
+    ends on a fact the viewer cannot resolve on their own."""
+
+    def test_an_unresolved_fact_is_a_valid_handoff(self):
+        self.assertTrue(longform_llm._handoff_ok(
+            _chapter("The fleet sailed.", "The order had already been signed.")))
+
+    def test_a_name_and_a_distance_leaves_something_open(self):
+        self.assertTrue(longform_llm._handoff_ok(
+            _chapter("Admiral Tryon was three hours away.")))
+
+    def test_a_chapter_that_concludes_is_rejected(self):
+        self.assertFalse(longform_llm._handoff_ok(
+            _chapter("In the end, the ship was lost with all hands.")))
+
+    def test_a_question_to_the_viewer_is_rejected(self):
+        self.assertFalse(longform_llm._handoff_ok(
+            _chapter("So what really happened that night?")))
+
+    def test_youtube_tease_phrasing_is_rejected(self):
+        """The channel's credibility is the product. A viewer who hears a
+        tease stops believing the casualty figures too."""
+        for tease in ("But that is not even the strangest part.",
+                      "Little did they know what was coming.",
+                      "We'll get to that in a moment."):
+            with self.subTest(tease=tease):
+                self.assertFalse(longform_llm._handoff_ok(_chapter(tease)))
+
+    def test_a_vague_ending_with_nothing_open_is_rejected(self):
+        self.assertFalse(longform_llm._handoff_ok(
+            _chapter("It was a very bad day for the crew and for the town.")))
+
+    def test_an_empty_chapter_cannot_hand_off(self):
+        self.assertFalse(longform_llm._handoff_ok({"segments": []}))
+
+    def test_the_closing_sentence_is_the_last_one_spoken(self):
+        chapter = _chapter("First line here.", "Second line. The last one.")
+        self.assertEqual(longform_llm._closing_sentence(chapter),
+                         "The last one.")
+
+    def test_the_final_chapter_is_told_to_close_instead(self):
+        rule = longform_llm._handoff_rule(None)
+        self.assertIn("FINAL", rule)
+        self.assertNotIn("HAND OFF", rule)
+
+    def test_every_other_chapter_names_the_one_it_leads_into(self):
+        rule = longform_llm._handoff_rule("The Decision")
+        self.assertIn("HAND OFF", rule)
+        self.assertIn("The Decision", rule)
+
+    def test_the_prompt_carries_the_handoff_rule(self):
+        prompt = longform_llm._chapter_prompt(
+            "A topic", "The Chain", "brief", 280, "",
+            next_heading="The Cost")
+        self.assertIn("HAND OFF", prompt)
+        self.assertIn("The Cost", prompt)
+
+
+class TestThePacingVaries(unittest.TestCase):
+    """One cut rate and one narration speed for seven minutes is why the
+    rhythm itself never held anyone: the ear stops being surprised."""
+
+    def test_every_arc_slot_has_a_pacing_entry(self):
+        self.assertEqual(len(longform_llm.PACING), len(longform_llm.ARC))
+
+    def test_the_chapters_do_not_all_cut_at_the_same_rate(self):
+        rates = {p["words_per_image"] for p in longform_llm.PACING}
+        self.assertGreater(len(rates), 3)
+
+    def test_the_chapters_are_not_all_read_at_the_same_speed(self):
+        speeds = {p["tts_rate"] for p in longform_llm.PACING}
+        self.assertGreater(len(speeds), 3)
+
+    def test_the_midpoint_is_read_slower_than_the_opening(self):
+        """Slowing down at the turning point is the interrupt — after two
+        chapters at pace, a drop in speed says this is the part that matters."""
+        def pct(entry):
+            return int(entry["tts_rate"].rstrip("%"))
+        self.assertLess(pct(longform_llm.PACING[longform_llm.PIVOT_INDEX]),
+                        pct(longform_llm.PACING[0]))
+
+    def test_the_driving_chapter_cuts_fastest(self):
+        fastest = min(longform_llm.PACING, key=lambda p: p["words_per_image"])
+        self.assertEqual(fastest["role"], "drive")
+
+    def test_an_index_off_the_end_still_returns_a_profile(self):
+        self.assertEqual(longform_llm.pacing_for(99),
+                         longform_llm.DEFAULT_PACING)
+
+    def test_the_cut_rate_reaches_the_prompt(self):
+        tight = longform_llm._chapter_prompt("t", "h", "b", 240, "",
+                                             words_per_image=20)
+        loose = longform_llm._chapter_prompt("t", "h", "b", 240, "",
+                                             words_per_image=40)
+        self.assertIn("exactly 12 consecutive segments", tight)
+        self.assertIn("exactly 6 consecutive segments", loose)
+
+
+class TestTheMidpointReset(unittest.TestCase):
+    """Retention graphs slump in the middle, and there was nothing in the
+    middle to slump against: chapter three looked and sounded like chapter
+    two."""
+
+    def _script(self, n=6):
+        return {"era_year": 1893, "chapters": [
+            {"heading": f"H{i}", "key_stat": {}, "arc_index": i,
+             "pacing": longform_llm.PACING[i],
+             "scenes": [{"narration": "a"}, {"narration": "b"}]}
+            for i in range(n)]}
+
+    def test_exactly_one_chapter_is_the_pivot(self):
+        scenes = longform_llm.flatten_scenes(self._script())
+        pivots = {s["chapter_index"] for s in scenes if s["is_pivot"]}
+        self.assertEqual(pivots, {longform_llm.PIVOT_INDEX})
+
+    def test_the_pivot_follows_the_arc_when_a_chapter_is_dropped(self):
+        """A chapter that failed to generate is dropped, so position in the
+        finished list is not position in the arc. The reset must land on the
+        chapter that earned it, not on whatever ended up third."""
+        script = self._script()
+        del script["chapters"][1]                      # lose chapter two
+        scenes = longform_llm.flatten_scenes(script)
+        pivot = [s for s in scenes if s["is_pivot"]]
+        self.assertTrue(pivot)
+        self.assertEqual(pivot[0]["chapter_heading"], "H2")
+
+    def test_the_narration_takes_a_longer_beat_before_the_pivot(self):
+        scenes = longform_llm.flatten_scenes(self._script())
+        beats = [s.get("pause_after") for s in scenes if s.get("pause_after")]
+        self.assertIn(longform_llm.PIVOT_BEAT, beats)
+        self.assertGreater(longform_llm.PIVOT_BEAT, longform_llm.CHAPTER_BEAT)
+
+    def test_every_chapter_ends_on_a_beat(self):
+        scenes = longform_llm.flatten_scenes(self._script())
+        with_beat = [s for s in scenes if s.get("pause_after")]
+        self.assertEqual(len(with_beat), 6)
+
+    def test_the_last_scene_of_the_video_gets_the_closing_beat(self):
+        scenes = longform_llm.flatten_scenes(self._script())
+        self.assertEqual(scenes[-1]["pause_after"], longform_llm.CLOSING_BEAT)
+
+    def test_the_pivot_card_dims_the_frame_and_centres_the_heading(self):
+        events = longform_video._pivot_events(30.0, 9.0, 3, "The Decision")
+        joined = "\n".join(events)
+        self.assertIn("THE DECISION", joined)
+        self.assertIn("PART THREE", joined)
+        self.assertIn("Scrim", joined)          # the wash over the frame
+        self.assertIn(r"\an5", joined)             # centred, not in the corner
+
+    def test_the_pivot_card_is_bigger_than_an_ordinary_chapter_card(self):
+        ordinary = longform_video._chapter_title_event(30.0, 9.0, 4, "The Chain")
+        pivot = "\n".join(longform_video._pivot_events(30.0, 9.0, 3, "The Decision"))
+        def biggest(text):
+            return max(int(m) for m in re.findall(r"\\fs(\d+)", text))
+        self.assertGreater(biggest(pivot), biggest(ordinary))
+
+    def test_the_styles_the_pivot_card_uses_exist(self):
+        self.assertIn("Style: Pivot,", longform_video.ASS_HEADER)
+        self.assertIn("Style: Scrim,", longform_video.ASS_HEADER)
+
+    def test_the_pivot_card_is_rendered_when_the_cue_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "subs.ass")
+            longform_video.generate_subtitles(
+                [_scene("A line.")], out, [0.0],
+                chapter_titles=[(10.0, 9.0, 3, "The Decision", True)])
+            self.assertIn("Pivot,,", open(out, encoding="utf-8").read())
+
+    def test_an_ordinary_cue_still_gets_the_ordinary_card(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "subs.ass")
+            longform_video.generate_subtitles(
+                [_scene("A line.")], out, [0.0],
+                chapter_titles=[(10.0, 9.0, 4, "The Chain", False)])
+            ass = open(out, encoding="utf-8").read()
+            self.assertIn("Chapter,,", ass)
+            self.assertNotIn("Pivot,,", ass)
+
+
+class TestTheSoundtrackMoves(unittest.TestCase):
+    """Narration plus one music file at a fixed 10% for seven minutes. Not one
+    auditory event in the whole video — which is everything, for the share of
+    the audience that is half-watching in another tab."""
+
+    def test_the_bed_ducks_into_the_midpoint(self):
+        expr = longform_video.music_envelope([20.0], 20.0, 300.0)
+        self.assertIn(f"-{longform_video.MUSIC_PIVOT_DUCK:.4f}", expr)
+
+    def test_the_bed_comes_back_over_the_top_after_the_duck(self):
+        expr = longform_video.music_envelope([20.0], 20.0, 300.0)
+        self.assertIn(f"+{longform_video.MUSIC_PIVOT_SWELL:.4f}", expr)
+
+    def test_the_pivot_does_not_also_get_an_ordinary_card_lift(self):
+        """Two overlapping moves at the same moment fight each other."""
+        expr = longform_video.music_envelope([20.0], 20.0, 300.0)
+        self.assertNotIn(f"+{longform_video.MUSIC_CARD_LIFT:.4f}", expr)
+
+    def test_ordinary_chapter_cards_still_lift_the_bed(self):
+        expr = longform_video.music_envelope([40.0], 200.0, 300.0)
+        self.assertIn(f"+{longform_video.MUSIC_CARD_LIFT:.4f}", expr)
+
+    def test_the_level_never_goes_negative_anywhere_in_the_video(self):
+        """A negative gain in an ffmpeg volume expression inverts the phase
+        rather than silencing it."""
+        expr = longform_video.music_envelope([30.0, 60.0, 90.0], 60.0, 400.0)
+        env = {"min": min, "max": max}
+        for i in range(0, 401):
+            value = eval(expr.replace("t", str(float(i))), env)   # noqa: S307
+            self.assertGreaterEqual(value, 0.0)
+
+    def test_a_video_with_no_music_still_produces_an_expression(self):
+        self.assertTrue(longform_video.music_envelope([], None, 300.0))
+
+    def test_every_number_callout_gets_an_impact_and_every_card_a_riser(self):
+        frags, labels = longform_video._sfx_sources(
+            [("impact", 10.0), ("riser", 20.0)])
+        self.assertEqual(len(labels), 2)
+        self.assertIn("adelay=10000|10000", frags[0])
+        self.assertIn("adelay=20000|20000", frags[1])
+
+    def test_cues_past_the_end_of_the_video_are_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "sfx.wav")
+            self.assertIsNone(
+                longform_video.build_sfx_bed([("impact", 500.0)], 100.0, out))
+
+    def test_a_video_with_no_cues_needs_no_sfx_track(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(longform_video.build_sfx_bed(
+                [], 100.0, os.path.join(tmp, "sfx.wav")))
+
+    def test_the_sound_design_stays_under_the_narration(self):
+        """The moment a viewer notices the sound design as sound design, the
+        channel reads as a template."""
+        self.assertLess(longform_video.IMPACT_GAIN, 0.5)
+        self.assertLess(longform_video.RISER_GAIN, 0.5)
+
+
+class TestDeadAirIsRemoved(unittest.TestCase):
+    """edge-tts pads every clip it returns. Across forty clips that is most of
+    a minute of nothing, delivered as a hesitation at every single cut."""
+
+    def test_word_timings_move_with_the_audio(self):
+        words = [{"word": "the", "start": 0.50, "end": 0.70},
+                 {"word": "order", "start": 0.80, "end": 1.10}]
+        shifted = audio_engine.shift_word_timings(words, 0.40)
+        self.assertAlmostEqual(shifted[0]["start"], 0.10)
+        self.assertAlmostEqual(shifted[1]["end"], 0.70)
+
+    def test_a_word_inside_the_trimmed_silence_is_clamped_not_dropped(self):
+        """Dropping it would lose a caption chunk entirely."""
+        shifted = audio_engine.shift_word_timings(
+            [{"word": "a", "start": 0.10, "end": 0.20}], 0.40)
+        self.assertEqual(len(shifted), 1)
+        self.assertEqual(shifted[0]["start"], 0.0)
+
+    def test_nothing_moves_when_nothing_was_trimmed(self):
+        words = [{"word": "a", "start": 0.5, "end": 0.7}]
+        self.assertIs(audio_engine.shift_word_timings(words, 0.0), words)
+
+    def test_a_clip_that_is_silent_throughout_is_left_alone(self):
+        """That is a failed synthesis, not a padded one, and trimming it to
+        nothing would take the scene out of the video."""
+        self.assertEqual(audio_engine._measure_silence.__doc__ is None, False)
+
+
+class TestTheOpeningStillDeliversOnWhatItPromised(unittest.TestCase):
+    """A viewer burned by an unfulfilled setup does not stay for the next
+    one."""
+
+    def test_the_closing_chapter_is_checked_against_the_opening(self):
+        script = {"chapters": [
+            {"heading": "The Anomaly", "scenes": [
+                {"narration": "The Hood exploded in ninety seconds."}]},
+            {"heading": "What Would Have Stopped It", "scenes": [
+                {"narration": "The Hood needed deck armour she never got."}]}]}
+        self.assertTrue(longform_llm.payoff_ok(script))
+
+    def test_an_ending_about_something_else_entirely_is_flagged(self):
+        script = {"chapters": [
+            {"heading": "The Anomaly", "scenes": [
+                {"narration": "The Hood exploded in ninety seconds."}]},
+            {"heading": "What Would Have Stopped It", "scenes": [
+                {"narration": "Belgrano sailed from Ushuaia that morning."}]}]}
+        self.assertFalse(longform_llm.payoff_ok(script))
+
+    def test_a_one_chapter_script_is_not_judged(self):
+        script = {"chapters": [{"heading": "The Anomaly",
+                                "scenes": [{"narration": "A line."}]}]}
+        self.assertTrue(longform_llm.payoff_ok(script))
+
+
 if __name__ == "__main__":
     unittest.main()

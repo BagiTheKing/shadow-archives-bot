@@ -22,7 +22,8 @@ from openai import OpenAI
 
 from audio_engine import is_speakable
 from llm_engine import (get_free_models, normalize_thumbnail_fields,
-                        validate_title, _extract_json, _validate_hook)
+                        validate_title, _extract_json, _validate_hook,
+                        _has_proper_noun)
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -139,6 +140,61 @@ STYLE_SUFFIX = CANONICAL_STYLE
 # produced 13-frame nine-minute videos that reviewed as slideshows; the video
 # engine additionally splits any scene that still runs past ~13 seconds.
 WORDS_PER_IMAGE = 32
+
+# ---------------------------------------------------------------------------
+# Pacing profile
+#
+# Everything about the rhythm used to be one number applied to all six
+# chapters: one cut rate, one narration speed, one music level. Seven minutes
+# of a perfectly even pulse is the reason a retention graph slopes instead of
+# stepping — the viewer's ear stops being surprised by anything around the
+# ninety-second mark and the brain files the rest as "more of this".
+#
+# So the arc now breathes. Each chapter carries its own cut rate and its own
+# narration speed, chosen against what that chapter is doing:
+#
+#   The Anomaly      fast cuts, fast read      — earn the next thirty seconds
+#   Supposed To Happen  slow cuts, slower read — the calm before, and it must
+#                                                actually feel calm
+#   The Decision     tightest cuts, SLOWEST read — the midpoint reset. Slowing
+#                                                down here is the interrupt:
+#                                                after two chapters of pace,
+#                                                a drop in speed reads as
+#                                                "this is the part that matters"
+#   The Chain        fastest cuts, fastest read — events overtaking people
+#   The Cost         slow cuts, slow read       — the numbers need air
+#   Counterfactual   medium both                — land it
+#
+# The index is positional, not keyed by heading: THE UNSOLVED substitutes two
+# headings but keeps their slots, so a mystery's "What Has Been Ruled Out"
+# inherits the pivot treatment its position earns.
+# ---------------------------------------------------------------------------
+
+# Which slot in the arc is the midpoint reset.
+PIVOT_INDEX = 2
+
+# words_per_image: lower = more cuts. tts_rate: edge-tts percentage.
+PACING = [
+    {"role": "open",  "words_per_image": 26, "tts_rate": "+10%"},
+    {"role": "build", "words_per_image": 36, "tts_rate": "+6%"},
+    {"role": "pivot", "words_per_image": 24, "tts_rate": "+2%"},
+    {"role": "drive", "words_per_image": 22, "tts_rate": "+12%"},
+    {"role": "cost",  "words_per_image": 34, "tts_rate": "+4%"},
+    {"role": "close", "words_per_image": 30, "tts_rate": "+7%"},
+]
+
+# Used when a chapter index falls outside the table (a shorter arc, or an arc
+# someone extends later without touching this file).
+DEFAULT_PACING = {"role": "build", "words_per_image": WORDS_PER_IMAGE,
+                  "tts_rate": os.getenv("TTS_RATE", "+8%")}
+
+
+def pacing_for(index: int) -> dict:
+    """The cut rate, narration speed and role for this slot in the arc."""
+    if 0 <= index < len(PACING):
+        return PACING[index]
+    return DEFAULT_PACING
+
 
 # Photography exists from roughly here. For stories older than this, "real
 # imagery" means period artwork — paintings, engravings, portraits, maps —
@@ -458,9 +514,51 @@ def _archive_query_rule(era_year):
     )
 
 
+# ---------------------------------------------------------------------------
+# Open loops
+#
+# Every chapter used to be written to feel finished. The briefs said so
+# outright — "end on the detail that lingers" — and each chapter was generated
+# as an independent request that knew what had already been said and nothing
+# about what came next. The result is six small essays played in sequence, and
+# every seam between them is a place the viewer can leave without feeling they
+# abandoned anything.
+#
+# The fix is not a teaser voice. This channel is calm and forensic, and
+# "but that's not even the weird part" would cost more credibility than the
+# retention is worth. What it does instead is end each chapter on a fact that
+# is INCOMPLETE — an order already signed, a warning nobody had read, a number
+# that does not add up yet. A flat declarative sentence the viewer cannot
+# resolve on their own is an open loop, and it survives the channel's voice.
+#
+# The last chapter gets no handoff: there is nothing to hand off to, and a
+# cliffhanger at the end is the thing that makes people distrust the next one.
+# ---------------------------------------------------------------------------
+
+def _handoff_rule(next_heading) -> str:
+    """The instruction that turns a chapter ending into an open loop."""
+    if not next_heading:
+        return ("This is the FINAL chapter. Close the video. Do not open a new "
+                "question, do not tease anything, and do not end on a moral. "
+                "End on the concrete detail that stays with the viewer.\n\n")
+    return (
+        f"HAND OFF TO THE NEXT CHAPTER, which is titled \"{next_heading}\".\n"
+        "Your LAST sentence must leave one thing unresolved, so the viewer needs "
+        "the next chapter to settle it. State it as a flat fact, not a tease: "
+        "name a document nobody had read, an order already signed, a person "
+        "already on their way, or a number that does not yet add up. Keep it "
+        "under 14 words.\n"
+        "It must NOT summarise this chapter, and it must NOT be a question. "
+        "BANNED in this sentence: \"but\" as the opening word, \"little did "
+        "they know\", \"what happened next\", \"that's not even\", \"stay "
+        "with me\", \"we'll get to that\", \"more on that\", \"as we will "
+        "see\". Never address the viewer.\n\n")
+
+
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
-                    era_year=None, covered=None, episode_format=None):
-    n_images = max(2, round(words / WORDS_PER_IMAGE))
+                    era_year=None, covered=None, episode_format=None,
+                    next_heading=None, words_per_image=None):
+    n_images = max(2, round(words / (words_per_image or WORDS_PER_IMAGE)))
 
     # The channel's promise for this episode type. Stated on every chapter
     # rather than once at the top, because each chapter is its own request
@@ -512,6 +610,7 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
         "than inventing one.\n\n"
         "Every sentence must carry information the viewer did not have a "
         "sentence ago. Never pad by restating an earlier line in new words.\n\n"
+        f"{_handoff_rule(next_heading)}"
         # The placeholders below are deliberately not plausible facts. This
         # example once read {"value": "1,415", "label": "men lost with Hood"},
         # and a model copied 1,415 into a video about a different battle
@@ -810,6 +909,107 @@ def _opening_hook_ok(data) -> bool:
     return _validate_hook(sentence)
 
 
+# Phrases that turn an open loop into a YouTube tease. The channel's whole
+# credibility rests on sounding like it is reporting rather than selling, and a
+# viewer who hears one of these stops believing the numbers too.
+BANNED_HANDOFF_PHRASES = (
+    "little did they know", "what happened next", "that's not even",
+    "thats not even", "that is not even", "stay with me",
+    "we'll get to that", "well get to that",
+    "more on that", "as we will see", "as we shall see", "keep watching",
+    "you won't believe", "you wont believe", "hold that thought",
+)
+
+# Openers that mean the sentence is closing the chapter rather than opening the
+# next one.
+_CONCLUSION_OPENERS = (
+    "in the end", "ultimately", "in summary", "in total", "altogether",
+    "overall", "in conclusion", "and that", "that was", "so the", "in all",
+    "finally", "the result was", "and so",
+)
+
+# A sentence is an open loop when the viewer cannot close it themselves. These
+# are the words that leave something dangling: an order already signed, a
+# warning nobody had read, a person still three hours away.
+_INCOMPLETE_MARKERS = (
+    r"\balready\b", r"\bstill\b", r"\byet\b", r"\bnever\b", r"\bnobody\b",
+    r"\bno one\b", r"\bnone\b", r"\bwould\b", r"\bhad not\b", r"\bhadn't\b",
+    r"\bdid not\b", r"\bdidn't\b", r"\bwas not\b", r"\bwasn't\b",
+    r"\bunread\b", r"\bunopened\b", r"\bunsigned\b", r"\bunaware\b",
+    r"\bmissing\b", r"\bwrong\b", r"\bhad been\b", r"\bon its way\b",
+    r"\bon his way\b", r"\bon her way\b", r"\bon their way\b",
+)
+
+# The prompt asks for under 14; a couple of words of slack beats spending a
+# request from a 50-a-day budget on a sentence that is fine.
+HANDOFF_MAX_WORDS = 16
+
+
+def _closing_sentence(data) -> str:
+    """The last spoken sentence of a chapter — the seam the viewer may leave at."""
+    text = ""
+    for seg in (data or {}).get("segments") or []:
+        if (seg.get("narration") or "").strip():
+            text = seg["narration"].strip()
+    if not text:
+        return ""
+    parts = [p for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()]
+    return parts[-1].strip() if parts else ""
+
+
+def _handoff_ok(data) -> bool:
+    """Whether this chapter ends on an open loop rather than a full stop.
+
+    Judged the same way the opening hook is judged, and for the same reason:
+    the seam between two chapters is a decision point exactly like the first
+    fifteen seconds, and the pipeline had a validator for one and nothing for
+    the other. A chapter that ends complete is a chapter the viewer can close.
+    """
+    sentence = _closing_sentence(data)
+    if not sentence:
+        return False
+    low = sentence.lower()
+
+    if sentence.endswith("?"):
+        print(f"⚠️ Handoff rejected: it asks the viewer a question. ({sentence!r})")
+        return False
+
+    words = len(sentence.split())
+    if words > HANDOFF_MAX_WORDS:
+        print(f"⚠️ Handoff rejected: {words} words, needs <= "
+              f"{HANDOFF_MAX_WORDS}. ({sentence!r})")
+        return False
+
+    for phrase in BANNED_HANDOFF_PHRASES:
+        if phrase in low:
+            print(f"⚠️ Handoff rejected: tease phrase {phrase!r}. ({sentence!r})")
+            return False
+
+    # The prompt forbids opening this sentence with "but", because that is how
+    # a factual handoff turns into a nudge.
+    if low.startswith("but "):
+        print(f"⚠️ Handoff rejected: it opens with 'but'. ({sentence!r})")
+        return False
+
+    for opener in _CONCLUSION_OPENERS:
+        if low.startswith(opener):
+            print(f"⚠️ Handoff rejected: it closes the chapter with "
+                  f"{opener!r}. ({sentence!r})")
+            return False
+
+    # Something must actually be left hanging: a name, a figure, or a word that
+    # marks the fact as incomplete.
+    has_anchor = (_has_proper_noun(sentence)
+                  or bool(re.search(r"\d", sentence))
+                  or any(re.search(m, low) for m in _INCOMPLETE_MARKERS))
+    if not has_anchor:
+        print(f"⚠️ Handoff rejected: nothing is left open — no name, number "
+              f"or unresolved fact. ({sentence!r})")
+        return False
+
+    return True
+
+
 def _chapter_words(data):
     return sum(len(s["narration"].split()) for s in (data or {}).get("segments", []))
 
@@ -910,6 +1110,44 @@ def _validate_chapter(data, expected_words, enforce_history=False,
     return True
 
 
+# ---------------------------------------------------------------------------
+# Promise and payoff
+#
+# The packaging call already writes the title against the finished script, so
+# the thumbnail cannot promise something the video never covers. What nothing
+# checked is the other direction: whether the video's own opening — the
+# anomaly it leads with, the thing the viewer stayed for — is still the subject
+# by the time it ends.
+#
+# It is a warning, never a rejection. Six chapters are written by this point,
+# and a script that drifts is still a video; a script thrown away is not. But
+# a run that trips this is worth seeing in the log, because it means the model
+# lost the thread somewhere in the middle and the ending pays off a promise
+# nobody made.
+# ---------------------------------------------------------------------------
+
+def payoff_ok(script: dict) -> bool:
+    """Whether the closing chapter is still about what the opening promised.
+
+    Compares the named actors in the first chapter against the last. No overlap
+    means the video ended somewhere other than where it started.
+    """
+    chapters = (script or {}).get("chapters") or []
+    if len(chapters) < 2:
+        return True
+
+    def named(chapter):
+        text = " ".join(s.get("narration", "") for s in chapter.get("scenes", []))
+        return set(_entities(text))
+
+    opening, closing = named(chapters[0]), named(chapters[-1])
+    # A chapter that names nobody cannot be judged this way — most often the
+    # counterfactual, which is about a missing bolt rather than a person.
+    if not opening or not closing:
+        return True
+    return bool(opening & closing)
+
+
 def generate_longform_script(topic: str = None, enforce_history: bool = False,
                              era_year: int = None) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
@@ -953,9 +1191,17 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     # The first feeds the repetition gate, the second is handed to the model so
     # it knows what not to say again.
     said_sentences, said_lines = [], []
-    for heading, brief, words in arc:
-        print(f"✍️  Chapter: {heading} (~{words} words)...")
+    for c_index, (heading, brief, words) in enumerate(arc):
+        pacing = pacing_for(c_index)
+        # The last chapter closes the video; every other one hands off.
+        next_heading = arc[c_index + 1][0] if c_index + 1 < len(arc) else None
+        print(f"✍️  Chapter: {heading} (~{words} words, {pacing['role']}, "
+              f"cut every ~{pacing['words_per_image']} words)...")
         data, best, feedback = None, None, ""
+        # A weak handoff is worth exactly one extra request, not the whole
+        # attempt budget: the seam matters, but not as much as having a
+        # chapter at all, and the daily allowance is small.
+        handoff_retried = False
 
         # Three attempts on Gemini, two on OpenRouter. The old flat two was
         # sized for a 50-request day; Gemini's free tier is far larger, and a
@@ -970,7 +1216,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                                   tail, feedback,
                                                   era_year=era_year,
                                                   covered=said_lines,
-                                                  episode_format=episode_format),
+                                                  episode_format=episode_format,
+                                                  next_heading=next_heading,
+                                                  words_per_image=pacing["words_per_image"]),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -981,26 +1229,51 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             if _validate_chapter(candidate, words,
                                  enforce_history=enforce_history,
                                  previous_sentences=said_sentences):
-                if heading != opening_heading or _opening_hook_ok(candidate):
-                    data = candidate
-                    break
-                # Structurally fine, but it opens on setup. Keep it as the
-                # fallback — losing this chapter loses the video — and spend
-                # the remaining attempts trying for a real hook.
-                if best is None:
-                    best = candidate
-                feedback = (
-                    "Your previous attempt opened with setup. The FIRST sentence "
-                    "of this chapter is the whole video's hook and is judged on "
-                    "its own: at most 12 words, containing a hard number, a "
-                    "proper name, or a superlative, and it may not begin with "
-                    "'In', a year, 'It was', 'Imagine', 'This is', 'Picture "
-                    "this', 'Have you ever', 'Most people' or 'What if'. "
-                    "Write the anomaly itself, not an introduction to it.")
-                if attempt < attempts - 1:
-                    print(f"   retrying chapter {heading!r} for a stronger "
-                          f"opening ({attempt + 2}/{attempts})...")
-                continue
+                if heading == opening_heading and not _opening_hook_ok(candidate):
+                    # Structurally fine, but it opens on setup. Keep it as the
+                    # fallback — losing this chapter loses the video — and spend
+                    # the remaining attempts trying for a real hook.
+                    if best is None:
+                        best = candidate
+                    feedback = (
+                        "Your previous attempt opened with setup. The FIRST sentence "
+                        "of this chapter is the whole video's hook and is judged on "
+                        "its own: at most 12 words, containing a hard number, a "
+                        "proper name, or a superlative, and it may not begin with "
+                        "'In', a year, 'It was', 'Imagine', 'This is', 'Picture "
+                        "this', 'Have you ever', 'Most people' or 'What if'. "
+                        "Write the anomaly itself, not an introduction to it.")
+                    if attempt < attempts - 1:
+                        print(f"   retrying chapter {heading!r} for a stronger "
+                              f"opening ({attempt + 2}/{attempts})...")
+                    continue
+
+                # The chapter is sound. The remaining question is whether its
+                # last sentence lets the viewer leave. Worth one retry, never
+                # more: a closed ending is a real cost, an abandoned chapter is
+                # a bigger one.
+                if (next_heading and not handoff_retried
+                        and attempt < attempts - 1
+                        and not _handoff_ok(candidate)):
+                    if best is None:
+                        best = candidate
+                    handoff_retried = True
+                    feedback = (
+                        "Your previous attempt ended the chapter completely, so "
+                        "the viewer has no reason to continue. Rewrite it so the "
+                        "LAST sentence leaves one thing unresolved that the "
+                        f"chapter \"{next_heading}\" will settle — an order "
+                        "already signed, a message nobody had read, someone "
+                        "already on their way, a figure that does not yet add "
+                        "up. Under 14 words, a flat statement of fact, not a "
+                        "question and not a tease. Keep the rest of the chapter "
+                        "as it was.")
+                    print(f"   retrying chapter {heading!r} for an open ending "
+                          f"({attempt + 2}/{attempts})...")
+                    continue
+
+                data = candidate
+                break
 
             # Repetition needs its own correction. Telling a padding model to
             # "write more words" is how it padded in the first place.
@@ -1082,7 +1355,11 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         else:
             stat = {}
 
-        chapters.append({"heading": heading, "scenes": segs, "key_stat": stat})
+        # arc_index, not the position in this list: a chapter that failed to
+        # generate is dropped, and everything downstream that cares about the
+        # midpoint would otherwise silently shift to the wrong chapter.
+        chapters.append({"heading": heading, "scenes": segs, "key_stat": stat,
+                         "arc_index": c_index, "pacing": pacing})
         tail = segs[-1]["narration"][-160:]
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
@@ -1112,6 +1389,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
               "GEMINI_API_KEY for a stronger writer.")
         return None
     print(f"🔎 Script variety: {script_ratio:.0%} distinct sentences.")
+    if not payoff_ok({"chapters": chapters}):
+        print("⚠️ The closing chapter names none of the people the opening "
+              "did — the video may not pay off what it promised.")
     meta = {}
     try:
         meta = _packaging_call(pool, topic, full_text)
@@ -1221,22 +1501,61 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  max_tokens=2500) or {}
 
 
+# Silence deliberately left at a chapter seam. Not dead air — dead air is what
+# the trimmer removes. This is the opposite: a measured beat where the previous
+# sentence is allowed to land before the next chapter starts talking.
+CHAPTER_BEAT = 0.35
+
+# The breath before the midpoint. Longer, because it is doing work: after two
+# chapters of narration at pace, most of a second of nothing is itself the
+# pattern interrupt that says the video just changed gear.
+PIVOT_BEAT = 0.9
+
+# The last line of the video gets room before the end card fades up.
+CLOSING_BEAT = 0.6
+
+
 def flatten_scenes(script: dict) -> list:
     """Flattens chapters into the scene list the audio/visual engines expect.
     Chapter titles are typeset over the footage by the video engine (keyed off
     chapter_index changes), so every scene gets real imagery — the old
-    full-screen chapter cards are gone."""
+    full-screen chapter cards are gone.
+
+    Each scene also carries the pacing its chapter earned: the narration speed
+    the audio engine reads it at, the role the video engine grades and scores
+    it by, and the beat of silence that follows it.
+    """
+    chapters = script["chapters"]
+    # Which position in the final list is the midpoint, given that chapters can
+    # be dropped. Falls back to the arithmetic middle when no chapter declares
+    # itself the pivot, so a short arc still gets a reset somewhere sensible.
+    pivot_pos = next((i for i, c in enumerate(chapters)
+                      if (c.get("pacing") or {}).get("role") == "pivot"),
+                     len(chapters) // 2 if len(chapters) >= 4 else None)
+
     scenes = []
-    for c_idx, chapter in enumerate(script["chapters"]):
+    for c_idx, chapter in enumerate(chapters):
+        pacing = chapter.get("pacing") or DEFAULT_PACING
+        last = len(chapter["scenes"]) - 1
         for s_idx, scene in enumerate(chapter["scenes"]):
             s = dict(scene)
             s["chapter_index"] = c_idx
             s["chapter_heading"] = chapter["heading"]
+            s["chapter_role"] = pacing.get("role", "build")
+            s["is_pivot"] = (c_idx == pivot_pos)
+            s["tts_rate"] = pacing.get("tts_rate")
             # The visual engine gates archival search and b-roll on the era.
             s["era_year"] = script.get("era_year")
             if s_idx == 0:
                 # longform_video reads key_stat off the chapter's first scene.
                 s["key_stat"] = chapter.get("key_stat") or {}
+            if s_idx == last:
+                if c_idx == len(chapters) - 1:
+                    s["pause_after"] = CLOSING_BEAT
+                elif pivot_pos is not None and c_idx == pivot_pos - 1:
+                    s["pause_after"] = PIVOT_BEAT
+                else:
+                    s["pause_after"] = CHAPTER_BEAT
             scenes.append(s)
     return scenes
 

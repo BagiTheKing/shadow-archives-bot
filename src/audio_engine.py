@@ -32,9 +32,15 @@ RATE = os.getenv("TTS_RATE", "+8%")    # slightly faster = better Shorts retenti
 PITCH = os.getenv("TTS_PITCH", "-4Hz")  # slightly deeper = more gravitas
 
 
-async def _synthesize(text: str, output_path: str):
-    """Generates the MP3 and returns word timings: [(word, start_s, end_s), ...]."""
-    communicate = edge_tts.Communicate(text, VOICE, rate=RATE, pitch=PITCH, boundary="WordBoundary")
+async def _synthesize(text: str, output_path: str, rate: str = None):
+    """Generates the MP3 and returns word timings: [(word, start_s, end_s), ...].
+
+    rate overrides the global narration speed for this scene. The long-form arc
+    reads its midpoint slower than its opening on purpose — see PACING in
+    longform_llm — and a single global rate made that impossible.
+    """
+    communicate = edge_tts.Communicate(text, VOICE, rate=rate or RATE,
+                                       pitch=PITCH, boundary="WordBoundary")
     words = []
     with open(output_path, "wb") as f:
         async for chunk in communicate.stream():
@@ -66,11 +72,143 @@ def get_audio_duration(file_path: str) -> float:
     return float(result.stdout.strip())
 
 
+
+
+# ---------------------------------------------------------------------------
+# Dead air
+#
+# edge-tts pads every clip it returns: a beat of near-silence before the first
+# word and another after the last. On a fifty-second Short that is invisible.
+# On a seven-minute video assembled from forty separate clips it is most of a
+# minute of nothing, distributed as a small hesitation at every single cut —
+# which is exactly where a viewer is already deciding whether to stay.
+#
+# The trim has to be measured rather than guessed, because the word timings
+# edge-tts hands back are offsets into the UNtrimmed audio. Cutting the head
+# without shifting them by the same amount would desynchronise every caption in
+# the video. So: measure, cut, shift by the measured amount.
+# ---------------------------------------------------------------------------
+
+# Anything under this is silence for our purposes. Narration recorded at -4Hz
+# pitch still sits far above it, so this does not clip speech.
+SILENCE_DB = -45
+
+# Silence has to last this long to count as padding rather than a plosive.
+SILENCE_MIN = 0.05
+
+# Left behind at each end so a trimmed clip does not start on the attack of the
+# first consonant.
+SILENCE_KEEP = 0.06
+
+# MP3 encoder padding puts the last decoded sample slightly before the
+# container's reported duration, so "ends at the end" needs a tolerance.
+EOF_TOLERANCE = 0.15
+
+_SILENCE_START = re.compile(r"silence_start:\s*(-?[\d.]+)")
+_SILENCE_END = re.compile(r"silence_end:\s*([\d.]+)")
+
+
+def _measure_silence(path: str, duration: float):
+    """(leading, trailing) seconds of silence in this clip.
+
+    Uses ffmpeg's silencedetect, which reports every silent run; only a run
+    starting at the very beginning and one ending at the very end are padding.
+    """
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", path,
+         "-af", f"silencedetect=noise={SILENCE_DB}dB:d={SILENCE_MIN}",
+         "-f", "null", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    log = result.stdout or ""
+
+    starts = [float(m) for m in _SILENCE_START.findall(log)]
+    ends = [float(m) for m in _SILENCE_END.findall(log)]
+
+    lead = 0.0
+    if starts and starts[0] <= 0.02 and ends:
+        lead = ends[0]
+
+    trailing = 0.0
+    if len(starts) > len(ends):
+        # A silence that opened and never closed runs to the end of the file.
+        trailing = duration - starts[-1]
+    elif starts and ends and ends[-1] >= duration - EOF_TOLERANCE:
+        # silencedetect closes the final run at the last decoded sample, which
+        # for an MP3 sits a little short of the container duration because of
+        # encoder padding. Anything landing that close to the end IS the end.
+        trailing = duration - starts[-1]
+    trailing = max(0.0, min(trailing, duration))
+
+    # A clip that is silent end to end is a failed synthesis, not a padded one.
+    if lead + trailing >= duration - 0.05:
+        return 0.0, 0.0
+    return lead, trailing
+
+
+def tighten_clip(path: str, duration: float, pause_after: float = 0.0):
+    """Trims the padding off both ends and appends a deliberate beat.
+
+    Returns (seconds_removed_from_the_head, new_duration). The caller must
+    shift that scene's word timings back by the first value or every caption
+    after the cut runs early.
+    """
+    try:
+        lead, trailing = _measure_silence(path, duration)
+    except Exception as e:
+        print(f"   ⚠️ Could not measure silence ({type(e).__name__}: {e}) — "
+              f"leaving the clip as recorded.")
+        return 0.0, duration
+
+    start = max(0.0, lead - SILENCE_KEEP)
+    end = duration - max(0.0, trailing - SILENCE_KEEP)
+
+    # Nothing worth doing, and re-encoding for nothing costs quality.
+    if start < 0.02 and end > duration - 0.02 and pause_after <= 0:
+        return 0.0, duration
+    if end - start < 0.2:
+        return 0.0, duration
+
+    chain = [f"atrim=start={start:.3f}:end={end:.3f}", "asetpts=N/SR/TB"]
+    if pause_after > 0:
+        chain.append(f"apad=pad_dur={pause_after:.3f}")
+
+    tmp = path + ".tight.mp3"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", path,
+             "-af", ",".join(chain), "-q:a", "2", tmp],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+        os.replace(tmp, path)
+    except Exception as e:
+        print(f"   ⚠️ Could not tighten the clip ({type(e).__name__}: {e}) — "
+              f"leaving it as recorded.")
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return 0.0, duration
+
+    return start, get_audio_duration(path)
+
+
+def shift_word_timings(words, removed: float):
+    """Moves word timings back by the silence cut off the head of the clip."""
+    if not words or removed <= 0:
+        return words
+    shifted = []
+    for w in words:
+        start = w["start"] - removed
+        end = w["end"] - removed
+        # A word that started inside the trimmed silence keeps its text but
+        # begins at zero; dropping it would lose a caption chunk.
+        shifted.append({"word": w["word"], "start": max(0.0, start),
+                        "end": max(0.0, end)})
+    return shifted
+
+
 def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dict:
     print(f"🎙️ Initializing Audio Engine (voice: {VOICE})...")
     os.makedirs(output_dir, exist_ok=True)
 
-    skipped = 0
+    skipped, trimmed_total = 0, 0.0
     for idx, scene in enumerate(script_data.get("scenes", [])):
         audio_path = os.path.join(output_dir, f"scene_{idx}.mp3")
         text = scene.get("narration", "").strip()
@@ -87,10 +225,11 @@ def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dic
             skipped += 1
             continue
 
-        print(f"🗣️ Synthesizing scene {idx}: '{text[:40]}...'")
+        rate = scene.get("tts_rate") or RATE
+        print(f"🗣️ Synthesizing scene {idx} at {rate}: '{text[:40]}...'")
 
         try:
-            words = asyncio.run(_synthesize(text, audio_path))
+            words = asyncio.run(_synthesize(text, audio_path, rate=rate))
             if os.path.getsize(audio_path) < 1000:  # suspiciously small = failed
                 raise RuntimeError("edge-tts produced an empty file")
         except Exception as e:
@@ -105,12 +244,24 @@ def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dic
                 skipped += 1
                 continue
 
+        duration = get_audio_duration(audio_path)
+
+        # Cut the padding, add the beat this scene is supposed to end on, and
+        # move the word timings to match what is now in the file.
+        removed, duration = tighten_clip(audio_path, duration,
+                                         float(scene.get("pause_after") or 0.0))
+        words = shift_word_timings(words, removed)
+        trimmed_total += removed
+
         scene["audio_path"] = audio_path
-        scene["duration"] = get_audio_duration(audio_path)
+        scene["duration"] = duration
         scene["words"] = words
-        print(f"⏱️ Scene {idx}: {scene['duration']:.2f}s, {len(words)} word timings")
+        cut = f", -{removed:.2f}s dead air" if removed > 0.01 else ""
+        print(f"⏱️ Scene {idx}: {duration:.2f}s, {len(words)} word timings{cut}")
 
     note = f" ({skipped} scene(s) skipped)" if skipped else ""
+    if trimmed_total > 0.5:
+        print(f"✂️  Removed {trimmed_total:.1f}s of dead air across the video.")
     print(f"✅ Audio pipeline complete{note}.")
     return script_data
 

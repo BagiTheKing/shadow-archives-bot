@@ -63,6 +63,8 @@ Style: Body,{FONT_NAME},54,&H00FFFFFF,&H0000E8FF,&H00000000,&H80000000,0,0,0,0,1
 Style: Stat,{FONT_NAME},170,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,8,120,120,120,1
 Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,1,0,1,4,3,4,150,150,60,1
 Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
+Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
+Style: Scrim,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -169,6 +171,64 @@ def _chapter_title_event(start: float, duration: float, number: int,
             f"Chapter,,0,0,0,,{fx}")
 
 
+# ---------------------------------------------------------------------------
+# The midpoint reset
+#
+# Retention graphs slump in the middle, and this one has nothing in the middle
+# to slump against: chapter three looked, sounded and cut exactly like chapter
+# two. The arc already knows which chapter is its turning point — "The
+# Decision" is the chapter the whole format is built around — and it was being
+# rendered with the same sliding corner label as every other chapter.
+#
+# So the pivot announces itself. The frame dims, the label moves to the centre
+# and doubles in size, an accent rule draws under it, the narration has just
+# taken a beat of silence, and the music ducks and comes back up. It costs
+# about three seconds and it is the only moment in seven minutes that looks
+# like nothing else in the video.
+# ---------------------------------------------------------------------------
+
+# How long the pivot card holds. Longer than a normal chapter label: it is not
+# orientation, it is a gear change, and it needs to be felt.
+PIVOT_HOLD = 3.4
+
+# How dark the frame goes behind it. &H00 is opaque, &HFF is invisible.
+PIVOT_SCRIM_ALPHA = "&H55&"
+
+
+def _pivot_events(start: float, duration: float, number: int, heading: str):
+    """The midpoint card: a dimmed frame, a centred heading, an accent rule.
+
+    Returned as three events rather than one because they layer — the scrim has
+    to sit under the type, and the rule has to sit under both.
+    """
+    hold = min(PIVOT_HOLD, max(1.8, duration - 0.4))
+    end = start + hold
+    fade = r"\fad(420,520)"
+    cx, cy = W // 2, int(H * 0.5)
+
+    # A full-frame wash, drawn rather than styled: libass has no box primitive.
+    scrim = (f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Scrim,,0,0,0,,"
+             f"{{\\an7\\pos(0,0)\\1c&H000000&\\1a{PIVOT_SCRIM_ALPHA}"
+             f"\\bord0\\shad0{fade}\\p1}}"
+             f"m 0 0 l {W} 0 l {W} {H} l 0 {H}{{\\p0}}")
+
+    kicker = f"PART {_PART_WORDS[(number - 1) % len(_PART_WORDS)]}"
+    text = (f"{{\\an5\\pos({cx},{cy}){fade}\\q2}}"
+            f"{{\\fs54\\c{ACCENT_ASS}\\bord2}}{kicker}"
+            r"\N{\fs128\c&HFFFFFF&\bord5}" + heading.upper())
+    card = (f"Dialogue: 2,{_ass_time(start)},{_ass_time(end)},Pivot,,0,0,0,,"
+            f"{text}")
+
+    # The accent rule, drawn under the heading.
+    rule_y = cy + 120
+    rule = (f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Scrim,,0,0,0,,"
+            f"{{\\an5\\pos({cx},{rule_y})\\1c{ACCENT_ASS}\\1a&H00&"
+            f"\\bord0\\shad0{fade}\\p1}}"
+            f"m 0 0 l 360 0 l 360 6 l 0 6{{\\p0}}")
+
+    return [scrim, rule, card]
+
+
 def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
                        chapter_titles=None, total_duration=0.0):
     """offsets[i] is the global start time of scene i on the final timeline.
@@ -204,8 +264,14 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
     for start, value, label in (stat_cues or []):
         events.append(_stat_event(start, str(value), str(label or "")))
 
-    for start, duration, number, heading in (chapter_titles or []):
-        events.append(_chapter_title_event(start, duration, number, heading))
+    for cue in (chapter_titles or []):
+        # (start, duration, number, heading[, is_pivot])
+        start, duration, number, heading = cue[:4]
+        is_pivot = bool(cue[4]) if len(cue) > 4 else False
+        if is_pivot:
+            events.extend(_pivot_events(start, duration, number, heading))
+        else:
+            events.append(_chapter_title_event(start, duration, number, heading))
 
     # End card over the closing seconds. Layer 1 keeps it above the narration
     # captions, and its own margin keeps it clear of them.
@@ -363,6 +429,140 @@ def _pick_music():
         if tracks else None
 
 
+# ---------------------------------------------------------------------------
+# Sound design
+#
+# Everything above this line is picture. The audio track, for seven minutes,
+# was narration plus one music file at a fixed 10% — the same bed, at the same
+# level, under the hook, under the midpoint and under the closing line. Not one
+# auditory event in the whole video. Every pattern interrupt the channel had
+# was something you could only see, which means it had none at all for anyone
+# half-watching in another tab, and half-watching is most of the audience.
+#
+# Two things are added here, both synthesised by ffmpeg at render time. No
+# files to license, no downloads to fail in CI, no repository bloat:
+#
+#   an impact   a short low hit under each number callout, so the figure lands
+#   a riser     a rising tone into each chapter card, so the change is heard
+#               a beat before it is read
+#
+# And the bed itself now moves: it ducks into the midpoint, comes back up
+# under it, lifts under each chapter card, and swells for the closing lines.
+# ---------------------------------------------------------------------------
+
+# Held low on purpose. These are punctuation, not effects — the moment a viewer
+# notices the sound design as sound design, it reads as a template channel.
+IMPACT_GAIN = 0.28
+RISER_GAIN = 0.16
+
+# The bed, and how far it moves.
+MUSIC_BASE = 0.085
+MUSIC_CARD_LIFT = 0.035        # under a chapter card
+MUSIC_PIVOT_DUCK = 0.055       # into the midpoint — nearly out
+MUSIC_PIVOT_SWELL = 0.055      # and back up, over the top, as it opens
+MUSIC_OUTRO_LIFT = 0.045       # under the closing lines and the end card
+
+# Seconds either side of a move, so levels ramp instead of stepping. A hard
+# jump in a music bed is audible as a click, which is worse than no move.
+MUSIC_RAMP = 0.8
+
+
+def _bump(a: float, b: float, fade: float = MUSIC_RAMP) -> str:
+    """An ffmpeg volume-expression term: 0 outside [a,b], 1 inside, ramped."""
+    a, b = max(0.0, a), max(0.0, b)
+    fade = max(0.05, min(fade, (b - a) / 2 if b > a else 0.05))
+    return (f"min(min(1,max(0,(t-{a:.3f})/{fade:.3f})),"
+            f"min(1,max(0,({b:.3f}-t)/{fade:.3f})))")
+
+
+def music_envelope(card_starts, pivot_start, total: float) -> str:
+    """The music bed's level as a function of time, as an ffmpeg expression.
+
+    Everything is additive against MUSIC_BASE, and every term is a ramped
+    window, so the result is continuous and never goes negative.
+    """
+    terms = [f"{MUSIC_BASE:.4f}"]
+
+    for start in card_starts or []:
+        if pivot_start is not None and abs(start - pivot_start) < 4.0:
+            continue                      # the pivot has its own, bigger move
+        terms.append(f"{MUSIC_CARD_LIFT:.4f}*{_bump(start - 0.6, start + 3.4)}")
+
+    if pivot_start is not None:
+        # Out, then over the top. The duck starts before the chapter does,
+        # under the beat of silence the audio engine left there.
+        terms.append(f"-{MUSIC_PIVOT_DUCK:.4f}*"
+                     f"{_bump(pivot_start - 2.2, pivot_start + 1.2)}")
+        terms.append(f"{MUSIC_PIVOT_SWELL:.4f}*"
+                     f"{_bump(pivot_start + 1.4, pivot_start + 6.5)}")
+
+    if total > 20:
+        terms.append(f"{MUSIC_OUTRO_LIFT:.4f}*{_bump(total - 13.0, total)}")
+
+    return "+".join(terms).replace("+-", "-")
+
+
+def _sfx_sources(cues):
+    """(filter_complex fragments, output labels) for every synthesised hit.
+
+    impact: two low sines an octave apart with a fast decay — felt more than
+            heard, which is what a number callout wants.
+    riser:  a tone sweeping upward over a second, ending where the card lands.
+    """
+    frags, labels = [], []
+    for i, (kind, at) in enumerate(cues):
+        label = f"sfx{i}"
+        delay = max(0, int(at * 1000))
+        if kind == "impact":
+            # exp decay over 1.1s, fundamental at 58Hz with an octave above.
+            expr = ("(sin(2*PI*58*t)*0.7+sin(2*PI*116*t)*0.3)"
+                    "*exp(-3.4*t)")
+            dur, gain = 1.2, IMPACT_GAIN
+        else:
+            # 1.0s sweep, 180Hz -> 780Hz, fading in so it does not click.
+            expr = "sin(2*PI*t*(180+600*t))*min(1,t*3)*exp(-1.1*t)"
+            dur, gain = 1.0, RISER_GAIN
+        frags.append(
+            f"aevalsrc='{expr}':s=44100:d={dur}[{label}r];"
+            f"[{label}r]volume={gain},aformat=channel_layouts=stereo,"
+            f"adelay={delay}|{delay}[{label}]")
+        labels.append(label)
+    return frags, labels
+
+
+def build_sfx_bed(cues, total: float, out: str):
+    """Renders every hit into one silent-background track the length of the
+    video, so the final mix takes one extra input instead of twenty.
+
+    Returns the path, or None — sound design is the first thing that should be
+    dropped if ffmpeg is unhappy, because the video is fine without it.
+    """
+    cues = [(k, t) for k, t in (cues or []) if 0 <= t < total]
+    if not cues:
+        return None
+    try:
+        frags, labels = _sfx_sources(cues)
+        # A silent track the full length of the video is the first input, so
+        # the mix is exactly as long as the video without padding after the
+        # fact — apad after an amix does not reliably reach the target.
+        frags.insert(0, f"anullsrc=r=44100:cl=stereo:d={total:.3f}[base]")
+        labels.insert(0, "base")
+        mix = "".join(f"[{l}]" for l in labels)
+        chain = (";".join(frags) + ";" +
+                 f"{mix}amix=inputs={len(labels)}:duration=first:normalize=0"
+                 f"[out]")
+        _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-filter_complex", chain, "-map", "[out]",
+              "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", out])
+        print(f"🔔 Sound design: {len(cues)} cues "
+              f"({sum(1 for k, _ in cues if k == 'impact')} impacts, "
+              f"{sum(1 for k, _ in cues if k == 'riser')} risers).")
+        return out
+    except Exception as e:
+        print(f"⚠️ Sound design skipped ({type(e).__name__}: {e}).")
+        return None
+
+
 def generate_longform_video(scenes, build_dir="build"):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks)
     where chapter_marks is [(heading, start_seconds), ...] for the description."""
@@ -391,6 +591,8 @@ def generate_longform_video(scenes, build_dir="build"):
 
     reels, global_offsets, chapter_marks, cursor, cuts = [], [], [], 0.0, 0
     stat_cues, chapter_titles = [], []
+    # Where the music ducks and the sound design fires.
+    card_starts, pivot_start = [], None
     for c_idx, group in chapters:
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
@@ -406,9 +608,13 @@ def generate_longform_video(scenes, build_dir="build"):
         # story — and 69% of them left inside the first 23 seconds. A chapter
         # title is orientation, and nobody needs orienting before they have
         # been given a reason to stay.
+        is_pivot = bool(group[0].get("is_pivot"))
         if c_idx > 0:
             chapter_titles.append((cursor + 0.3, group[0]["duration"],
-                                   c_idx + 1, heading))
+                                   c_idx + 1, heading, is_pivot))
+            card_starts.append(cursor + 0.3)
+        if is_pivot:
+            pivot_start = cursor
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
 
@@ -465,15 +671,43 @@ def generate_longform_video(scenes, build_dir="build"):
           f"fade=t=in:st=0:d=0.8,"
           f"fade=t=out:st={max(total_duration - 1.0, 0):.2f}:d=1.0")
 
+    # Sound design: a hit under every number callout, a riser into every
+    # chapter card. Rendered to one track so the mix below stays a three-input
+    # graph however many cues there are.
+    sfx_cues = [("impact", start) for start, _, _ in stat_cues]
+    sfx_cues += [("riser", max(0.0, cue[0] - 0.55)) for cue in chapter_titles]
+    sfx = build_sfx_bed(sfx_cues, total_duration,
+                        os.path.join(build_dir, "lf_sfx.wav"))
+
+    inputs, mix_parts, mix_labels = ["-i", merged], [], ["[0:a]"]
+
     music = _pick_music()
     if music:
         print(f"🎵 Bed: {os.path.basename(music)}")
-        af = (f"[1:a]aloop=loop=-1:size=2e9,atrim=0:{total_duration:.3f},"
-              f"volume=0.10,afade=t=out:st={max(total_duration - 2.5, 0):.2f}:d=2.5[bg];"
-              f"[0:a][bg]amix=inputs=2:duration=first:normalize=0,"
-              f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2[aout]")
-        cmd = ["ffmpeg", "-y", "-i", merged, "-i", music,
-               "-filter_complex", af, "-map", "0:v", "-map", "[aout]", "-vf", vf,
+        idx = len(inputs) // 2
+        inputs += ["-i", music]
+        # The bed is no longer a fixed 10%. It ducks into the midpoint, comes
+        # back over the top of it, lifts under each chapter card, and swells
+        # for the closing lines — see music_envelope.
+        envelope = music_envelope(card_starts, pivot_start, total_duration)
+        mix_parts.append(
+            f"[{idx}:a]aloop=loop=-1:size=2e9,atrim=0:{total_duration:.3f},"
+            f"volume=volume='{envelope}':eval=frame,"
+            f"afade=t=out:st={max(total_duration - 2.5, 0):.2f}:d=2.5[bg]")
+        mix_labels.append("[bg]")
+
+    if sfx:
+        idx = len(inputs) // 2
+        inputs += ["-i", sfx]
+        mix_labels.append(f"[{idx}:a]")
+
+    if len(mix_labels) > 1:
+        mix_parts.append(
+            f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:"
+            f"duration=first:normalize=0,"
+            f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2[aout]")
+        cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(mix_parts),
+               "-map", "0:v", "-map", "[aout]", "-vf", vf,
                "-c:v", "libx264", "-preset", "medium", "-crf", "21",
                "-c:a", "aac", "-b:a", "192k", final_output]
     else:
