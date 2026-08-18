@@ -1,0 +1,61 @@
+name: Reconcile playlist
+
+# Files any published video that is missing from the series playlist.
+#
+# It runs weekly rather than daily because there is normally nothing to do:
+# every upload files itself now. This exists for the two cases where that is
+# not true — the fifty videos published before the pipeline could file anything,
+# and any run where add_to_playlist failed quietly, which it is designed to do
+# so that a playlist hiccup never sinks a video that is already public.
+#
+# Sunday 06:00 UTC: no publish is scheduled then (uploads go out at 15:23), so
+# the whole daily quota is free and the catalogue catches up fastest.
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what is missing without filing anything'
+        type: boolean
+        default: false
+      max_adds:
+        description: 'Cap on inserts this run (50 quota units each)'
+        type: string
+        default: '30'
+
+concurrency:
+  group: reconcile-playlist
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # No FFmpeg step: this one renders nothing, it only talks to the API.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: File the stragglers
+        env:
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          SERIES_NAME: Catastrophe Files
+          MAX_PLAYLIST_ADDS: ${{ inputs.max_adds || '30' }}
+        run: |
+          python tools/reconcile_playlist.py \
+            ${{ inputs.dry_run && '--dry-run' || '' }}

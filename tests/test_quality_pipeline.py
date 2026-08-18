@@ -31,6 +31,10 @@ import video_engine                                         # noqa: E402
 import visual_engine                                        # noqa: E402
 import youtube_publisher                                    # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+
+import reconcile_playlist                                   # noqa: E402
+
 
 
 class _FakeRequest:
@@ -1660,6 +1664,81 @@ class TestLongformOpeningHook(unittest.TestCase):
         self.assertLessEqual(opening_words, 75)
         for _, _, words in longform_llm.ARC[1:]:
             self.assertGreater(words, opening_words)
+
+
+class TestPlaylistReconciler(unittest.TestCase):
+    """The back catalogue was published before anything could file it, and
+    add_to_playlist swallows its failures by design, so drift is permanent
+    without something that goes looking for it."""
+
+    def _youtube(self, uploaded, filed, private=()):
+        """A stand-in for the two playlistItems listings the tool reads."""
+        uploads_items = [
+            {"contentDetails": {"videoId": v},
+             "status": {"privacyStatus": "private" if v in private else "public"}}
+            for v in uploaded]
+        filed_items = [{"contentDetails": {"videoId": v}} for v in filed]
+
+        class Items:
+            def list(self, part=None, playlistId=None, maxResults=None):
+                items = uploads_items if playlistId == "UU_uploads" else filed_items
+                return _FakeRequest({"items": items})
+
+            def list_next(self, request, response):
+                return None
+
+        class Channels:
+            def list(self, part=None, mine=None):
+                return _FakeRequest({"items": [{"contentDetails": {
+                    "relatedPlaylists": {"uploads": "UU_uploads"}}}]})
+
+        return type("YT", (), {"playlistItems": lambda s: Items(),
+                               "channels": lambda s: Channels()})()
+
+    def test_uploads_are_returned_oldest_first(self):
+        """The uploads playlist is newest-first. A series should read in the
+        order it was published, and new uploads append from the end."""
+        yt = self._youtube(["newest", "middle", "oldest"], [])
+        self.assertEqual(reconcile_playlist.uploaded_video_ids(yt),
+                         ["oldest", "middle", "newest"])
+
+    def test_private_videos_are_skipped(self):
+        """They cannot be added to a playlist, and trying costs a unit and an
+        error apiece."""
+        yt = self._youtube(["a", "b", "c"], [], private=("b",))
+        self.assertEqual(reconcile_playlist.uploaded_video_ids(yt),
+                         ["c", "a"])
+
+    def test_already_filed_videos_are_read_back(self):
+        yt = self._youtube(["a"], ["a", "b"])
+        self.assertEqual(reconcile_playlist.playlist_video_ids(yt, "PL_series"),
+                         {"a", "b"})
+
+    def test_the_missing_set_is_the_difference(self):
+        yt = self._youtube(["c", "b", "a"], ["a"])
+        uploads = reconcile_playlist.uploaded_video_ids(yt)
+        filed = reconcile_playlist.playlist_video_ids(yt, "PL_series")
+        self.assertEqual([v for v in uploads if v not in filed], ["b", "c"])
+
+    def test_a_caught_up_catalogue_has_nothing_to_do(self):
+        yt = self._youtube(["b", "a"], ["a", "b"])
+        uploads = reconcile_playlist.uploaded_video_ids(yt)
+        filed = reconcile_playlist.playlist_video_ids(yt, "PL_series")
+        self.assertEqual([v for v in uploads if v not in filed], [])
+
+    def test_a_run_is_capped_so_it_can_share_a_day_with_a_publish(self):
+        """Inserts cost 50 units each against a 10,000/day allowance, and a
+        publish day already spends ~2,500."""
+        self.assertLessEqual(reconcile_playlist.MAX_ADDS * 50, 2000)
+
+    def test_credentials_without_a_channel_stop_rather_than_guess(self):
+        class NoChannel:
+            def channels(self):
+                return type("C", (), {
+                    "list": lambda s, part=None, mine=None: _FakeRequest(
+                        {"items": []})})()
+        with self.assertRaises(SystemExit):
+            reconcile_playlist.uploaded_video_ids(NoChannel())
 
 
 if __name__ == "__main__":
