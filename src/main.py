@@ -100,6 +100,20 @@ def build_metadata(script_data: dict, episode=None):
     return title, description, trimmed
 
 
+def build_first_comment(script_data: dict) -> str:
+    """The question posted under the video. Falls back to naming the subject,
+    because a generic prompt is still better than the silence the channel has
+    now — but the model is asked for something specific first."""
+    question = (script_data.get("comment_question") or "").strip()
+    if not question:
+        subject = (script_data.get("topic") or "").split("(")[0].strip(" ,.")
+        if not subject:
+            return ""
+        question = (f"{subject} — at which moment do you think it stopped "
+                    "being recoverable?")
+    return question
+
+
 def plan_run():
     """Reads the channel back before writing anything.
 
@@ -187,7 +201,8 @@ def main():
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — video rendered but not uploaded (dry run).")
     else:
-        upload_video_to_youtube(final_video_path, title, description, tags)
+        upload_video_to_youtube(final_video_path, title, description, tags,
+                                first_comment=build_first_comment(script_data))
 
     print("🎉 Pipeline complete.")
 

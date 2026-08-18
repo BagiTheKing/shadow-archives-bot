@@ -58,75 +58,110 @@ import os
 # is one line: set EXPERIMENT_EVERY=7 in the workflow env.
 EXPERIMENT_EVERY = int(os.getenv("EXPERIMENT_EVERY", "0"))
 
-CORE_TOPICS = [
+# ---------------------------------------------------------------------------
+# REACH: how much of an audience a subject can find before the script does any
+# work. This is the gate that moves the hit rate, and it is not the same axis as
+# catastrophe-vs-mystery.
+#
+# 7 of the first 42 Shorts cleared 500 views; the rest died between 5 and 150 —
+# same pipeline, same format, a 100x spread. The split tracks the SUBJECT:
+#
+#   WIDE       Recognised on sight, or shocking without any prior knowledge, and
+#              not already a Shorts cliché. HMS Hood 605, Ariane 5 529, the
+#              Crater 1,054, the Light Brigade 1,059.
+#   NARROW     Real, well documented, and nobody is searching for it. The hook
+#              has to do all the work and usually cannot. Zeebrugge 65,
+#              General Slocum 10, Anjouan 19, the Meknes siege 29.
+#   SATURATED  Famous, and done a thousand times by better-funded channels.
+#              Recognition does not help when the feed already has fifty
+#              versions. Dyatlov Pass 5, Voynich 12, Chernobyl 38, and the Great
+#              Fire of London at 25 and 8 despite being the most recognisable
+#              subject on this list.
+#
+# Honesty about where these ratings come from: the tiers on topics the channel
+# has already published are measurements. The rest are editorial judgement —
+# my read of how recognisable a subject is and how heavily Shorts already covers
+# it — and the Darien Scheme (obscure, 725 views) is a standing reminder that
+# the rule has exceptions. Re-rate an entry whenever the channel proves it
+# wrong; that is the point of keeping the rating next to the topic.
+WIDE = "wide"
+NARROW = "narrow"
+SATURATED = "saturated"
+
+# Tiers this pipeline may publish, best first. SATURATED is never selected
+# automatically — set REACH_FLOOR=all to override.
+REACH_ORDER = [WIDE, NARROW, SATURATED]
+REACH_FLOOR = os.getenv("REACH_FLOOR", WIDE)
+
+_CORE = [
     # --- Orders and decisions that destroyed armies ---
-    "The Battle of Karansebes (1788), where the Austrian army attacked itself in the dark and took hundreds of casualties without ever meeting the enemy",
-    "Operation Cottage (1943), where Allied troops stormed Kiska island and took over 300 casualties fighting each other, because the Japanese had left two weeks earlier",
-    "The Battle of Isandlwana (1879), where a British force with rifles and artillery was destroyed by Zulu infantry after the camp was left unfortified",
-    "The Battle of Little Bighorn (1876) and Custer's decision to split his regiment into three before attacking a village he had never scouted",
-    "Operation Market Garden (1944), the airborne plan that depended on one road and ignored reconnaissance photos showing German armour at Arnhem",
-    "The Dieppe Raid (1942), where tanks were landed onto shingle beach that seized their tracks within metres of the waterline",
-    "The Gallipoli landings (1915) and the ANZAC troops put ashore beneath cliffs, roughly a mile from the flat beach they had trained for",
-    "The first day of the Somme (1916), when British troops were ordered to walk toward German lines and took 57,470 casualties before evening",
-    "Task Force Smith (1950), the undersized American unit sent to stop a tank column with bazooka rounds that could not penetrate a T-34",
-    "The Battle of Cannae (216 BC), where Hannibal used Rome's own numerical advantage to encircle and annihilate the larger army",
-    "The Battle of Agincourt (1415), where French numbers became a liability in a funnel of mud between two woods",
-    "The Battle of Tanga (1914), the British landing in East Africa broken up in part by swarms of disturbed bees",
-    "The Siege of Cartagena de Indias (1741), where Admiral Vernon struck victory medals before the battle and then lost it",
-    "The Battle of Adwa (1896), the Italian defeat that grew out of two versions of the Treaty of Wuchale saying different things in different languages",
-    "Italy's invasion of Greece (1940), launched in mountain winter without winter equipment and immediately pushed backwards",
-    "Operation Barbarossa (1941) and the decision not to issue winter clothing because the campaign was expected to end before the cold",
-    "The voyage of the Russian Baltic Fleet to Tsushima (1904), which opened fire on British fishing trawlers in the North Sea believing them to be Japanese torpedo boats",
-    "Operation Eagle Claw (1980), the Iran hostage rescue abandoned in a sandstorm that ended with a helicopter and a transport colliding on the ground",
-    "The Bay of Pigs invasion (1961) and the assumptions about a popular uprising that never came",
-    "The Zeebrugge Raid (1918), the blockships that were scuttled in the wrong position and left the canal usable",
+    ("The Battle of Karansebes (1788), where the Austrian army attacked itself in the dark and took hundreds of casualties without ever meeting the enemy", SATURATED),
+    ("Operation Cottage (1943), where Allied troops stormed Kiska island and took over 300 casualties fighting each other, because the Japanese had left two weeks earlier", WIDE),
+    ("The Battle of Isandlwana (1879), where a British force with rifles and artillery was destroyed by Zulu infantry after the camp was left unfortified", WIDE),
+    ("The Battle of Little Bighorn (1876) and Custer's decision to split his regiment into three before attacking a village he had never scouted", WIDE),
+    ("Operation Market Garden (1944), the airborne plan that depended on one road and ignored reconnaissance photos showing German armour at Arnhem", WIDE),
+    ("The Dieppe Raid (1942), where tanks were landed onto shingle beach that seized their tracks within metres of the waterline", WIDE),
+    ("The Gallipoli landings (1915) and the ANZAC troops put ashore beneath cliffs, roughly a mile from the flat beach they had trained for", WIDE),
+    ("The first day of the Somme (1916), when British troops were ordered to walk toward German lines and took 57,470 casualties before evening", WIDE),
+    ("Task Force Smith (1950), the undersized American unit sent to stop a tank column with bazooka rounds that could not penetrate a T-34", NARROW),
+    ("The Battle of Cannae (216 BC), where Hannibal used Rome's own numerical advantage to encircle and annihilate the larger army", WIDE),
+    ("The Battle of Agincourt (1415), where French numbers became a liability in a funnel of mud between two woods", WIDE),
+    ("The Battle of Tanga (1914), the British landing in East Africa broken up in part by swarms of disturbed bees", WIDE),
+    ("The Siege of Cartagena de Indias (1741), where Admiral Vernon struck victory medals before the battle and then lost it", WIDE),
+    ("The Battle of Adwa (1896), the Italian defeat that grew out of two versions of the Treaty of Wuchale saying different things in different languages", NARROW),
+    ("Italy's invasion of Greece (1940), launched in mountain winter without winter equipment and immediately pushed backwards", NARROW),
+    ("Operation Barbarossa (1941) and the decision not to issue winter clothing because the campaign was expected to end before the cold", WIDE),
+    ("The voyage of the Russian Baltic Fleet to Tsushima (1904), which opened fire on British fishing trawlers in the North Sea believing them to be Japanese torpedo boats", WIDE),
+    ("Operation Eagle Claw (1980), the Iran hostage rescue abandoned in a sandstorm that ended with a helicopter and a transport colliding on the ground", NARROW),
+    ("The Bay of Pigs invasion (1961) and the assumptions about a popular uprising that never came", WIDE),
+    ("The Zeebrugge Raid (1918), the blockships that were scuttled in the wrong position and left the canal usable", NARROW),
 
     # --- Engineering decisions that killed ---
-    "The Challenger disaster (1986) and the engineers who argued against launching in the cold the night before",
-    "The Chernobyl safety test (1986), the experiment that disabled the protections it was meant to verify",
-    "The Tacoma Narrows Bridge (1940), the span designed for wind loads that destroyed itself in a 40 mph breeze",
-    "The Hyatt Regency walkway collapse (1981), where a single change to how two walkways hung doubled the load on a connection and killed 114 people",
-    "The Johnstown Flood (1889), the dam a private club lowered and modified until it failed and killed 2,209 people downstream",
-    "The Ariane 5 Flight 501 explosion (1996), destroyed 39 seconds after launch by reused software converting a number into a variable too small to hold it",
-    "The Mars Climate Orbiter (1999), lost because one team worked in pound-force and the other in newtons",
-    "The Gimli Glider (1983), Air Canada Flight 143, the airliner that ran out of fuel at 41,000 feet after a conversion between pounds and kilograms",
-    "The Tenerife airport disaster (1977), the deadliest crash in aviation history, caused by an ambiguous radio exchange in fog",
-    "The sinking of HMS Hood (1941), the battlecruiser lost in about three minutes with 1,415 men and three survivors",
-    "The loss of the Kursk (2000), the submarine sunk by its own torpedo propellant leaking in the tube",
-    "The General Slocum fire (1904), where 1,021 people died beside life preservers that had rotted in place for thirteen years",
-    "The Sultana explosion (1865), the worst maritime disaster in American history, caused by a boiler patched overnight on a ship carrying six times its legal capacity",
-    "The Great Fire of London (1666) and the Lord Mayor who looked at the first burning street and went back to bed",
-    "The Boston Molasses Flood (1919), the storage tank that had been leaking so visibly it was painted brown to hide it",
-    "The London Beer Flood (1814), when a single failed iron hoop released a wave of porter through a London parish",
-    "The Vajont Dam disaster (1963), where a perfect dam held and the mountain beside it did not",
-    "The Banqiao Dam failure (1975), designed against a once-in-a-thousand-year storm that arrived within a decade",
-    "The Texas City disaster (1947), started by a cargo fire that spectators gathered on the docks to watch",
-    "The Halifax harbour collision (1917) and the twenty minutes when both crews knew what was coming and the city did not",
+    ("The Challenger disaster (1986) and the engineers who argued against launching in the cold the night before", WIDE),
+    ("The Chernobyl safety test (1986), the experiment that disabled the protections it was meant to verify", SATURATED),
+    ("The Tacoma Narrows Bridge (1940), the span designed for wind loads that destroyed itself in a 40 mph breeze", SATURATED),
+    ("The Hyatt Regency walkway collapse (1981), where a single change to how two walkways hung doubled the load on a connection and killed 114 people", WIDE),
+    ("The Johnstown Flood (1889), the dam a private club lowered and modified until it failed and killed 2,209 people downstream", WIDE),
+    ("The Ariane 5 Flight 501 explosion (1996), destroyed 39 seconds after launch by reused software converting a number into a variable too small to hold it", WIDE),
+    ("The Mars Climate Orbiter (1999), lost because one team worked in pound-force and the other in newtons", WIDE),
+    ("The Gimli Glider (1983), Air Canada Flight 143, the airliner that ran out of fuel at 41,000 feet after a conversion between pounds and kilograms", NARROW),
+    ("The Tenerife airport disaster (1977), the deadliest crash in aviation history, caused by an ambiguous radio exchange in fog", WIDE),
+    ("The sinking of HMS Hood (1941), the battlecruiser lost in about three minutes with 1,415 men and three survivors", WIDE),
+    ("The loss of the Kursk (2000), the submarine sunk by its own torpedo propellant leaking in the tube", WIDE),
+    ("The General Slocum fire (1904), where 1,021 people died beside life preservers that had rotted in place for thirteen years", NARROW),
+    ("The Sultana explosion (1865), the worst maritime disaster in American history, caused by a boiler patched overnight on a ship carrying six times its legal capacity", NARROW),
+    ("The Great Fire of London (1666) and the Lord Mayor who looked at the first burning street and went back to bed", SATURATED),
+    ("The Boston Molasses Flood (1919), the storage tank that had been leaking so visibly it was painted brown to hide it", SATURATED),
+    ("The London Beer Flood (1814), when a single failed iron hoop released a wave of porter through a London parish", NARROW),
+    ("The Vajont Dam disaster (1963), where a perfect dam held and the mountain beside it did not", WIDE),
+    ("The Banqiao Dam failure (1975), designed against a once-in-a-thousand-year storm that arrived within a decade", NARROW),
+    ("The Texas City disaster (1947), started by a cargo fire that spectators gathered on the docks to watch", NARROW),
+    ("The Halifax harbour collision (1917) and the twenty minutes when both crews knew what was coming and the city did not", WIDE),
 ]
 
-EXPERIMENT_TOPICS = [
-    "The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck",
-    "Roman dodecahedrons, the bronze objects found across Europe with no surviving explanation of their use",
-    "The Voynich Manuscript, the illustrated book written in a script no one has decoded",
-    "The Wow! Signal (1977), the 72-second radio burst never detected again",
-    "The Mary Celeste (1872), the ship found under sail in good order with its entire crew gone",
-    "The Lost Colony of Roanoke and the single word carved into a post",
-    "The Tunguska Event (1908), the blast that flattened 80 million trees and left no crater",
-    "The year 536 AD, described by historians as the worst year to be alive",
-    "The Carrington Event (1859), the solar storm that set telegraph offices on fire",
-    "The disappearance of the Ninth Roman Legion and the competing explanations",
-    "D.B. Cooper, the only unsolved airplane hijacking in American history",
-    "The Somerton Man, the unidentified body found with a torn page from a Persian poem",
-    "The Max Headroom broadcast intrusion (1987), the hijacked television signal never traced",
-    "The Isdal Woman, found in a Norwegian valley with every label removed from her clothing",
-    "Kaspar Hauser, the boy who appeared in Nuremberg in 1828 claiming he had grown up in a dark cell",
-    "The Amber Room, the chamber looted in 1941 and never recovered",
-    "The Library of Alexandria and what was actually lost, against the myth",
-    "Genghis Khan's hidden tomb and why Mongolia has not looked for it",
-    "The Phaistos Disc, the Bronze Age artifact stamped with symbols used nowhere else",
-    "The Eilean Mor lighthouse keepers, three men gone from a locked island station in 1900",
-    "Agatha Christie's eleven-day disappearance in 1926, which she never explained",
-    "The Hinterkaifeck murders (1922), the farm where the killer appears to have lived in the attic before acting",
+_EXPERIMENT = [
+    ("The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck", WIDE),
+    ("Roman dodecahedrons, the bronze objects found across Europe with no surviving explanation of their use", NARROW),
+    ("The Voynich Manuscript, the illustrated book written in a script no one has decoded", SATURATED),
+    ("The Wow! Signal (1977), the 72-second radio burst never detected again", SATURATED),
+    ("The Mary Celeste (1872), the ship found under sail in good order with its entire crew gone", SATURATED),
+    ("The Lost Colony of Roanoke and the single word carved into a post", SATURATED),
+    ("The Tunguska Event (1908), the blast that flattened 80 million trees and left no crater", WIDE),
+    ("The year 536 AD, described by historians as the worst year to be alive", WIDE),
+    ("The Carrington Event (1859), the solar storm that set telegraph offices on fire", WIDE),
+    ("The disappearance of the Ninth Roman Legion and the competing explanations", NARROW),
+    ("D.B. Cooper, the only unsolved airplane hijacking in American history", SATURATED),
+    ("The Somerton Man, the unidentified body found with a torn page from a Persian poem", NARROW),
+    ("The Max Headroom broadcast intrusion (1987), the hijacked television signal never traced", SATURATED),
+    ("The Isdal Woman, found in a Norwegian valley with every label removed from her clothing", NARROW),
+    ("Kaspar Hauser, the boy who appeared in Nuremberg in 1828 claiming he had grown up in a dark cell", NARROW),
+    ("The Amber Room, the chamber looted in 1941 and never recovered", NARROW),
+    ("The Library of Alexandria and what was actually lost, against the myth", SATURATED),
+    ("Genghis Khan's hidden tomb and why Mongolia has not looked for it", WIDE),
+    ("The Phaistos Disc, the Bronze Age artifact stamped with symbols used nowhere else", NARROW),
+    ("The Eilean Mor lighthouse keepers, three men gone from a locked island station in 1900", SATURATED),
+    ("Agatha Christie's eleven-day disappearance in 1926, which she never explained", NARROW),
+    ("The Hinterkaifeck murders (1922), the farm where the killer appears to have lived in the attic before acting", SATURATED),
 ]
 
 
@@ -166,7 +201,30 @@ PUBLISHED_TOPICS = [
 ]
 
 # Everything the encore lane may match a published title against.
+CORE_TOPICS = [t for t, _ in _CORE]
+EXPERIMENT_TOPICS = [t for t, _ in _EXPERIMENT]
+
+# Every rated topic, by rating. Anything absent (the already-published entries
+# below) is treated as NARROW, which is the cautious answer.
+REACH = {t: r for t, r in _CORE + _EXPERIMENT}
+
 ALL_TOPICS = CORE_TOPICS + EXPERIMENT_TOPICS + PUBLISHED_TOPICS
+
+
+def reach_of(topic: str) -> str:
+    """A topic's tier. Unrated entries — the already-published ones — count as
+    NARROW, so nothing sneaks into the wide lane by being absent from REACH."""
+    return REACH.get(topic, NARROW)
+
+
+def _allowed_tiers(floor: str) -> set:
+    """Every tier from the best down to `floor`. 'all' means no gate."""
+    if floor == "all":
+        return set(REACH_ORDER)
+    if floor not in REACH_ORDER:
+        print(f"⚠️ Unknown REACH_FLOOR {floor!r} — falling back to {WIDE!r}.")
+        floor = WIDE
+    return set(REACH_ORDER[:REACH_ORDER.index(floor) + 1])
 
 
 def _topic_for_slot(slot: int) -> str:
@@ -180,28 +238,56 @@ def _topic_for_slot(slot: int) -> str:
     return CORE_TOPICS[core_slot % len(CORE_TOPICS)]
 
 
-def pick_topic(offset: int = 0, exclude=()) -> str:
-    """The topic for today's slot, skipping anything already published.
+def _rotate(slot: int, exclude: set, tiers: set):
+    """The first topic at or after `slot` that is unpublished and in `tiers`."""
+    for step in range(len(CORE_TOPICS) + len(EXPERIMENT_TOPICS) + 1):
+        topic = _topic_for_slot(slot + step)
+        if topic in exclude or reach_of(topic) not in tiers:
+            continue
+        if step:
+            print(f"↪️  Skipped {step} pool entr(ies): already published, or "
+                  f"below the {'/'.join(sorted(tiers))} reach floor.")
+        return topic
+    return None
 
-    The date rotation alone is not memory. Two runs on the same day — a manual
-    trigger and the scheduled one — land on the same slot and therefore the same
-    subject, which is exactly how the channel ended up with four Light Brigade
-    Shorts, two Ariane 5s and two Great Fires. `exclude` is what published_history
-    reads back off the channel, and it is what makes a re-run safe.
 
-    Returns None when every topic in the pool has already been published. That is
-    deliberate: publishing nothing is better than publishing a duplicate, and the
-    caller halts with a message asking for new topics.
+def pick_topic(offset: int = 0, exclude=(), floor: str = None) -> str:
+    """The topic for today's slot: unpublished, and worth publishing.
+
+    Two gates, and they are different problems.
+
+    Deduplication (`exclude`) stops the channel republishing itself. The date
+    rotation alone is not memory: two runs on the same day land on the same slot
+    and therefore the same subject, which is how four Light Brigade Shorts, two
+    Ariane 5s and two Great Fires happened.
+
+    Reach (`floor`) is the hit-rate gate. Nothing about the pipeline separates a
+    600-view upload from a 10-view one — the scripts, the voice and the render
+    are identical. What separates them is whether anyone was ever going to
+    watch a video about that subject. Topics below the floor stay in the pool
+    and are used only once the better ones are gone, rather than being deleted:
+    a NARROW topic is not a bad topic, it is one that needs help this channel
+    cannot give it yet.
+
+    Returns None only when the pool is genuinely finished at every tier.
     """
     exclude = {e.strip() for e in exclude if isinstance(e, str) and e.strip()}
     slot = datetime.date.today().toordinal() + offset
+    floor = floor or REACH_FLOOR
 
-    for step in range(len(CORE_TOPICS) + len(EXPERIMENT_TOPICS) + 1):
-        topic = _topic_for_slot(slot + step)
-        if topic not in exclude:
-            if step:
-                print(f"↪️  Skipped {step} already-published topic(s) "
-                      f"in the rotation.")
+    topic = _rotate(slot, exclude, _allowed_tiers(floor))
+    if topic:
+        return topic
+
+    # Nothing left in the preferred tiers. Widening beats publishing nothing,
+    # but say so plainly — it means the pool needs new WIDE entries.
+    for wider in REACH_ORDER[REACH_ORDER.index(NARROW):]:
+        if wider == SATURATED and floor != "all":
+            break
+        topic = _rotate(slot, exclude, _allowed_tiers(wider))
+        if topic:
+            print(f"⚠️ No unpublished {WIDE} topic left — falling back to "
+                  f"{wider}. Add recognisable subjects to CORE_TOPICS.")
             return topic
 
     print("❌ Every topic in the pool has already been published.")
@@ -210,8 +296,13 @@ def pick_topic(offset: int = 0, exclude=()) -> str:
 
 if __name__ == "__main__":
     # Preview the next three weeks of scheduling.
+    # Each preview day excludes what the days before it published, which is what
+    # published_history does at runtime. Without that the preview shows the same
+    # topic twice whenever a skip lands on it from two different slots.
+    published = set()
     for i in range(21):
         day = datetime.date.today() + datetime.timedelta(days=i)
-        slot = day.toordinal()
-        tag = "EXP " if EXPERIMENT_EVERY and slot % EXPERIMENT_EVERY == 0 else "core"
-        print(f"{day} [{tag}] {(pick_topic(i) or '(pool exhausted)')[:88]}")
+        picked = pick_topic(i, exclude=published)
+        tag = reach_of(picked) if picked else "-"
+        print(f"{day} [{tag:9}] {(picked or '(pool exhausted)')[:80]}")
+        published.add(picked)

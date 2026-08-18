@@ -866,6 +866,86 @@ class TestMatcherOnRealTitles(unittest.TestCase):
             channel_insights.match_topic("The Design Error That Destroyed Six"))
 
 
+class TestReachGate(unittest.TestCase):
+    """The hit-rate problem: 7 of 42 Shorts cleared 500 views and the rest died
+    between 5 and 150, on an identical pipeline. What separates them is whether
+    the SUBJECT had an audience before the script was written."""
+
+    def test_every_pool_topic_carries_a_rating(self):
+        for topic in topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS:
+            self.assertIn(topics.REACH.get(topic), topics.REACH_ORDER, topic[:60])
+
+    def test_unrated_topics_are_treated_as_narrow(self):
+        self.assertEqual(topics.reach_of("something never rated"), topics.NARROW)
+
+    def test_the_default_floor_only_picks_wide(self):
+        published = set()
+        for day in range(20):
+            picked = topics.pick_topic(day, exclude=published)
+            self.assertEqual(topics.reach_of(picked), topics.WIDE, picked[:60])
+            published.add(picked)
+
+    def test_measured_flops_are_rated_below_the_floor(self):
+        """These are not guesses — the channel published them and they died."""
+        for fragment, expected in (("Zeebrugge Raid (1918)", topics.NARROW),
+                                   ("General Slocum", topics.NARROW),
+                                   ("Chernobyl safety test", topics.SATURATED),
+                                   ("Great Fire of London", topics.SATURATED)):
+            topic = next(t for t in topics.CORE_TOPICS if fragment in t)
+            self.assertEqual(topics.reach_of(topic), expected, fragment)
+
+    def test_measured_winners_are_rated_wide(self):
+        for fragment in ("HMS Hood", "Ariane 5 Flight 501", "Hyatt Regency"):
+            topic = next(t for t in topics.CORE_TOPICS if fragment in t)
+            self.assertEqual(topics.reach_of(topic), topics.WIDE, fragment)
+
+    def test_a_narrow_topic_is_held_back_not_deleted(self):
+        """Once the wide lane is used up the pool widens rather than stopping —
+        but only then, and it says so."""
+        wide = [t for t in topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS
+                if topics.reach_of(t) == topics.WIDE]
+        picked = topics.pick_topic(exclude=wide)
+        self.assertIsNotNone(picked)
+        self.assertEqual(topics.reach_of(picked), topics.NARROW)
+
+    def test_saturated_topics_are_never_selected_automatically(self):
+        holdback = [t for t in topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS
+                    if topics.reach_of(t) != topics.SATURATED]
+        self.assertIsNone(topics.pick_topic(exclude=holdback))
+        self.assertIsNotNone(topics.pick_topic(exclude=holdback, floor="all"))
+
+
+class TestFirstComment(unittest.TestCase):
+    """Zero comments across 50 videos, because nothing ever asked for one."""
+
+    def test_the_models_question_is_used_when_it_gives_one(self):
+        import main
+        self.assertEqual(
+            main.build_first_comment({"comment_question": "Who do you blame, "
+                                      "Nolan or Lucan?", "topic": "x"}),
+            "Who do you blame, Nolan or Lucan?")
+
+    def test_a_missing_question_falls_back_to_naming_the_subject(self):
+        import main
+        text = main.build_first_comment(
+            {"topic": "The sinking of HMS Hood (1941), the battlecruiser lost"})
+        self.assertIn("HMS Hood", text)
+        self.assertTrue(text.endswith("?"))
+
+    def test_nothing_to_say_posts_nothing(self):
+        import main
+        self.assertEqual(main.build_first_comment({}), "")
+
+    def test_an_empty_comment_is_never_posted(self):
+        import youtube_publisher
+        self.assertFalse(youtube_publisher.post_first_comment(None, "vid", "  "))
+
+    def test_both_pipelines_ask_for_a_comment(self):
+        import inspect, longform_main, main
+        self.assertIn("first_comment=", inspect.getsource(main.main))
+        self.assertIn("first_comment=", inspect.getsource(longform_main.main))
+
+
 class TestSeriesIdentity(unittest.TestCase):
 
     def test_numbering_continues_from_the_channel(self):

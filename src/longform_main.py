@@ -158,6 +158,19 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
     return title, description, trimmed
 
 
+def build_first_comment(script: dict) -> str:
+    """Same reasoning as the Shorts side: the channel has never asked a
+    question, and it has never received an answer."""
+    question = (script.get("comment_question") or "").strip()
+    if question:
+        return question
+    subject = (script.get("topic") or "").split("(")[0].strip(" ,.")
+    if not subject:
+        return ""
+    return (f"{subject} — who do you hold responsible, and at which point was "
+            "it already too late?")
+
+
 def resolve_topic(lane: str, history=None):
     """Chooses this run's topic.
     Returns (topic, enforce_history, from_short, era_year).
@@ -303,7 +316,8 @@ def main():
         print(description)
     else:
         upload_video_to_youtube(video_path, title, description, tags,
-                                thumbnail_path=thumb_path)
+                                thumbnail_path=thumb_path,
+                                first_comment=build_first_comment(script))
 
     print("🎉 Long-form pipeline complete.")
 

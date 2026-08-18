@@ -1013,6 +1013,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         "tags": [t for t in (meta.get("tags") or []) if isinstance(t, str)],
         "thumbnail_text": thumb,
         "thumbnail_badge": str(meta.get("thumbnail_badge") or "").strip()[:12],
+        # Posted as the first comment under the video. See
+        # youtube_publisher.post_first_comment for why the channel needs one.
+        "comment_question": str(meta.get("comment_question") or "").strip()[:280],
         "chapters": chapters,
         "word_count": words,
         "era_year": era_year,
@@ -1043,9 +1046,15 @@ def _packaging_call(pool, topic, full_text):
                  "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
                  "VALLEY', 'ONE MISSING BOLT'. Bad: 'The story of how a ship sank'.\n"
                  "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
+                 "And comment_question: ONE question to post as the first comment, "
+                 "answerable by someone who just watched this and has an opinion — "
+                 "who was at fault, which moment was the point of no return, what "
+                 "they would have done. Name the people or the choice. Never "
+                 "'what do you think?' on its own.\n"
                  'Output: {"title": "...", "description": "3 sentences, no hashtags", '
                  '"tags": ["10-14 search tags including proper nouns"], '
-                 '"thumbnail_text": "...", "thumbnail_badge": "..."}',
+                 '"thumbnail_text": "...", "thumbnail_badge": "...", '
+                 '"comment_question": "..."}',
                  # Same headroom logic as the anchor call: reasoning models
                  # think inside max_tokens, and a truncated reply costs a
                  # request from the daily budget and returns nothing.

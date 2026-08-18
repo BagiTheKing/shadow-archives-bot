@@ -60,8 +60,38 @@ def set_thumbnail(youtube, video_id: str, thumbnail_path: str) -> bool:
         return False
 
 
+def post_first_comment(youtube, video_id: str, text: str) -> bool:
+    """Seeds the comment thread from the channel account.
+
+    50 videos, 9,000 views, zero comments. A video with no comments gives the
+    next viewer nothing to reply to, and YouTube reads engagement as a quality
+    signal — so the channel has been asking for a conversation it never started.
+
+    Note what this does NOT do: the Data API cannot pin a comment. This posts
+    it as the channel, which puts it at the top of a thread of one; pinning is
+    a manual click in Studio if you want it held there.
+    """
+    if not text or not text.strip():
+        return False
+    try:
+        youtube.commentThreads().insert(
+            part="snippet",
+            body={"snippet": {
+                "videoId": video_id,
+                "topLevelComment": {"snippet": {"textOriginal": text.strip()[:9000]}},
+            }},
+        ).execute()
+        print(f"💬 First comment posted: {text.strip()[:70]}")
+        return True
+    except Exception as e:
+        # Comments disabled on the video, or a token minted without force-ssl.
+        # Neither is worth failing a run whose video is already published.
+        print(f"⚠️ Could not post the first comment ({type(e).__name__}: {e}).")
+        return False
+
+
 def upload_video_to_youtube(video_path: str, title: str, description: str, tags=None,
-                            thumbnail_path: str = None):
+                            thumbnail_path: str = None, first_comment: str = None):
     youtube = get_authenticated_service()
     print(f"📤 Uploading: {title}")
 
@@ -97,5 +127,8 @@ def upload_video_to_youtube(video_path: str, title: str, description: str, tags=
 
     if thumbnail_path and video_id and os.path.exists(thumbnail_path):
         set_thumbnail(youtube, video_id, thumbnail_path)
+
+    if first_comment and video_id:
+        post_first_comment(youtube, video_id, first_comment)
 
     return video_id

@@ -90,10 +90,16 @@ shape "the <decision> that <destroyed something>":
 - Include one searchable proper noun (the ship, the battle, the country, the bridge) so \
 the video can also be found by people looking for that subject.
 
+COMMENT QUESTION:
+- One question, posted as the first comment under the video. It must be answerable by someone who just watched THIS video and has an opinion — who was actually at fault, which moment was the point of no return, what they would have done. Name the people or the choice; never ask "what do you think?" on its own.
+- GOOD: "Nolan carried the order and Lucan read it. Which of them do you blame?"
+- BAD:  "Let me know your thoughts in the comments!"
+
 OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
 {
   "title": "consequence-first title within the stated character limit, one searchable proper noun",
   "description": "2 sentences summarizing the story + 3 relevant hashtags",
+  "comment_question": "one specific question naming someone or something from the story",
   "tags": ["8-12 specific search tags, including the proper nouns from the story"],
   "scenes": [
     {"narration": "...", "image_prompt": "..."}
