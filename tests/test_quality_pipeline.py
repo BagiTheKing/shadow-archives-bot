@@ -1133,12 +1133,19 @@ class TestSeriesIdentity(unittest.TestCase):
     def test_unreadable_history_gives_no_number_rather_than_a_guess(self):
         self.assertIsNone(ph.next_episode_number(None, "Catastrophe Files"))
 
-    def test_prefix_forms(self):
-        self.assertEqual(ph.series_prefix("Catastrophe Files", 3),
-                         "Catastrophe Files #3 — ")
-        self.assertEqual(ph.series_prefix("Catastrophe Files", None),
-                         "Catastrophe Files — ")
-        self.assertEqual(ph.series_prefix("", 3), "")
+    def test_suffix_forms(self):
+        self.assertEqual(ph.series_suffix("Catastrophe Files", 3),
+                         " — Catastrophe Files #3")
+        self.assertEqual(ph.series_suffix("Catastrophe Files", None),
+                         " — Catastrophe Files")
+        self.assertEqual(ph.series_suffix("", 3), "")
+
+    def test_numbering_survives_the_move_from_prefix_to_suffix(self):
+        """The first fifty titles carry the marker in front and everything
+        after carries it at the end. The count must not restart at 1."""
+        history = [_video("The Bolt That Sank Her — Catastrophe Files #51", 2),
+                   _video("Catastrophe Files #50 — An Older One #shorts", 40)]
+        self.assertEqual(ph.next_episode_number(history, "Catastrophe Files"), 52)
 
     def test_recent_titles_are_newest_first(self):
         history = [_video("old", 50), _video("new", 1)]
@@ -1151,23 +1158,32 @@ class TestShortsTitleBudget(unittest.TestCase):
         import main
         self.main = main
 
-    def test_series_prefix_and_suffix_fit_inside_youtubes_limit(self):
-        prefix = ph.series_prefix("Catastrophe Files", 128)
-        title = self.main.sanitize_title("A" * 200, prefix)
+    def test_series_marker_and_tag_fit_inside_youtubes_limit(self):
+        series = ph.series_suffix("Catastrophe Files", 128)
+        title = self.main.sanitize_title("A" * 200, series)
         self.assertLessEqual(len(title), 100)
-        self.assertTrue(title.startswith(prefix))
-        self.assertTrue(title.endswith(" #shorts"))
+        self.assertTrue(title.endswith(f"{series} #shorts"))
 
     def test_a_normal_title_survives_intact(self):
-        prefix = ph.series_prefix("Catastrophe Files", 14)
+        series = ph.series_suffix("Catastrophe Files", 14)
         body = "The Design Flaw That Destroyed HMS Hood"
-        self.assertEqual(self.main.sanitize_title(body, prefix),
-                         f"{prefix}{body} #shorts")
+        self.assertEqual(self.main.sanitize_title(body, series),
+                         f"{body}{series} #shorts")
+
+    def test_the_story_owns_the_front_of_the_title(self):
+        """The Shorts feed truncates around 40 characters. As a prefix the
+        series marker spent the first 24 of them on text identical across all
+        fifty videos, so the visible title never reached the subject."""
+        series = ph.series_suffix("Catastrophe Files", 14)
+        title = self.main.sanitize_title(
+            "The Math Error That Starved Air Canada Flight 143", series)
+        self.assertTrue(title.startswith("The Math Error"))
+        self.assertNotIn("Catastrophe Files", title[:40])
 
     def test_the_writer_is_asked_for_a_title_that_actually_fits(self):
-        budget = self.main.title_budget(ph.series_prefix("Catastrophe Files", 14))
+        budget = self.main.title_budget(ph.series_suffix("Catastrophe Files", 14))
         self.assertGreater(budget, 40)
-        self.assertLessEqual(budget + len("Catastrophe Files #14 — ")
+        self.assertLessEqual(budget + len(" — Catastrophe Files #14")
                              + len(" #shorts"), 100)
 
     def test_the_description_states_the_series(self):
@@ -1739,6 +1755,182 @@ class TestPlaylistReconciler(unittest.TestCase):
                         {"items": []})})()
         with self.assertRaises(SystemExit):
             reconcile_playlist.uploaded_video_ids(NoChannel())
+
+
+# The channel's real published titles. Six of the eight are the same sentence
+# with the nouns changed, which is what these tests exist to stop.
+PUBLISHED_TITLES = [
+    "Catastrophe Files #12 — The Mistake That Killed the Light Brigade #shorts",
+    "Catastrophe Files #11 — The Order That Killed Six Hundred #shorts",
+    "Catastrophe Files #10 — Scotland's Colonial Gamble That Destroyed a Nation #shorts",
+    "Catastrophe Files #9 — The Math Error That Starved Air Canada Flight 143 #shorts",
+    "Catastrophe Files #8 — The Arrogant Mayor Who Burned London #shorts",
+    "Catastrophe Files #7 — The Design Flaw That Destroyed HMS Hood #shorts",
+    "Soviet Invasion of Kuril Islands 1945: The Hidden WW2 Battle",
+    "Zeebrugge Raid 1918: Why the Blockships Failed",
+]
+
+
+class TestSeriesMarkerIsStripped(unittest.TestCase):
+    """Shapes have to be read off the title a viewer sees. With the marker left
+    on, every historical title starts 'Catastrophe' and shapes identically for
+    the wrong reason."""
+
+    def test_a_prefix_marker_is_removed(self):
+        self.assertEqual(
+            llm_engine.strip_series_marker(
+                "Catastrophe Files #12 — The Mistake That Killed the Light "
+                "Brigade #shorts", "Catastrophe Files"),
+            "The Mistake That Killed the Light Brigade")
+
+    def test_a_suffix_marker_is_removed(self):
+        self.assertEqual(
+            llm_engine.strip_series_marker(
+                "The Bolt That Sank Her — Catastrophe Files #51 #shorts",
+                "Catastrophe Files"),
+            "The Bolt That Sank Her")
+
+    def test_an_unnumbered_marker_is_removed(self):
+        self.assertEqual(
+            llm_engine.strip_series_marker(
+                "Catastrophe Files — A Title", "Catastrophe Files"), "A Title")
+
+    def test_trailing_hashtags_go_but_the_title_survives(self):
+        self.assertEqual(
+            llm_engine.strip_series_marker("A Real Title #shorts #history", ""),
+            "A Real Title")
+
+    def test_a_title_without_a_marker_is_untouched(self):
+        self.assertEqual(
+            llm_engine.strip_series_marker("Zeebrugge Raid 1918: Why the "
+                                           "Blockships Failed",
+                                           "Catastrophe Files"),
+            "Zeebrugge Raid 1918: Why the Blockships Failed")
+
+
+class TestTitleShape(unittest.TestCase):
+
+    def _shape(self, title):
+        return llm_engine.title_shape(
+            llm_engine.strip_series_marker(title, "Catastrophe Files"))
+
+    def test_the_house_formula_is_recognised(self):
+        for title in PUBLISHED_TITLES[:6]:
+            self.assertEqual(self._shape(title), "x-that-y", title)
+
+    def test_irregular_verbs_count_too(self):
+        """'That Sank' has no -ed and is the same formula."""
+        self.assertEqual(llm_engine.title_shape("The Bolt That Sank Her"),
+                         "x-that-y")
+
+    def test_question_led_is_its_own_shape(self):
+        self.assertEqual(
+            llm_engine.title_shape("Why 600 Cavalry Charged the Wrong Valley"),
+            "question-led")
+
+    def test_number_led_is_its_own_shape(self):
+        self.assertEqual(llm_engine.title_shape("8,000 Men Died in a Hole"),
+                         "number-led")
+
+    def test_a_plain_statement_is_declarative(self):
+        self.assertEqual(
+            llm_engine.title_shape("Russia's Fleet Fired on British Fishermen"),
+            "declarative")
+
+
+class TestTitleValidator(unittest.TestCase):
+    """The prompt used to instruct the formula outright, with three worked
+    examples. This is the backstop that stops it returning by habit."""
+
+    def test_a_sixteenth_title_in_the_same_shape_is_rejected(self):
+        self.assertFalse(llm_engine.validate_title(
+            "The Bolt That Sank the Ferry", PUBLISHED_TITLES,
+            "Catastrophe Files"))
+
+    def test_a_different_shape_passes(self):
+        self.assertTrue(llm_engine.validate_title(
+            "Why 600 Cavalry Charged the Wrong Valley", PUBLISHED_TITLES,
+            "Catastrophe Files"))
+
+    def test_vague_significance_is_rejected_however_it_is_dressed(self):
+        for bad in ("Soviet Invasion of Kuril Islands 1945: The Hidden WW2 Battle",
+                    "The Untold Story of the Vasa",
+                    "What Really Happened at Dogger Bank",
+                    "The Forgotten Disaster of 1904",
+                    "The SHOCKING Truth About HMS Hood"):
+            self.assertFalse(llm_engine.validate_title(bad), bad)
+
+    def test_the_formula_is_not_banned_only_capped(self):
+        """Used occasionally it is a good title shape. The rule is that it
+        cannot be every title."""
+        varied = ["Why the Blockships Failed", "8,000 Men Died in a Hole",
+                  "Russia's Fleet Fired on Fishermen",
+                  "The Bolt That Sank Her", "How One Word Killed 600",
+                  "Sweden's Flagship Never Left the Harbour",
+                  "One Missing Bolt", "The Order Nobody Questioned"]
+        self.assertTrue(llm_engine.validate_title(
+            "The Mistake That Killed the Light Brigade", varied, ""))
+
+    def test_an_empty_title_is_never_valid(self):
+        self.assertFalse(llm_engine.validate_title("", PUBLISHED_TITLES))
+        self.assertFalse(llm_engine.validate_title(None, PUBLISHED_TITLES))
+
+    def test_a_new_channel_is_not_judged_on_two_titles(self):
+        """Saturation needs a window worth measuring; rejecting on a sample of
+        two would just be noise."""
+        self.assertTrue(llm_engine.validate_title(
+            "The Bolt That Sank the Ferry",
+            ["The Order That Killed Six Hundred"], ""))
+
+    def test_the_writer_is_warned_about_the_rut_it_is_in(self):
+        warning = llm_engine._shape_warning(PUBLISHED_TITLES, "Catastrophe Files")
+        self.assertIn("6 of the last 8", warning)
+
+    def test_no_warning_when_the_titles_already_vary(self):
+        varied = ["Why the Blockships Failed", "8,000 Men Died in a Hole",
+                  "Russia's Fleet Fired on Fishermen", "One Missing Bolt",
+                  "How One Word Killed 600", "The Order Nobody Questioned"]
+        self.assertEqual(llm_engine._shape_warning(varied, ""), "")
+
+    def test_the_prompt_no_longer_prescribes_a_single_shape(self):
+        """The root cause: the system prompt said titles that perform 'follow
+        the shape the <decision> that <destroyed something>' and gave three
+        examples of it."""
+        prompt = llm_engine.SYSTEM_PROMPT
+        self.assertNotIn("follow the", prompt.lower())
+        self.assertIn("VARY THE SHAPE", prompt)
+
+    def test_the_script_validator_enforces_the_title_rules(self):
+        script = {
+            "title": "Soviet Invasion of Kuril Islands: The Hidden WW2 Battle",
+            "scenes": [{"narration": "Six hundred cavalrymen charged the wrong "
+                                     "valley because of one word.",
+                        "image_prompt": "x"}] +
+                      [{"narration": " ".join(["word"] * 30),
+                        "image_prompt": "x"} for _ in range(4)],
+        }
+        self.assertFalse(llm_engine._validate(script, 80, PUBLISHED_TITLES,
+                                              "Catastrophe Files"))
+
+
+class TestLongformRetitles(unittest.TestCase):
+
+    def test_a_rejected_title_gets_one_corrective_retry(self):
+        import inspect
+        src = inspect.getsource(longform_llm.generate_longform_script)
+        self.assertIn("retitle=True", src)
+
+    def test_the_retry_names_the_failure_rather_than_repeating_the_brief(self):
+        import inspect
+        src = inspect.getsource(longform_llm._packaging_call)
+        self.assertIn("YOUR PREVIOUS TITLE WAS REJECTED", src)
+        self.assertIn("not a rewording", src)
+
+    def test_the_packaging_prompt_demands_a_comprehensible_title(self):
+        import inspect
+        src = inspect.getsource(longform_llm._packaging_call)
+        self.assertIn("NEVER HEARD OF", src)
+        self.assertIn("Dogger Bank", src)   # the worked example of the failure
 
 
 if __name__ == "__main__":

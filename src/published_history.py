@@ -118,15 +118,27 @@ def next_episode_number(videos, series_name: str):
     return max(numbers) + 1 if numbers else 1
 
 
-def series_prefix(series_name: str, number) -> str:
-    """`Catastrophe Files #14 — `, or an unnumbered prefix, or nothing.
+def series_suffix(series_name: str, number) -> str:
+    """` — Catastrophe Files #14`, or an unnumbered suffix, or nothing.
 
-    Point 3 of the diagnosis: nothing on this channel tells a viewer there is a
-    next one. A named, numbered series is the cheapest subscribe reason there is.
+    A named, numbered series is still the cheapest subscribe reason there is —
+    that part of the diagnosis stands. What was wrong was where it sat.
+
+    As a PREFIX it spent the first 24 characters of every title, and 24
+    characters is roughly everything the Shorts feed shows before it truncates.
+    Fifty videos went out whose visible title was "Catastrophe Files #12 — The
+    Mist...": identical on every one, with the subject cut off. The series
+    marker was doing its job in the one position where nobody could use it, and
+    hiding the only words that distinguish one video from the next.
+
+    At the end it says the same thing to anyone who reads that far, and the
+    story gets the space that decides the click. next_episode_number searches
+    the whole title rather than anchoring, so the numbering carries across the
+    change without a gap.
     """
     if not series_name:
         return ""
-    return f"{series_name} #{number} — " if number else f"{series_name} — "
+    return f" — {series_name} #{number}" if number else f" — {series_name}"
 
 
 def describe(videos) -> str:

@@ -22,7 +22,7 @@ from openai import OpenAI
 
 from audio_engine import is_speakable
 from llm_engine import (get_free_models, normalize_thumbnail_fields,
-                        _extract_json, _validate_hook)
+                        validate_title, _extract_json, _validate_hook)
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -1062,13 +1062,24 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
               "GEMINI_API_KEY for a stronger writer.")
         return None
     print(f"🔎 Script variety: {script_ratio:.0%} distinct sentences.")
+    meta = {}
     try:
         meta = _packaging_call(pool, topic, full_text)
+        # One correction pass, and only when the title is the problem. The
+        # published long-form titles include "Soviet Invasion of Kuril Islands
+        # 1945: The Hidden WW2 Battle" — a phrase that would fit any battle
+        # ever fought, attached to a name almost nobody recognises. That
+        # combination is the whole reason these videos are not clicked.
+        if not validate_title((meta.get("title") or "").strip()):
+            retry = _packaging_call(pool, topic, full_text, retitle=True)
+            if retry.get("title") and validate_title(retry["title"].strip()):
+                meta = retry
+            else:
+                print("   Keeping the first title — the retry was no better.")
     except QuotaExhausted:
         # Six chapters are already written. Losing the video over its title
         # would be absurd — fall back to topic-derived metadata.
         print("🛑 Quota gone before packaging; deriving metadata from the topic.")
-        meta = {}
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
@@ -1102,17 +1113,43 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     return script
 
 
-def _packaging_call(pool, topic, full_text):
+def _packaging_call(pool, topic, full_text, retitle=False):
     """Title, description, tags and thumbnail text, written against the finished
-    script rather than guessed up front."""
+    script rather than guessed up front.
+
+    retitle re-runs the call after the first title failed the shared rules,
+    naming the failure so the second attempt is not the first one reworded.
+    """
+    correction = ""
+    if retitle:
+        correction = (
+            "\nYOUR PREVIOUS TITLE WAS REJECTED. It either used a phrase that "
+            "promises significance without naming anything — 'the hidden', 'the "
+            "untold story', 'what really happened', 'the forgotten', 'the "
+            "secret', 'the truth about', 'shocking' — or it leaned entirely on "
+            "a proper noun the audience does not recognise. Write a different "
+            "title, not a rewording: state the specific thing that went wrong "
+            "and what it cost, in words someone outside the subject understands."
+            "\n")
     return _call(pool,
                  "You write YouTube metadata. Output only JSON, no fences.",
                  f"This is the narration of a documentary about:\n{topic}\n\n"
                  f"{full_text[:3000]}\n\n"
+                 f"{correction}"
                  "Write metadata for a YouTube SEARCH audience. The title must name the "
                  "event with the words someone would actually type, and state the "
                  "consequence. Under 70 characters. No clickbait the video does not "
                  "deliver, no ALL CAPS.\n"
+                 "THE TITLE MUST BE UNDERSTANDABLE TO SOMEONE WHO HAS NEVER HEARD OF "
+                 "THIS EVENT. Include the searchable name, but never let the name be "
+                 "the only content — the name is what gets the video found, the stake "
+                 "is what gets it clicked, and it needs both. 'Dogger Bank Incident "
+                 "1904' names something nobody outside the subject recognises; "
+                 "'Russia's Fleet Opened Fire on British Fishing Boats' says what "
+                 "happened.\n"
+                 "BANNED, because they would fit any story at all: 'the hidden ...', "
+                 "'the untold story', 'what really happened', 'the forgotten ...', "
+                 "'the secret ...', 'the truth about', 'shocking', 'insane'.\n"
                  "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
                  "arresting fact in the video, readable at thumbnail size. Not a "
                  "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "

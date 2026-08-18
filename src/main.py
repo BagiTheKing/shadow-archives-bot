@@ -9,7 +9,7 @@ from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import pick_topic
 from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
                                load_published, next_episode_number,
-                               published_within, recent_titles, series_prefix)
+                               published_within, recent_titles, series_suffix)
 from topic_reach import vet
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
@@ -26,19 +26,24 @@ def cleanup_build_dir(build_dir="build"):
 SUFFIX = " #shorts"
 
 
-def title_budget(prefix: str = "") -> int:
+def title_budget(series: str = "") -> int:
     """Characters left for the story title itself. YouTube's ceiling is 100 and
-    both the series prefix and the #shorts suffix are spent out of it."""
-    return 100 - len(SUFFIX) - len(prefix)
+    both the series marker and the #shorts tag are spent out of it."""
+    return 100 - len(SUFFIX) - len(series)
 
 
-def sanitize_title(title: str, prefix: str = "") -> str:
-    """YouTube: max 100 chars, no angle brackets. Cut on a word boundary."""
+def sanitize_title(title: str, series: str = "") -> str:
+    """YouTube: max 100 chars, no angle brackets. Cut on a word boundary.
+
+    Story first, then the series marker, then the tag — because the front of
+    the title is the only part the Shorts feed shows, and it belongs to the
+    words that tell a viewer which video this is.
+    """
     clean = re.sub(r"[<>]", "", title or "").strip()
-    max_body = title_budget(prefix)
+    max_body = title_budget(series)
     if len(clean) > max_body:
         clean = clean[:max_body].rsplit(" ", 1)[0].rstrip(".,;:")
-    return prefix + clean + SUFFIX
+    return clean + series + SUFFIX
 
 
 # The channel is "The Archive Paradox". The pipeline used to write "The Shadow
@@ -69,9 +74,9 @@ BASE_TAGS = ["history", "shorts", "history shorts", "military history",
 
 
 def build_metadata(script_data: dict, episode=None):
-    prefix = series_prefix(SERIES_NAME, episode)
+    series = series_suffix(SERIES_NAME, episode)
     title = sanitize_title(script_data.get("title")
-                           or script_data["scenes"][0]["narration"], prefix)
+                           or script_data["scenes"][0]["narration"], series)
 
     description = script_data.get("description", "").strip()
 
@@ -251,7 +256,8 @@ def main():
     script_data = generate_video_script(
         topic=topic,
         avoid_titles=avoid_titles,
-        title_max=min(80, title_budget(series_prefix(SERIES_NAME, episode))))
+        title_max=min(80, title_budget(series_suffix(SERIES_NAME, episode))),
+        series_name=SERIES_NAME)
     if not script_data:
         print("❌ Pipeline halted: script generation failed.")
         raise SystemExit(1)

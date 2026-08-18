@@ -82,13 +82,27 @@ palette with one accent color, highly detailed, no text, no watermark"
 TITLE RULES (the title is the second filter, after the hook):
 - No ALL CAPS words, no clickbait the script does not deliver. The user message
 states the hard character limit; it is a ceiling, not a target.
-- Name the CONSEQUENCE, not the event. Titles that perform on this channel follow the \
-shape "the <decision> that <destroyed something>":
-  "The Mistake That Killed the Light Brigade", "The Order That Killed Six Hundred", \
-"Scotland's Colonial Gamble That Destroyed a Nation".
-- Titles that state a flat fact do not perform. Avoid "X Happened in 1899" shapes.
-- Include one searchable proper noun (the ship, the battle, the country, the bridge) so \
-the video can also be found by people looking for that subject.
+- Name the CONSEQUENCE, not the event. "X Happened in 1899" states a flat fact and \
+does not earn a click.
+- UNDERSTANDABLE ON SIGHT. Someone who has never heard of this event must know what \
+is at stake from the title alone. A name they do not recognise is not a reason to \
+click; what it cost them is.
+- Include one searchable proper noun (the ship, the battle, the country, the bridge) \
+so the video can also be found by people looking for that subject — but the proper \
+noun may never be the ONLY content. The name is for search, the stake is for the \
+click, and the title needs both.
+  GOOD: "The Math Error That Starved Air Canada Flight 143"
+  BAD:  "Dogger Bank Incident 1904" — nobody outside the subject knows what that is.
+- BANNED, because they promise significance without specifying anything: "the hidden \
+...", "the untold story", "what really happened", "the forgotten ...", "the secret \
+...", "you won't believe", "the truth about", "shocking", "insane", "this changed \
+everything". If the title would still make sense with the subject swapped out, it is \
+one of these.
+- VARY THE SHAPE. The user message lists what has already been published. Do not \
+return the grammatical shape those titles use. A channel whose every title reads \
+"The <thing> That <verb>ed <someone>" has taught its audience that the videos are \
+interchangeable, and they stop reading past the third word. Question-led, \
+number-led, a plain declarative or a two-part title are all available.
 
 COMMENT QUESTION:
 - One question, posted as the first comment under the video. It must be answerable by someone who just watched THIS video and has an opinion — who was actually at fault, which moment was the point of no return, what they would have done. Name the people or the choice; never ask "what do you think?" on its own.
@@ -321,7 +335,8 @@ def _validate_hook(hook: str) -> bool:
     return True
 
 
-def _validate(data: dict, title_max: int = 80) -> bool:
+def _validate(data: dict, title_max: int = 80, avoid_titles=(),
+              series_name: str = "") -> bool:
     scenes = data.get("scenes")
     if not isinstance(scenes, list) or not (4 <= len(scenes) <= 6):
         return False
@@ -340,6 +355,128 @@ def _validate(data: dict, title_max: int = 80) -> bool:
         print(f"⚠️ Script rejected: title is {len(title)} chars, "
               f"needs <= {title_max}.")
         return False
+    if not validate_title(title, avoid_titles, series_name):
+        return False
+    return True
+
+
+# Phrases that promise significance without specifying anything. The test is
+# whether the title still makes sense with the subject swapped out: "The Hidden
+# WW2 Battle" works equally well for any battle, which is what makes it useless.
+BANNED_TITLE_PHRASES = (
+    "the hidden", "the untold", "untold story", "what really happened",
+    "the forgotten", "the secret", "you won't believe", "you wont believe",
+    "the truth about", "shocking", "insane", "changed everything",
+    "will blow your mind", "nobody talks about", "no one talks about",
+)
+
+# Coarse grammatical shapes. This is not a taxonomy — it exists to answer one
+# question: is this the same title the channel has already published fifteen
+# times? First match wins, so the order is the specificity order.
+_TITLE_SHAPES = (
+    ("question-led", r"^(how|why|what|when|who|where)\b"),
+    ("number-led", r"^\d"),
+    # The channel's house formula: "<something> That <verb>ed <someone>".
+    # Both the -ed form and the irregular verbs it actually uses.
+    ("x-that-y",
+     r"\b(that|who|which)\s+(\w+ed|killed|sank|sunk|lost|cost|broke|burned|"
+     r"burnt|destroyed|starved|drowned|froze|blew|tore|ended|began|saved|"
+     r"doomed|wrecked|ruined)\b"),
+    ("two-part", r"[:—]"),
+)
+
+# Above this share of the recent window, a shape has stopped being a choice and
+# become a rut. Half is deliberately permissive: the formula is not banned, it
+# just cannot be every title.
+TITLE_SHAPE_SATURATION = 0.5
+TITLE_SHAPE_WINDOW = 8
+# Under this many known titles there is no rut to detect, and rejecting on a
+# sample of two would just be noise.
+TITLE_SHAPE_MIN_HISTORY = 4
+
+
+def strip_series_marker(title: str, series_name: str = "") -> str:
+    """The title as a viewer reads it, without the series marker or hashtags.
+
+    Needed at both ends: the marker was a prefix for the first fifty videos and
+    is a suffix from here on, and the channel's history contains both.
+    """
+    # Hashtags first, and the order is load-bearing: "#51" in a suffix marker
+    # matches the hashtag pattern too, so stripping tags afterwards would eat
+    # the episode number and leave the series name stranded on the end.
+    text = re.sub(r"(\s*#\w+)+\s*$", "", (title or "").strip())
+    if series_name:
+        marker = rf"{re.escape(series_name)}\s*#?\s*\d*"
+        text = re.sub(rf"^\s*{marker}\s*[—–-]\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(rf"\s*[—–-]\s*{marker}\s*$", "", text, flags=re.IGNORECASE)
+    return text.strip(" —–-")
+
+
+def title_shape(title: str) -> str:
+    text = (title or "").strip()
+    for name, pattern in _TITLE_SHAPES:
+        if re.search(pattern, text, re.IGNORECASE):
+            return name
+    return "declarative"
+
+
+def _shape_is_saturated(shape: str, avoid_titles, series_name: str = "") -> bool:
+    recent = [t for t in (avoid_titles or []) if t][:TITLE_SHAPE_WINDOW]
+    if len(recent) < TITLE_SHAPE_MIN_HISTORY:
+        return False
+    same = sum(1 for t in recent
+               if title_shape(strip_series_marker(t, series_name)) == shape)
+    return same / len(recent) > TITLE_SHAPE_SATURATION
+
+
+def _shape_warning(recent, series_name: str = "") -> str:
+    """Names the rut, for the writer that is about to fall into it.
+
+    Listing the recent titles is not enough on its own — a model reads fifteen
+    examples of one sentence shape as the house style and produces a sixteenth.
+    """
+    window = [t for t in (recent or []) if t][:TITLE_SHAPE_WINDOW]
+    if len(window) < TITLE_SHAPE_MIN_HISTORY:
+        return ""
+    counts = {}
+    for t in window:
+        shape = title_shape(strip_series_marker(t, series_name))
+        counts[shape] = counts.get(shape, 0) + 1
+    shape, n = max(counts.items(), key=lambda kv: kv[1])
+    if n / len(window) <= TITLE_SHAPE_SATURATION:
+        return ""
+    return (f"WARNING: {n} of the last {len(window)} titles use the same "
+            f"grammatical shape. Do NOT write another one in that shape — it is "
+            "why this channel's titles are no longer being read. Pick a "
+            "different construction.\n")
+
+
+def validate_title(title: str, avoid_titles=(), series_name: str = "") -> bool:
+    """The backstop behind the prompt's title rules.
+
+    The prompt used to instruct the formula outright — "titles that perform on
+    this channel follow the shape 'the <decision> that <destroyed something>'"
+    — with three worked examples of it, which is why all fifty published titles
+    are the same sentence with the nouns changed. The instruction is gone; this
+    is what stops it coming back by habit.
+    """
+    text = (title or "").strip()
+    if not text:
+        return False
+
+    low = text.lower()
+    for phrase in BANNED_TITLE_PHRASES:
+        if phrase in low:
+            print(f"⚠️ Title rejected: {phrase!r} promises significance without "
+                  f"naming anything. ({text!r})")
+            return False
+
+    shape = title_shape(text)
+    if _shape_is_saturated(shape, avoid_titles, series_name):
+        print(f"⚠️ Title rejected: shape {shape!r} is most of the last "
+              f"{TITLE_SHAPE_WINDOW} titles. ({text!r})")
+        return False
+
     return True
 
 
@@ -384,7 +521,8 @@ def normalize_thumbnail_fields(data: dict) -> dict:
 
 
 def generate_video_script(topic: str = None, avoid_titles=(),
-                         title_max: int = 80, max_retries_per_model: int = 2):
+                         title_max: int = 80, max_retries_per_model: int = 2,
+                         series_name: str = ""):
     """Generates the daily script.
 
     `topic` is chosen by the caller now, because choosing it well needs the
@@ -421,6 +559,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
             "If the story you were given is the same event as any of these, say so "
             'by returning {"duplicate": true} and nothing else. Otherwise write a '
             "title that could not be mistaken for one of them.\n"
+            f"{_shape_warning(recent, series_name)}"
         )
 
     user_prompt = (
@@ -462,7 +601,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     # Trust it: the caller's exclusion list missed this one.
                     print("🚫 Writer reports this story is already published.")
                     return None
-                if _validate(data, title_max):
+                if _validate(data, title_max, avoid_titles, series_name):
                     data["topic"] = topic
                     normalize_thumbnail_fields(data)
                     print(f"✅ Script generated by {response.model}")
