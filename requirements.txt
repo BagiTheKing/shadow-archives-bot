@@ -7,3 +7,6 @@ Pillow>=10.0.0
 google-api-python-client>=2.122.0
 google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
+# Optional: only used when ANTHROPIC_API_KEY is set, which puts the paid
+# tier last in the writer chain. Every free provider is reached first.
+anthropic>=0.69.0

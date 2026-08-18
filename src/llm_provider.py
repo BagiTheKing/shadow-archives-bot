@@ -25,7 +25,30 @@ OpenRouter key sitting right there. The pool now chains them: every Gemini
 candidate first, then OpenRouter's free models, each with its own client. A
 chapter is only lost when every model everywhere refuses it.
 
-Get a Gemini key at https://aistudio.google.com/apikey — free, no card.
+ONE PROVIDER IS ALSO A SINGLE POINT OF *BILLING* FAILURE. Chaining Gemini to
+OpenRouter fixed outages but not allowances: both are free tiers, both run dry,
+and they run dry on the same busy afternoon. So the chain now spans four free
+providers and one paid one, and every tier is optional — configure none of the
+new ones and the pipeline behaves exactly as before.
+
+    gemini      free, no card. The best writer of the free tiers.
+    groq        free, no card. Very fast, generous daily allowance.
+    cerebras    free, no card. Another independent allowance.
+    openrouter  free, ~50 requests a day across whatever is free that morning.
+    anthropic   PAID, and last on purpose — it is the only tier that can cost
+                money, so it is only ever reached when every free tier has
+                already refused. Unset by default.
+
+A note on subscriptions, because it is the most common misunderstanding here: a
+Claude Pro or a Gemini Advanced subscription is a chat plan for the web app. It
+does not issue an API key and cannot be used by this pipeline. Anthropic API
+billing is a separate, pay-as-you-go account; Google's AI Studio key is the free
+tier this file has always preferred.
+
+Get keys — all free, none need a card:
+    Gemini    https://aistudio.google.com/apikey
+    Groq      https://console.groq.com/keys
+    Cerebras  https://cloud.cerebras.ai
 """
 
 import os
@@ -36,6 +59,10 @@ from openai import OpenAI
 # calling code needs no provider-specific branches.
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# Both speak the OpenAI protocol, including GET /models, so neither needs a
+# hand-written model list — see the "model names are not stable" lesson above.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
 
 # Only used if live discovery fails. Deliberately generic aliases, which Google
 # keeps pointed at a current model, rather than pinned versions that retire.
@@ -54,6 +81,55 @@ def gemini_available() -> bool:
 
 def openrouter_available() -> bool:
     return bool(os.getenv("OPENROUTER_API_KEY"))
+
+
+def groq_available() -> bool:
+    return bool(os.getenv("GROQ_API_KEY"))
+
+
+def cerebras_available() -> bool:
+    return bool(os.getenv("CEREBRAS_API_KEY"))
+
+
+def anthropic_available() -> bool:
+    return bool(os.getenv("ANTHROPIC_API_KEY"))
+
+
+# Model families that cannot write a documentary script, on any provider that
+# lists its catalogue. Guard/moderation models and speech models both appear in
+# Groq's listing and both fail in ways that look like a bad script rather than a
+# wrong model.
+_CHAT_SKIP = ("whisper", "tts", "guard", "embed", "moderation", "vision",
+              "audio", "distil", "prompt-guard", "allam")
+
+
+def _discover_openai_models(client, provider: str, limit: int = 3) -> list:
+    """Chat models this key can use today, from the provider's own catalogue.
+
+    Same reasoning as discover_gemini_models: a hand-written list of model IDs
+    goes stale between writing it and running it, and a run that dies on
+    "model not found" has written nothing.
+    """
+    override = os.getenv(f"{provider.upper()}_MODELS")
+    if override:
+        return [m.strip() for m in override.split(",") if m.strip()]
+    try:
+        ids = []
+        for model in client.models.list():
+            mid = (getattr(model, "id", "") or "").split("/")[-1]
+            if not mid or any(s in mid.lower() for s in _CHAT_SKIP):
+                continue
+            ids.append(mid)
+        if ids:
+            # Longest name last: providers tend to suffix the specialised
+            # variants, and the plain name is the general-purpose one.
+            ids.sort(key=lambda m: (len(m), m))
+            return ids[:limit]
+        print(f"⚠️ {provider} listed no usable chat models.")
+    except Exception as e:
+        print(f"⚠️ Could not list {provider} models "
+              f"({type(e).__name__}: {e}) — skipping this provider.")
+    return []
 
 
 def _gemini_rank(model_id: str):
@@ -107,6 +183,108 @@ def discover_gemini_models(client) -> list:
     return list(GEMINI_FALLBACK_MODELS)
 
 
+# ---------------------------------------------------------------------------
+# The paid tier
+#
+# Anthropic does not speak the OpenAI protocol, and this pipeline has exactly
+# one call shape: client.chat.completions.create(...) -> .choices[0].message.
+# Rather than teach every call site a second shape, the official SDK is wrapped
+# in an adapter that presents the shape the rest of the code already uses.
+#
+# This is the only tier that can spend money, which is why it sits last in the
+# chain and why nothing reaches it until every free provider has refused. A run
+# that never exhausts its free allowances never sends Anthropic a request.
+# ---------------------------------------------------------------------------
+
+# Opus is the strongest writer available to this pipeline by a wide margin, and
+# a whole video is roughly a dozen requests of a few thousand tokens. Override
+# with ANTHROPIC_MODEL if that trade looks different to you.
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
+
+# Low effort, deliberately: writing a 280-word chapter as JSON is not a
+# reasoning problem, and thinking tokens come out of the same budget as the
+# reply — the exact failure that truncated every Gemini chapter of a live run.
+ANTHROPIC_EFFORT = os.getenv("ANTHROPIC_EFFORT", "low")
+
+
+class _AnthropicMessage:
+    def __init__(self, content):
+        self.content = content
+        self.reasoning = None
+        self.reasoning_content = None
+
+
+class _AnthropicChoice:
+    def __init__(self, content, finish_reason):
+        self.message = _AnthropicMessage(content)
+        self.finish_reason = finish_reason
+
+
+class _AnthropicResponse:
+    def __init__(self, content, finish_reason):
+        self.choices = [_AnthropicChoice(content, finish_reason)]
+
+
+class AnthropicClient:
+    """The official Anthropic SDK, wearing the OpenAI client's interface.
+
+    Only the surface this pipeline actually calls is implemented: a single
+    non-streaming completion with a system prompt and one user message.
+    """
+
+    def __init__(self, api_key: str):
+        import anthropic                       # imported here so the package
+        self._sdk = anthropic.Anthropic(api_key=api_key)   # stays optional
+        self.chat = self                       # client.chat.completions...
+        self.completions = self
+
+    def create(self, model=None, messages=(), temperature=None,
+               max_tokens=1024, **_ignored):
+        system = " ".join(m["content"] for m in messages
+                          if m.get("role") == "system")
+        turns = [{"role": m["role"], "content": m["content"]}
+                 for m in messages if m.get("role") != "system"]
+
+        kwargs = {"model": model or ANTHROPIC_MODEL,
+                  "max_tokens": max_tokens,
+                  "messages": turns}
+        if system:
+            kwargs["system"] = system
+        if ANTHROPIC_EFFORT:
+            kwargs["output_config"] = {"effort": ANTHROPIC_EFFORT}
+
+        try:
+            reply = self._sdk.messages.create(**kwargs)
+        except TypeError:
+            # An older SDK that does not know output_config must not cost the
+            # run a chapter — same guard the OpenAI path uses for
+            # reasoning_effort.
+            kwargs.pop("output_config", None)
+            reply = self._sdk.messages.create(**kwargs)
+
+        # Text blocks only: a thinking block is not part of the answer, and
+        # concatenating it into the JSON is what makes the parse fail.
+        text = "".join(b.text for b in reply.content
+                       if getattr(b, "type", "") == "text")
+        # The pipeline reads "length" to mean the reply was cut off.
+        finish = "length" if reply.stop_reason == "max_tokens" else "stop"
+        return _AnthropicResponse(text, finish)
+
+
+def anthropic_client():
+    """The paid client, or None when the SDK is not installed."""
+    try:
+        return AnthropicClient(os.getenv("ANTHROPIC_API_KEY"))
+    except ImportError:
+        print("⚠️ ANTHROPIC_API_KEY is set but the 'anthropic' package is "
+              "not installed — skipping the paid tier.")
+        return None
+    except Exception as e:
+        print(f"⚠️ Could not start the Anthropic client "
+              f"({type(e).__name__}: {e}) — skipping the paid tier.")
+        return None
+
+
 class ModelPool:
     """Ordered (client, model) candidates spanning every provider configured.
 
@@ -141,7 +319,12 @@ class ModelPool:
 
 
 def get_pool() -> ModelPool:
-    """Every model this run may use, in preference order."""
+    """Every model this run may use, in preference order.
+
+    Free tiers first, cheapest failure mode first within them, and the paid
+    tier last. Every provider is optional: a key that is not set contributes
+    nothing and costs nothing.
+    """
     entries = []
 
     if gemini_available():
@@ -150,6 +333,18 @@ def get_pool() -> ModelPool:
         for model in discover_gemini_models(client):
             entries.append((model, client, "gemini"))
 
+    if groq_available():
+        client = OpenAI(base_url=GROQ_BASE_URL,
+                        api_key=os.getenv("GROQ_API_KEY"))
+        for model in _discover_openai_models(client, "groq"):
+            entries.append((model, client, "groq"))
+
+    if cerebras_available():
+        client = OpenAI(base_url=CEREBRAS_BASE_URL,
+                        api_key=os.getenv("CEREBRAS_API_KEY"))
+        for model in _discover_openai_models(client, "cerebras"):
+            entries.append((model, client, "cerebras"))
+
     if openrouter_available():
         from llm_engine import get_free_models
         client = OpenAI(base_url=OPENROUTER_BASE_URL,
@@ -157,12 +352,34 @@ def get_pool() -> ModelPool:
         for model in get_free_models():
             entries.append((model, client, "openrouter"))
 
+    # Last, and only if a key is set: this is the one tier that bills.
+    if anthropic_available():
+        client = anthropic_client()
+        if client is not None:
+            entries.append((ANTHROPIC_MODEL, client, "anthropic"))
+
     return ModelPool(entries)
 
 
+# In preference order, matching get_pool.
+_PROVIDERS = (
+    ("gemini", gemini_available, "free"),
+    ("groq", groq_available, "free"),
+    ("cerebras", cerebras_available, "free"),
+    ("openrouter", openrouter_available, "free"),
+    ("anthropic", anthropic_available, "paid"),
+)
+
+
+def configured_providers() -> list:
+    """The providers this run actually has keys for, best first."""
+    return [name for name, available, _ in _PROVIDERS if available()]
+
+
 def describe_provider() -> str:
-    if gemini_available() and openrouter_available():
-        return "Gemini free tier, falling back to OpenRouter"
-    if gemini_available():
-        return "Gemini (free tier)"
-    return "OpenRouter free models"
+    names = configured_providers()
+    if not names:
+        return "none configured"
+    if len(names) == 1:
+        return names[0]
+    return f"{names[0]}, falling back to {', '.join(names[1:])}"

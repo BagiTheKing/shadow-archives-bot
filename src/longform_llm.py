@@ -272,6 +272,11 @@ _parse_failures = {}
 # Cleared only by starting a new run.
 _retired = set()
 
+# Providers whose daily allowance is gone. Tracked separately from _retired so
+# the run can say which tiers it burned through, and so that hitting the wall
+# on one provider retires that provider rather than ending the run.
+_exhausted_providers = set()
+
 FAILURE_LOG_DIR = os.path.join("build", "llm_failures")
 
 # A 280-word chapter with six image prompts is around 1,200 tokens of JSON, and
@@ -383,9 +388,14 @@ def _log_raw_failure(model, content, error, finish_reason):
 
 
 def _max_tokens_for(provider: str, requested: int) -> int:
-    """Gemini gets real headroom; OpenRouter's free models keep the tight
-    ceiling they need to stay inside a 50-request day."""
-    if provider == "gemini":
+    """Gemini and Anthropic get real headroom; the free-tier providers keep the
+    tight ceiling they need to stay inside a small daily allowance.
+
+    Both of the roomy providers think before they answer, and the thinking is
+    charged against the same ceiling as the reply — which is how a whole live
+    run came back truncated at 4,000 tokens.
+    """
+    if provider in ("gemini", "anthropic"):
         return max(requested, GEMINI_CHAPTER_MAX_TOKENS)
     return requested
 
@@ -459,10 +469,27 @@ def _call(pool, system, user, max_tokens):
         except Exception as e:
             err = str(e)
             if _is_daily_quota(err):
-                raise QuotaExhausted(
-                    f"OpenRouter free-model daily limit reached after "
-                    f"{_request_count} request(s) this run."
-                    f"{_quota_reset(err)}") from None
+                # A daily allowance is gone for THIS PROVIDER, not for the run.
+                # This used to abort outright, which meant a spent OpenRouter
+                # allowance threw away a working Gemini key sitting right
+                # beside it — the exact single-point-of-failure the chain
+                # exists to remove. Retire the provider and keep walking.
+                _exhausted_providers.add(provider)
+                for other in pool.models:
+                    if pool.provider_for(other) == provider:
+                        _retired.add(other)
+                print(f"⛔ {provider} daily limit reached after "
+                      f"{_request_count} request(s).{_quota_reset(err)}")
+                remaining = _usable_models(pool.models)
+                if not remaining:
+                    raise QuotaExhausted(
+                        f"Every configured provider is out of quota after "
+                        f"{_request_count} request(s) this run "
+                        f"({', '.join(sorted(_exhausted_providers))})."
+                        f"{_quota_reset(err)}") from None
+                print(f"   ↩️  Continuing on "
+                      f"{', '.join(sorted({pool.provider_for(m) for m in remaining}))}.")
+                continue
             # Truncate: these payloads are hundreds of lines of nested JSON.
             print(f"⚠️ {model} failed: {err[:160]}")
             if _parse_failures.get(model, 0) >= MAX_PARSE_FAILURES:

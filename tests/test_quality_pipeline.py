@@ -12,6 +12,8 @@ import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
+import inspect
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -337,16 +339,39 @@ class TestRepetitionGate(unittest.TestCase):
 
 class TestWriterProvider(unittest.TestCase):
 
+    KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY",
+            "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY")
+
     def setUp(self):
-        self._saved = os.environ.pop("GEMINI_API_KEY", None)
+        self._saved = {k: os.environ.pop(k, None) for k in self.KEYS}
 
     def tearDown(self):
-        if self._saved:
-            os.environ["GEMINI_API_KEY"] = self._saved
+        for key, value in self._saved.items():
+            os.environ.pop(key, None)
+            if value:
+                os.environ[key] = value
 
-    def test_defaults_to_openrouter_without_a_key(self):
+    def test_falls_back_to_openrouter_without_a_gemini_key(self):
+        os.environ["OPENROUTER_API_KEY"] = "test-key"
         self.assertFalse(llm_provider.gemini_available())
-        self.assertIn("OpenRouter", llm_provider.describe_provider())
+        self.assertIn("openrouter", llm_provider.describe_provider().lower())
+
+    def test_a_run_with_no_keys_at_all_says_so(self):
+        """It used to claim OpenRouter whatever was configured, so a run with
+        no keys reported a writer it did not have."""
+        self.assertEqual(llm_provider.describe_provider(), "none configured")
+
+    def test_the_free_tiers_come_before_the_one_that_bills(self):
+        for key in ("GEMINI_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY",
+                    "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+            os.environ[key] = "test-key"
+        order = llm_provider.configured_providers()
+        self.assertEqual(order[-1], "anthropic")
+        self.assertEqual(order[0], "gemini")
+
+    def test_every_provider_is_optional(self):
+        os.environ["GROQ_API_KEY"] = "test-key"
+        self.assertEqual(llm_provider.configured_providers(), ["groq"])
 
     def test_gemini_detected_when_configured(self):
         os.environ["GEMINI_API_KEY"] = "test-key"
@@ -2369,6 +2394,115 @@ class TestTheOpeningStillDeliversOnWhatItPromised(unittest.TestCase):
         script = {"chapters": [{"heading": "The Anomaly",
                                 "scenes": [{"narration": "A line."}]}]}
         self.assertTrue(longform_llm.payoff_ok(script))
+
+
+class TestThePaidTierWearsTheSameInterface(unittest.TestCase):
+    """Anthropic does not speak the OpenAI protocol, and this pipeline has
+    exactly one call shape. The adapter presents that shape so no call site
+    needs to know which provider answered."""
+
+    def _client(self, blocks, stop_reason="end_turn"):
+        class Reply:
+            def __init__(self):
+                self.content = blocks
+                self.stop_reason = stop_reason
+
+        class Messages:
+            def __init__(self): self.seen = {}
+            def create(self, **kwargs):
+                self.seen.update(kwargs)
+                return Reply()
+
+        class SDK:
+            def __init__(self): self.messages = Messages()
+
+        client = llm_provider.AnthropicClient.__new__(llm_provider.AnthropicClient)
+        client._sdk = SDK()
+        client.chat = client
+        client.completions = client
+        return client
+
+    def _block(self, kind, text):
+        return type("B", (), {"type": kind, "text": text})()
+
+    def test_the_reply_arrives_where_the_pipeline_looks_for_it(self):
+        client = self._client([self._block("text", '{"ok": true}')])
+        reply = client.chat.completions.create(
+            model="m", messages=[{"role": "user", "content": "hi"}],
+            max_tokens=100)
+        self.assertEqual(reply.choices[0].message.content, '{"ok": true}')
+
+    def test_thinking_blocks_are_not_concatenated_into_the_json(self):
+        """A thinking block is not part of the answer, and gluing it onto the
+        front of the JSON is what makes the parse fail."""
+        client = self._client([self._block("thinking", "hmm, let me think"),
+                               self._block("text", '{"ok": true}')])
+        reply = client.chat.completions.create(
+            messages=[{"role": "user", "content": "hi"}], max_tokens=100)
+        self.assertEqual(reply.choices[0].message.content, '{"ok": true}')
+
+    def test_a_truncated_reply_reports_the_reason_the_pipeline_knows(self):
+        client = self._client([self._block("text", "{")], stop_reason="max_tokens")
+        reply = client.chat.completions.create(
+            messages=[{"role": "user", "content": "hi"}], max_tokens=10)
+        self.assertEqual(reply.choices[0].finish_reason, "length")
+
+    def test_the_system_prompt_is_lifted_out_of_the_messages(self):
+        """Anthropic takes the system prompt as its own parameter; leaving it
+        in the message list sends it as a user turn."""
+        client = self._client([self._block("text", "{}")])
+        client.chat.completions.create(
+            messages=[{"role": "system", "content": "You write narration."},
+                      {"role": "user", "content": "Write a chapter."}],
+            max_tokens=100)
+        sent = client._sdk.messages.seen
+        self.assertEqual(sent["system"], "You write narration.")
+        self.assertEqual([m["role"] for m in sent["messages"]], ["user"])
+
+    def test_it_does_not_spend_the_reply_budget_on_reasoning(self):
+        """Thinking tokens come out of the same budget as the reply — the
+        exact failure that truncated every chapter of a live Gemini run."""
+        client = self._client([self._block("text", "{}")])
+        client.chat.completions.create(
+            messages=[{"role": "user", "content": "hi"}], max_tokens=100)
+        self.assertEqual(
+            client._sdk.messages.seen["output_config"]["effort"], "low")
+
+    def test_a_missing_sdk_skips_the_tier_instead_of_ending_the_run(self):
+        saved = os.environ.get("ANTHROPIC_API_KEY")
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            with unittest.mock.patch.object(
+                    llm_provider.AnthropicClient, "__init__",
+                    side_effect=ImportError("no module named anthropic")):
+                self.assertIsNone(llm_provider.anthropic_client())
+        finally:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            if saved:
+                os.environ["ANTHROPIC_API_KEY"] = saved
+
+
+class TestOneProviderRunningDryDoesNotEndTheRun(unittest.TestCase):
+    """A spent OpenRouter allowance used to throw away a working Gemini key
+    sitting right beside it — the single point of failure the chain exists to
+    remove."""
+
+    def test_the_run_only_stops_when_every_provider_is_out(self):
+        src = inspect.getsource(longform_llm._call)
+        # The daily-limit branch retires the provider and keeps walking; it
+        # raises only once nothing usable is left.
+        self.assertIn("_exhausted_providers.add(provider)", src)
+        self.assertIn("if not remaining:", src)
+
+    def test_hitting_the_wall_retires_that_provider_not_the_run(self):
+        src = inspect.getsource(longform_llm._call)
+        quota_branch = src[src.index("if _is_daily_quota(err):"):]
+        continued = quota_branch.index("continue")
+        raised = quota_branch.index("raise QuotaExhausted")
+        # The raise is guarded above the continue; both are present, and the
+        # branch ends by carrying on rather than by raising unconditionally.
+        self.assertLess(raised, continued)
+        self.assertIn("remaining = _usable_models(pool.models)", quota_branch)
 
 
 if __name__ == "__main__":
