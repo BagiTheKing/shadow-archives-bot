@@ -21,7 +21,8 @@ import time
 from openai import OpenAI
 
 from audio_engine import is_speakable
-from llm_engine import get_free_models, normalize_thumbnail_fields, _extract_json
+from llm_engine import (get_free_models, normalize_thumbnail_fields,
+                        _extract_json, _validate_hook)
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -30,17 +31,39 @@ from topics import pick_topic
 # Words per chapter. edge-tts at +8% rate lands around 165 wpm, so ~1,200 words
 # is roughly 7.5 minutes — inside the 6-9 minute target.
 ARC = [
-    # The brief used to say "state the anomaly in two sentences" while asking for
-    # 110 words. The model obeyed the brief, produced ~54 words, and failed the
-    # length check twice — a self-inflicted deadlock. The brief now asks for the
-    # material that actually fills the chapter.
-    ("Cold Open",
-     "Open with the anomaly in one or two sharp sentences, the way a Short would. "
-     "Then widen: sketch the scale of what was lost, name the people or place at "
-     "the centre of it, and pose the question this video answers — not what "
-     "happened, but how the decision behind it looked reasonable at the time. "
-     "Do not summarise the ending.",
-     90),
+    # This chapter has been rewritten twice, and the history is worth keeping.
+    #
+    # First it said "state the anomaly in two sentences" while asking for 110
+    # words. The model obeyed the brief, produced ~54 words, and failed the
+    # length check twice — a self-inflicted deadlock. So the brief was given
+    # material that actually fills the chapter: "open with the anomaly... then
+    # widen: sketch the scale, name the people, and pose the question this video
+    # answers."
+    #
+    # The widening is what killed it. Measured on the published videos, 69% of
+    # viewers left inside the first 23 seconds — which is to say, inside this
+    # chapter, while it was still setting up the question. Retention relative to
+    # comparable videos sat at 0.12 through the opening: bottom decile. The fix
+    # for a chapter that was too short was to give it more to say, and what it
+    # found to say was preamble.
+    #
+    # So it no longer widens. It states the anomaly, makes it worse, and walks
+    # straight into the story. 70 words is ~25 seconds; the old 90 spent 33
+    # seconds before chapter two could begin.
+    #
+    # Renamed from "Cold Open" at the same time: the heading is typeset in the
+    # description's chapter list, where it is production jargon addressed to
+    # nobody.
+    ("The Anomaly",
+     "Open with the anomaly in one or two sharp sentences, the way a Short would: "
+     "a hard number, a contradiction, or a named consequence, in the first "
+     "sentence. Then make it WORSE with a second concrete fact — not broader, "
+     "worse. Close by naming the person who made the decision and the moment they "
+     "made it, so the next chapter can begin at their shoulder. "
+     "Never announce what the video will cover, never pose the question the video "
+     "answers, and never summarise the ending. No sentence may begin with 'In' "
+     "followed by a year.",
+     70),
     ("What Was Supposed To Happen",
      "Establish the plan as its designers understood it. The viewer should finish this "
      "chapter thinking the plan sounds sensible. Give the specifics: who, when, what "
@@ -715,6 +738,34 @@ def _chapter_usable(data, enforce_history=False):
     return True
 
 
+def _opening_sentence(data) -> str:
+    """The first spoken sentence of a chapter — for the opening chapter, the
+    first thing anyone hears."""
+    for seg in (data or {}).get("segments") or []:
+        text = (seg.get("narration") or "").strip()
+        if text:
+            return re.split(r"(?<=[.!?])\s+", text)[0].strip()
+    return ""
+
+
+def _opening_hook_ok(data) -> bool:
+    """Judges the long-form opening by the Shorts' hook rules.
+
+    The Shorts have had a hook validator since the channel's view decline was
+    traced to weak first lines; the long-form lane had none, and it shows. Its
+    opening chapter had 69% of viewers gone within 23 seconds and relative
+    retention of 0.12 against comparable videos.
+
+    Same standard, same reason: a viewer decides in the first sentence, and a
+    seven-minute video does not get a longer grace period than a fifty-second
+    one — it gets a shorter one, because it is asking for more.
+    """
+    sentence = _opening_sentence(data)
+    if not sentence:
+        return False
+    return _validate_hook(sentence)
+
+
 def _chapter_words(data):
     return sum(len(s["narration"].split()) for s in (data or {}).get("segments", []))
 
@@ -847,6 +898,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     if enforce_history:
         print(f"🔒 History rule active: nothing after {HISTORY_CUTOFF_YEAR}.")
 
+    opening_heading = ARC[0][0]
     chapters, tail, short_chapters, dropped = [], "", 0, []
     # Everything already narrated, as normalised sentences and as plain lines.
     # The first feeds the repetition gate, the second is handed to the model so
@@ -879,8 +931,26 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             if _validate_chapter(candidate, words,
                                  enforce_history=enforce_history,
                                  previous_sentences=said_sentences):
-                data = candidate
-                break
+                if heading != opening_heading or _opening_hook_ok(candidate):
+                    data = candidate
+                    break
+                # Structurally fine, but it opens on setup. Keep it as the
+                # fallback — losing this chapter loses the video — and spend
+                # the remaining attempts trying for a real hook.
+                if best is None:
+                    best = candidate
+                feedback = (
+                    "Your previous attempt opened with setup. The FIRST sentence "
+                    "of this chapter is the whole video's hook and is judged on "
+                    "its own: at most 12 words, containing a hard number, a "
+                    "proper name, or a superlative, and it may not begin with "
+                    "'In', a year, 'It was', 'Imagine', 'This is', 'Picture "
+                    "this', 'Have you ever', 'Most people' or 'What if'. "
+                    "Write the anomaly itself, not an introduction to it.")
+                if attempt < attempts - 1:
+                    print(f"   retrying chapter {heading!r} for a stronger "
+                          f"opening ({attempt + 2}/{attempts})...")
+                continue
 
             # Repetition needs its own correction. Telling a padding model to
             # "write more words" is how it padded in the first place.
@@ -913,15 +983,17 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                       f"({attempt + 2}/{attempts})...")
 
         if data is None and best is not None:
-            # A short chapter costs pacing. Abandoning the run costs the video.
+            # A weak chapter costs pacing. Abandoning the run costs the video.
             data = best
-            short_chapters += 1
-            print(f"   ⚠️ Accepting a short {heading!r} ({_chapter_words(best)} "
+            got = _chapter_words(best)
+            if got < words * 0.8:
+                short_chapters += 1
+            print(f"   ⚠️ Accepting the best attempt at {heading!r} ({got} "
                   f"words) rather than losing the run.")
 
         if not data:
             print(f"❌ Chapter {heading!r} could not be generated.")
-            if heading == ARC[0][0]:
+            if heading == opening_heading:
                 # The cold open is the only chapter the format cannot do
                 # without: it is the hook, and everything after it is written
                 # as a continuation of it.

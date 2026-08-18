@@ -400,8 +400,15 @@ def generate_longform_video(scenes, build_dir="build"):
         cuts += max(0, len(group) - 1)
         heading = group[0].get("chapter_heading", f"Part {c_idx + 1}")
         chapter_marks.append((heading, cursor))
-        chapter_titles.append((cursor + 0.3, group[0]["duration"],
-                               c_idx + 1, heading))
+        # Every chapter is announced on screen except the first. The opening
+        # card used to slide in at 0.3s and sit over the hook for four seconds,
+        # so the first thing a viewer read was a filing label rather than the
+        # story — and 69% of them left inside the first 23 seconds. A chapter
+        # title is orientation, and nobody needs orienting before they have
+        # been given a reason to stay.
+        if c_idx > 0:
+            chapter_titles.append((cursor + 0.3, group[0]["duration"],
+                                   c_idx + 1, heading))
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
 

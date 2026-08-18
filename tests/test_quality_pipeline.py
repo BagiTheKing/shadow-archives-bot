@@ -144,9 +144,9 @@ class TestOnScreenTypography(unittest.TestCase):
         self.assertNotIn("{9}", event)
 
     def test_chapter_title_event_shape(self):
-        event = longform_video._chapter_title_event(0.3, 12.0, 1, "Cold Open")
-        self.assertIn("PART ONE", event)
-        self.assertIn("COLD OPEN", event)
+        event = longform_video._chapter_title_event(0.3, 12.0, 2, "The Decision")
+        self.assertIn("PART TWO", event)
+        self.assertIn("THE DECISION", event)
         self.assertIn(r"\move", event)        # it animates in
 
     def test_chapter_title_never_outlives_its_scene(self):
@@ -1575,6 +1575,91 @@ class TestLongformEndCard(unittest.TestCase):
         body = re.search(r"Style: Body,[^\n]*", longform_video.ASS_HEADER).group(0)
         cta = re.search(r"Style: Cta,[^\n]*", longform_video.ASS_HEADER).group(0)
         self.assertGreater(int(cta.split(",")[-2]), int(body.split(",")[-2]))
+
+
+class TestTheOpeningIsNotInterrupted(unittest.TestCase):
+    """Measured on the published long-form videos: 69% of viewers left inside
+    the first 23 seconds, with relative retention at 0.12 — bottom decile. The
+    first thing on screen was a card reading PART ONE / COLD OPEN."""
+
+    def test_the_first_chapter_gets_no_title_card(self):
+        import inspect
+        src = inspect.getsource(longform_video.generate_longform_video)
+        # The card is appended only for chapters after the first.
+        self.assertRegex(src, r"if c_idx > 0:\s*\n\s*chapter_titles\.append")
+
+    def test_later_chapters_still_get_one(self):
+        event = longform_video._chapter_title_event(30.0, 8.0, 3, "The Chain")
+        self.assertIn("PART THREE", event)
+        self.assertIn("THE CHAIN", event)
+
+    def test_the_opening_heading_is_not_production_jargon(self):
+        heading = longform_llm.ARC[0][0]
+        # It is typeset in the description's chapter list at 0:00, where a
+        # viewer reads it. "Cold Open" is a note to the writer, not to them.
+        self.assertNotIn("cold open", heading.lower())
+
+    def test_the_arc_still_starts_where_the_code_thinks_it_does(self):
+        """generate_longform_script treats ARC[0] as the one unrecoverable
+        chapter. If the arc is reordered, that check must follow it."""
+        import inspect
+        src = inspect.getsource(longform_llm.generate_longform_script)
+        self.assertIn("opening_heading = ARC[0][0]", src)
+        self.assertIn("if heading == opening_heading:", src)
+
+
+class TestLongformOpeningHook(unittest.TestCase):
+    """The Shorts have been hook-validated since the view decline was traced to
+    weak first lines. The long-form lane had no such check at all."""
+
+    def _chapter(self, first_line):
+        return {"segments": [{"narration": first_line + " The rest follows."}]}
+
+    def test_a_concrete_opening_passes(self):
+        self.assertTrue(longform_llm._opening_hook_ok(self._chapter(
+            "Six hundred cavalrymen charged the wrong valley.")))
+
+    def test_a_date_first_opening_is_rejected(self):
+        self.assertFalse(longform_llm._opening_hook_ok(self._chapter(
+            "In 1854, the British army was camped above Balaclava.")))
+
+    def test_an_abstract_opening_is_rejected(self):
+        self.assertFalse(longform_llm._opening_hook_ok(self._chapter(
+            "A terrible mistake was made that day.")))
+
+    def test_a_rambling_opening_is_rejected(self):
+        self.assertFalse(longform_llm._opening_hook_ok(self._chapter(
+            "The Charge of the Light Brigade is remembered today as one of the "
+            "most famous military blunders in all of recorded history.")))
+
+    def test_an_empty_chapter_is_not_a_valid_hook(self):
+        self.assertFalse(longform_llm._opening_hook_ok({"segments": []}))
+        self.assertFalse(longform_llm._opening_hook_ok(None))
+
+    def test_the_opening_sentence_stops_at_the_full_stop(self):
+        self.assertEqual(
+            longform_llm._opening_sentence(self._chapter("The Vasa sank.")),
+            "The Vasa sank.")
+
+    def test_a_weak_opening_is_retried_but_never_loses_the_video(self):
+        """The opening chapter is the one chapter the format cannot do without,
+        so a hook failure must downgrade to 'keep it', not 'drop it'."""
+        import inspect
+        src = inspect.getsource(longform_llm.generate_longform_script)
+        self.assertIn("_opening_hook_ok", src)
+        self.assertIn("if best is None:", src)
+
+    def test_the_brief_no_longer_asks_the_opening_to_widen(self):
+        brief = longform_llm.ARC[0][1]
+        self.assertNotIn("widen", brief.lower())
+        self.assertIn("never pose the question", brief.lower())
+
+    def test_the_opening_chapter_is_shorter_than_the_body_chapters(self):
+        """90 words was 33 seconds of runway before chapter two could start."""
+        opening_words = longform_llm.ARC[0][2]
+        self.assertLessEqual(opening_words, 75)
+        for _, _, words in longform_llm.ARC[1:]:
+            self.assertGreater(words, opening_words)
 
 
 if __name__ == "__main__":
