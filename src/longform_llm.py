@@ -21,7 +21,7 @@ import time
 from openai import OpenAI
 
 from audio_engine import is_speakable
-from llm_engine import get_free_models, _extract_json
+from llm_engine import get_free_models, normalize_thumbnail_fields, _extract_json
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -1000,19 +1000,17 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
-    # Thumbnail text must be short or it turns to mush at 210px wide. If the
-    # model ignored that, fall back to the first few words of the title.
-    thumb = " ".join((meta.get("thumbnail_text") or "").split()[:5]).strip(" .,:;!?")
-    if not thumb or len(thumb) > 42:
-        thumb = " ".join(title.split()[:4])
 
     script = {
         "topic": topic,
         "title": title,
         "description": (meta.get("description") or "").strip(),
         "tags": [t for t in (meta.get("tags") or []) if isinstance(t, str)],
-        "thumbnail_text": thumb,
-        "thumbnail_badge": str(meta.get("thumbnail_badge") or "").strip()[:12],
+        # Thumbnail text must be short or it turns to mush at 210px wide. Both
+        # writers are given the same instruction and ignore it the same way, so
+        # they share the repair: see llm_engine.normalize_thumbnail_fields.
+        "thumbnail_text": meta.get("thumbnail_text"),
+        "thumbnail_badge": meta.get("thumbnail_badge"),
         # Posted as the first comment under the video. See
         # youtube_publisher.post_first_comment for why the channel needs one.
         "comment_question": str(meta.get("comment_question") or "").strip()[:280],
@@ -1020,6 +1018,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         "word_count": words,
         "era_year": era_year,
     }
+    normalize_thumbnail_fields(script)
+
     note = f", {short_chapters} under target" if short_chapters else ""
     print(f"✅ Script complete: {len(chapters)} chapters, {words} words "
           f"(~{words / 165:.1f} min narrated{note})")

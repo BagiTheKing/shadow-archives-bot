@@ -3,7 +3,9 @@ import os
 import re
 import shutil
 
+from caption_track import SRT_NAME
 from llm_engine import generate_video_script
+from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import pick_topic
 from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
                                load_published, next_episode_number,
@@ -51,6 +53,14 @@ UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "five days a week")
 # published so far tells a viewer there is a next one, which is most of why
 # 9,000 views converted 25 subscribers. Set SERIES_NAME="" to publish untitled.
 SERIES_NAME = os.getenv("SERIES_NAME", "Catastrophe Files")
+
+# Every upload is filed here. A playlist is the only surface that hands a viewer
+# the next episode instead of returning them to the feed, and the channel has
+# never had one — 9,000 views have produced a single playlist view.
+PLAYLIST_DESCRIPTION = (
+    f"{SERIES_NAME} — one catastrophic decision, explained. "
+    "Every episode is a real event, a real choice, and what it cost."
+)
 
 # Broad tags are close to worthless on their own, but they cost nothing and the
 # specific ones from the script are what give the video a chance in search.
@@ -150,6 +160,33 @@ def build_first_comment(script_data: dict) -> str:
     return question
 
 
+def build_thumbnail(script_data: dict, build_dir: str):
+    """Draws the 16:9 thumbnail for a Short, or returns None.
+
+    Never raises: a thumbnail is worth having and not worth losing a finished
+    video over. YouTube falls back to an auto-selected frame, which is what
+    every Short on the channel has now.
+    """
+    try:
+        source = pick_source_scene(script_data.get("scenes") or [])
+        if not source:
+            print("⚠️ No usable frame for a thumbnail — YouTube will pick one.")
+            return None
+        headline = script_data.get("thumbnail_text") or script_data.get("title", "")
+        if not headline.strip():
+            return None
+        path = os.path.join(build_dir, "thumbnail.jpg")
+        make_thumbnail(source, headline, path,
+                       badge=script_data.get("thumbnail_badge", ""))
+        print(f"🖼️  Thumbnail: {headline!r} "
+              f"({os.path.getsize(path) / 1024:.0f} KB)")
+        return path
+    except Exception as e:
+        print(f"⚠️ Thumbnail generation failed ({type(e).__name__}: {e}) — "
+              "YouTube will auto-select a frame.")
+        return None
+
+
 def plan_run():
     """Reads the channel back before writing anything.
 
@@ -240,15 +277,30 @@ def main():
     # Phase 3: render
     final_video_path = generate_video_pipeline(script_data, build_dir)
 
-    # Phase 4: metadata + upload
+    # Phase 4: thumbnail. Shorts autoplay in the feed, which is why this was
+    # skipped — but the feed is not the only place a Short appears. On the
+    # channel page, in search results and in suggested, it is a 16:9 thumbnail
+    # like any other video, and all 42 published so far have been an arbitrary
+    # frame YouTube picked.
+    thumb_path = build_thumbnail(script_data, build_dir)
+
+    # Phase 5: metadata + upload
     title, description, tags = build_metadata(script_data, episode)
     print(f"📋 Title: {title}")
+
+    caption_path = os.path.join(build_dir, SRT_NAME)
+    if not os.path.exists(caption_path):
+        caption_path = None
 
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — video rendered but not uploaded (dry run).")
     else:
         upload_video_to_youtube(final_video_path, title, description, tags,
-                                first_comment=first_comment)
+                                thumbnail_path=thumb_path,
+                                first_comment=first_comment,
+                                caption_path=caption_path,
+                                playlist_title=SERIES_NAME,
+                                playlist_description=PLAYLIST_DESCRIPTION)
 
     print("🎉 Pipeline complete.")
 

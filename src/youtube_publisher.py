@@ -60,6 +60,95 @@ def set_thumbnail(youtube, video_id: str, thumbnail_path: str) -> bool:
         return False
 
 
+def upload_captions(youtube, video_id: str, srt_path: str,
+                    language: str = "en", name: str = "English") -> bool:
+    """Attaches the transcript.
+
+    The captions burned into the picture are pixels — YouTube has never had the
+    words for any video on this channel. A real track is what makes a video
+    eligible for search on its own dialogue, gives the CC button something to
+    show, and feeds the auto-translation other languages are surfaced through.
+
+    Costs 400 quota units, by far the most expensive call here after the upload
+    itself, which is affordable at one video a day and would not be at ten."""
+    if not srt_path or not os.path.exists(srt_path):
+        return False
+    try:
+        youtube.captions().insert(
+            part="snippet",
+            body={"snippet": {
+                "videoId": video_id,
+                "language": language,
+                "name": name,
+                "isDraft": False,
+            }},
+            media_body=MediaFileUpload(srt_path, mimetype="application/octet-stream"),
+        ).execute()
+        print(f"🗒️  Caption track uploaded ({language}).")
+        return True
+    except Exception as e:
+        # A token minted before force-ssl was added to SCOPES cannot do this.
+        # Not worth failing a run whose video is already public.
+        print(f"⚠️ Could not upload captions ({type(e).__name__}: {e}).")
+        return False
+
+
+def ensure_playlist(youtube, title: str, description: str = "") -> str:
+    """Returns the id of the channel's playlist with this title, creating it on
+    first use. Returns '' if the lookup and the creation both fail.
+
+    Playlists are the only surface that turns one video into a session: a viewer
+    who finishes an episode inside a playlist is handed the next one instead of
+    being returned to the feed. In 43 days this channel has taken exactly one
+    playlist view, because it has no playlists."""
+    if not title:
+        return ""
+    try:
+        request = youtube.playlists().list(part="snippet", mine=True,
+                                           maxResults=50)
+        while request is not None:
+            response = request.execute()
+            for item in response.get("items", []):
+                if item["snippet"]["title"].strip().lower() == title.strip().lower():
+                    return item["id"]
+            request = youtube.playlists().list_next(request, response)
+    except Exception as e:
+        print(f"⚠️ Could not list playlists ({type(e).__name__}: {e}).")
+        return ""
+
+    try:
+        created = youtube.playlists().insert(
+            part="snippet,status",
+            body={
+                "snippet": {"title": title, "description": description},
+                "status": {"privacyStatus": "public"},
+            },
+        ).execute()
+        print(f"📂 Created playlist {title!r}.")
+        return created["id"]
+    except Exception as e:
+        print(f"⚠️ Could not create the playlist ({type(e).__name__}: {e}).")
+        return ""
+
+
+def add_to_playlist(youtube, playlist_id: str, video_id: str) -> bool:
+    if not playlist_id or not video_id:
+        return False
+    try:
+        youtube.playlistItems().insert(
+            part="snippet",
+            body={"snippet": {
+                "playlistId": playlist_id,
+                "resourceId": {"kind": "youtube#video", "videoId": video_id},
+            }},
+        ).execute()
+        print(f"📂 Added to playlist {playlist_id}.")
+        return True
+    except Exception as e:
+        print(f"⚠️ Could not add to the playlist ({type(e).__name__}: {e}).")
+        return False
+
+
 def post_first_comment(youtube, video_id: str, text: str) -> bool:
     """Seeds the comment thread from the channel account.
 
@@ -91,7 +180,9 @@ def post_first_comment(youtube, video_id: str, text: str) -> bool:
 
 
 def upload_video_to_youtube(video_path: str, title: str, description: str, tags=None,
-                            thumbnail_path: str = None, first_comment: str = None):
+                            thumbnail_path: str = None, first_comment: str = None,
+                            caption_path: str = None, playlist_title: str = None,
+                            playlist_description: str = ""):
     youtube = get_authenticated_service()
     print(f"📤 Uploading: {title}")
 
@@ -127,6 +218,14 @@ def upload_video_to_youtube(video_path: str, title: str, description: str, tags=
 
     if thumbnail_path and video_id and os.path.exists(thumbnail_path):
         set_thumbnail(youtube, video_id, thumbnail_path)
+
+    if caption_path and video_id:
+        upload_captions(youtube, video_id, caption_path)
+
+    if playlist_title and video_id:
+        playlist_id = ensure_playlist(youtube, playlist_title,
+                                      playlist_description)
+        add_to_playlist(youtube, playlist_id, video_id)
 
     if first_comment and video_id:
         post_first_comment(youtube, video_id, first_comment)

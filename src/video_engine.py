@@ -17,6 +17,8 @@ import os
 import random
 import subprocess
 
+from caption_track import write_srt
+
 W, H = 1080, 1920
 FPS = 30
 XFADE = 0.4  # crossfade duration in seconds
@@ -240,6 +242,10 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     ass_path = os.path.join(build_dir, "subtitles.ass")
     generate_subtitles(script_data, ass_path, timeline_offsets=offsets,
                        total_duration=total)
+
+    # The same timings, written out as a real caption track. The ASS above ends
+    # up as pixels; this is the copy YouTube can actually read.
+    write_srt(scenes, offsets, build_dir)
 
     # ---- Phase 4: grade + captions + music + end fade, single final encode ----
     print("🔥 Final render: grade, captions, music...")

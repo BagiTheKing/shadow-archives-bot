@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 
+from caption_track import SRT_NAME
 from longform_llm import (generate_longform_script, flatten_scenes,
                           select_historical_anchor, QuotaExhausted)
 from longform_visual import generate_longform_visuals
@@ -31,6 +32,14 @@ CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 # a prefix pushes the searchable words past where YouTube truncates them.
 SERIES_NAME = os.getenv("SERIES_NAME", "Catastrophe Files")
 BUILD_DIR = "build"
+
+# Both formats file into the same playlist deliberately. A viewer who finishes a
+# Short is handed the long-form telling of the next story rather than a
+# same-length clip, which is the only route this channel has to session time.
+PLAYLIST_DESCRIPTION = (
+    f"{SERIES_NAME} — one catastrophic decision, explained. "
+    "Every episode is a real event, a real choice, and what it cost."
+)
 
 BASE_TAGS = ["history documentary", "disaster documentary", "engineering failure",
              "history explained", "what went wrong", "military history"]
@@ -318,6 +327,10 @@ def main():
     print(f"📋 Title: {title}")
     print(f"⏱️  Duration: {minutes:.1f} min | {len(chapter_marks)} chapters")
 
+    caption_path = os.path.join(BUILD_DIR, SRT_NAME)
+    if not os.path.exists(caption_path):
+        caption_path = None
+
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — rendered but not uploaded (dry run).")
         print("--- description ---")
@@ -325,7 +338,10 @@ def main():
     else:
         upload_video_to_youtube(video_path, title, description, tags,
                                 thumbnail_path=thumb_path,
-                                first_comment=first_comment)
+                                first_comment=first_comment,
+                                caption_path=caption_path,
+                                playlist_title=SERIES_NAME,
+                                playlist_description=PLAYLIST_DESCRIPTION)
 
     print("🎉 Long-form pipeline complete.")
 

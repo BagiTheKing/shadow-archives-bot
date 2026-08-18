@@ -37,6 +37,8 @@ import random
 import re
 import subprocess
 
+from caption_track import write_srt
+
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
@@ -60,6 +62,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Body,{FONT_NAME},54,&H00FFFFFF,&H0000E8FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,140,140,70,1
 Style: Stat,{FONT_NAME},170,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,8,120,120,120,1
 Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,1,0,1,4,3,4,150,150,60,1
+Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -77,6 +80,14 @@ TRANSITIONS = [
 
 # Accent used for numbers in captions and for stat callouts (BGR in ASS).
 ACCENT_ASS = r"&H0000E8FF&"
+
+# The long-form videos have never had an outro of any kind — they reach the last
+# sentence and stop. The Shorts at least carry an end card, which is why the two
+# formats convert so differently: 75 long-form views have produced nothing.
+# Held longer than the Shorts version because a viewer seven minutes deep is not
+# thumb-scrolling, and it sits above the narration captions rather than over them.
+CTA_TEXT = os.getenv("LONGFORM_CTA_TEXT", "SUBSCRIBE — A NEW CATASTROPHE EVERY WEEK")
+CTA_DURATION = 5.0
 
 
 def _ass_time(seconds: float) -> str:
@@ -159,10 +170,11 @@ def _chapter_title_event(start: float, duration: float, number: int,
 
 
 def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
-                       chapter_titles=None):
+                       chapter_titles=None, total_duration=0.0):
     """offsets[i] is the global start time of scene i on the final timeline.
     stat_cues is [(start_seconds, value, label), ...] for the number callouts.
-    chapter_titles is [(start_seconds, scene_duration, number, heading), ...]."""
+    chapter_titles is [(start_seconds, scene_duration, number, heading), ...].
+    total_duration places the end card, and is 0 when there is no room for one."""
     print("📝 Building long-form captions...")
     events = []
     for idx, scene in enumerate(scenes):
@@ -194,6 +206,15 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
 
     for start, duration, number, heading in (chapter_titles or []):
         events.append(_chapter_title_event(start, duration, number, heading))
+
+    # End card over the closing seconds. Layer 1 keeps it above the narration
+    # captions, and its own margin keeps it clear of them.
+    if CTA_TEXT and total_duration > CTA_DURATION:
+        cta_start = total_duration - CTA_DURATION
+        events.append(
+            f"Dialogue: 1,{_ass_time(cta_start)},{_ass_time(total_duration)},"
+            f"Cta,,0,0,0,,{{\\fad(500,0)}}{CTA_TEXT}")
+        print(f"📣 End card at {cta_start:.1f}s: {CTA_TEXT!r}")
 
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))
@@ -415,7 +436,13 @@ def generate_longform_video(scenes, build_dir="build"):
     # ---- Phase 4: single quality pass — grade, captions, music, fades ----
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
     generate_subtitles(usable, ass_path, global_offsets, stat_cues=stat_cues,
-                       chapter_titles=chapter_titles)
+                       chapter_titles=chapter_titles,
+                       total_duration=total_duration)
+
+    # The uploadable copy of the same words. Seven minutes of narration is the
+    # most indexable thing this channel produces and none of it has ever been
+    # readable by anything but a viewer's eyes.
+    write_srt(usable, global_offsets, build_dir)
 
     print("🔥 Final render: grade, grain, captions, music...")
     final_output = os.path.join(build_dir, "final_longform.mp4")

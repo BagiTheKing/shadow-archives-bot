@@ -7,6 +7,7 @@ in-memory Pillow.
 import base64
 import io
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -18,12 +19,28 @@ from PIL import Image                                       # noqa: E402
 
 import archive_engine                                       # noqa: E402
 import audio_engine                                         # noqa: E402
+import caption_track                                        # noqa: E402
 import llm_engine                                           # noqa: E402
 import llm_provider                                         # noqa: E402
 import longform_llm                                         # noqa: E402
+import longform_main                                        # noqa: E402
 import longform_video                                       # noqa: E402
 import longform_visual                                      # noqa: E402
+import main                                                 # noqa: E402
+import video_engine                                         # noqa: E402
 import visual_engine                                        # noqa: E402
+import youtube_publisher                                    # noqa: E402
+
+
+
+class _FakeRequest:
+    """The googleapiclient calling convention: build a request, execute it."""
+
+    def __init__(self, response):
+        self.response = response
+
+    def execute(self):
+        return self.response
 
 
 def _info(width=1600, height=1000, mime="image/jpeg"):
@@ -1271,6 +1288,293 @@ class TestTrendingLaneStaysOnNiche(unittest.TestCase):
         src = inspect.getsource(longform_llm.select_historical_anchor)
         self.assertIn("THIS CHANNEL'S KIND OF STORY", src)
         self.assertIn("ALREADY COVERED ON THIS CHANNEL", src)
+
+
+# ---------------------------------------------------------------------------
+# The distribution layer: the transcript, the playlist, the thumbnail and the
+# end card. None of these change what the video says; all of them change
+# whether anyone is handed a second one.
+# ---------------------------------------------------------------------------
+
+
+def _timed(narration, start=0.0, per_word=0.4):
+    """Word timings shaped like the ones edge-tts emits."""
+    words = []
+    t = start
+    for w in narration.split():
+        words.append({"word": w, "start": t, "end": t + per_word})
+        t += per_word
+    return words
+
+
+def _scene(narration, duration=None, timed=True):
+    scene = {"narration": narration}
+    scene["duration"] = duration if duration is not None else \
+        len(narration.split()) * 0.4
+    if timed:
+        scene["words"] = _timed(narration)
+    return scene
+
+
+class TestTranscriptCues(unittest.TestCase):
+    """The burned-in captions are pixels. This is the copy YouTube can read."""
+
+    def test_cue_breaks_on_the_sentence_not_mid_clause(self):
+        scene = _scene("The ship sank. Twenty minutes had passed.")
+        cues = caption_track.build_cues([scene], [0.0])
+        self.assertEqual([c[2] for c in cues],
+                         ["The ship sank.", "Twenty minutes had passed."])
+
+    def test_a_long_sentence_is_split_rather_than_left_unreadable(self):
+        long_line = " ".join(["word"] * 30) + "."
+        cues = caption_track.build_cues([_scene(long_line)], [0.0])
+        self.assertGreater(len(cues), 1)
+        for _, _, text in cues:
+            self.assertLessEqual(len(text.split()), caption_track.MAX_CUE_WORDS)
+
+    def test_cues_are_offset_onto_the_finished_timeline(self):
+        scenes = [_scene("First scene here."), _scene("Second scene here.")]
+        cues = caption_track.build_cues(scenes, [0.0, 10.0])
+        self.assertAlmostEqual(cues[0][0], 0.0, places=2)
+        self.assertAlmostEqual(cues[1][0], 10.0, places=2)
+
+    def test_crossfaded_scenes_do_not_produce_overlapping_cues(self):
+        # Scene 2 starts before scene 1's audio ends, which is what a crossfade
+        # is. An SRT whose cues overlap stutters in the player.
+        scenes = [_scene("One two three four."), _scene("Five six seven eight.")]
+        cues = caption_track.build_cues(scenes, [0.0, 1.0])
+        for earlier, later in zip(cues, cues[1:]):
+            self.assertLessEqual(earlier[1], later[0] + 1e-6)
+
+    def test_a_scene_without_timings_still_appears(self):
+        """gTTS fallback scenes carry no WordBoundary events. A transcript with
+        a hole in the middle is worse than an approximate one."""
+        scene = _scene("The order was given.", duration=4.0, timed=False)
+        cues = caption_track.build_cues([scene], [0.0])
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0][2], "The order was given.")
+        self.assertLessEqual(cues[0][1], 4.0 + 1e-6)
+
+    def test_transcript_keeps_sentence_case(self):
+        """The on-screen captions are upper-cased for legibility. A transcript
+        is read by people and parsers, and neither wants shouting."""
+        cues = caption_track.build_cues([_scene("The Vasa sank.")], [0.0])
+        self.assertEqual(cues[0][2], "The Vasa sank.")
+
+
+class TestSrtFormat(unittest.TestCase):
+
+    def test_timestamps_use_the_srt_comma(self):
+        self.assertEqual(caption_track._srt_time(3661.5), "01:01:01,500")
+        self.assertEqual(caption_track._srt_time(0), "00:00:00,000")
+
+    def test_negative_time_is_clamped_not_rendered(self):
+        self.assertEqual(caption_track._srt_time(-2), "00:00:00,000")
+
+    def test_blocks_are_numbered_from_one_and_well_formed(self):
+        scenes = [_scene("First line here. Second line here.")]
+        srt = caption_track.build_srt(scenes, [0.0])
+        blocks = [b for b in srt.strip().split("\n\n") if b.strip()]
+        self.assertEqual(len(blocks), 2)
+        for i, block in enumerate(blocks, start=1):
+            lines = block.strip().split("\n")
+            self.assertEqual(lines[0], str(i))
+            self.assertRegex(lines[1],
+                             r"^\d{2}:\d{2}:\d{2},\d{3} --> "
+                             r"\d{2}:\d{2}:\d{2},\d{3}$")
+
+    def test_write_srt_returns_none_rather_than_raising_on_junk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(caption_track.write_srt([{"narration": ""}],
+                                                      [0.0], tmp))
+
+    def test_write_srt_produces_a_file_the_uploader_can_find(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = caption_track.write_srt([_scene("A ship sank.")], [0.0], tmp)
+            self.assertEqual(os.path.basename(path), caption_track.SRT_NAME)
+            self.assertIn("A ship sank.", open(path, encoding="utf-8").read())
+
+
+class TestBothPipelinesWriteATranscript(unittest.TestCase):
+    """The uploader looks for the file by name. If a render stops writing it,
+    the captions silently stop being uploaded — so assert the wiring."""
+
+    def test_shorts_pipeline_writes_the_srt(self):
+        import inspect
+        self.assertIn("write_srt",
+                      inspect.getsource(video_engine.generate_video_pipeline))
+
+    def test_longform_pipeline_writes_the_srt(self):
+        import inspect
+        self.assertIn("write_srt",
+                      inspect.getsource(longform_video.generate_longform_video))
+
+    def test_both_entry_points_pass_the_track_to_the_uploader(self):
+        import inspect
+        for module in (main, longform_main):
+            src = inspect.getsource(module.main)
+            self.assertIn("caption_path", src,
+                          f"{module.__name__} does not upload its transcript")
+
+
+class TestPlaylistFiling(unittest.TestCase):
+    """9,000 views produced one playlist view, because there was no playlist."""
+
+    class _FakePlaylists:
+        def __init__(self, existing):
+            self.existing = existing
+            self.created = []
+
+        def list(self, **kwargs):
+            return _FakeRequest({"items": self.existing})
+
+        def list_next(self, request, response):
+            return None
+
+        def insert(self, part=None, body=None):
+            self.created.append(body)
+            return _FakeRequest({"id": "PL_created"})
+
+    def _youtube(self, existing):
+        playlists = self._FakePlaylists(existing)
+        return type("YT", (), {"playlists": lambda s: playlists})(), playlists
+
+    def test_an_existing_playlist_is_reused_not_duplicated(self):
+        yt, playlists = self._youtube(
+            [{"id": "PL_old", "snippet": {"title": "Catastrophe Files"}}])
+        self.assertEqual(
+            youtube_publisher.ensure_playlist(yt, "Catastrophe Files"), "PL_old")
+        self.assertEqual(playlists.created, [])
+
+    def test_the_match_ignores_case_and_stray_whitespace(self):
+        yt, playlists = self._youtube(
+            [{"id": "PL_old", "snippet": {"title": "  catastrophe files "}}])
+        self.assertEqual(
+            youtube_publisher.ensure_playlist(yt, "Catastrophe Files"), "PL_old")
+        self.assertEqual(playlists.created, [])
+
+    def test_the_playlist_is_created_on_first_use(self):
+        yt, playlists = self._youtube([])
+        self.assertEqual(
+            youtube_publisher.ensure_playlist(yt, "Catastrophe Files"),
+            "PL_created")
+        self.assertEqual(len(playlists.created), 1)
+        self.assertEqual(playlists.created[0]["status"]["privacyStatus"],
+                         "public")
+
+    def test_no_title_means_no_playlist_call_at_all(self):
+        yt, playlists = self._youtube([])
+        self.assertEqual(youtube_publisher.ensure_playlist(yt, ""), "")
+        self.assertEqual(playlists.created, [])
+
+    def test_a_playlist_failure_never_raises(self):
+        class Broken:
+            def playlists(self):
+                raise RuntimeError("quota exceeded")
+        self.assertEqual(
+            youtube_publisher.ensure_playlist(Broken(), "Catastrophe Files"), "")
+
+    def test_adding_to_a_missing_playlist_is_a_no_op(self):
+        self.assertFalse(youtube_publisher.add_to_playlist(None, "", "vid123"))
+
+
+class TestCaptionUploadIsOptional(unittest.TestCase):
+
+    def test_a_missing_file_is_skipped_quietly(self):
+        self.assertFalse(
+            youtube_publisher.upload_captions(None, "vid", "/no/such/file.srt"))
+
+    def test_an_api_failure_does_not_sink_a_published_video(self):
+        class Broken:
+            def captions(self):
+                raise RuntimeError("insufficient scope")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "captions.srt")
+            open(path, "w").write("1\n00:00:00,000 --> 00:00:01,000\nHi\n")
+            self.assertFalse(
+                youtube_publisher.upload_captions(Broken(), "vid", path))
+
+
+class TestShortsThumbnailText(unittest.TestCase):
+    """Every Short published so far has run on a frame YouTube guessed at."""
+
+    def test_the_writers_headline_is_kept(self):
+        data = {"title": "The Order That Killed Six Hundred",
+                "thumbnail_text": "THE WRONG VALLEY"}
+        llm_engine.normalize_thumbnail_fields(data)
+        self.assertEqual(data["thumbnail_text"], "THE WRONG VALLEY")
+
+    def test_a_missing_headline_falls_back_to_the_words_that_carry_meaning(self):
+        data = {"title": "The Mistake That Killed the Light Brigade"}
+        llm_engine.normalize_thumbnail_fields(data)
+        # Not "The Mistake That Killed" — four words of grammar and no fact.
+        self.assertEqual(data["thumbnail_text"], "Mistake Killed Light Brigade")
+
+    def test_a_sentence_masquerading_as_a_headline_is_rejected(self):
+        data = {"title": "The Bolt That Sank the Ferry",
+                "thumbnail_text": "This is the long story of how one single "
+                                  "bolt brought down an entire ferry"}
+        llm_engine.normalize_thumbnail_fields(data)
+        self.assertLessEqual(len(data["thumbnail_text"].split()), 4)
+
+    def test_the_badge_falls_back_to_the_year_in_the_topic(self):
+        data = {"title": "The Bolt That Sank the Ferry",
+                "topic": "The Herald of Free Enterprise (1987), where the bow "
+                         "door was left open"}
+        llm_engine.normalize_thumbnail_fields(data)
+        self.assertEqual(data["thumbnail_badge"], "1987")
+
+    def test_no_year_anywhere_leaves_the_badge_empty_rather_than_wrong(self):
+        data = {"title": "The Bolt That Sank the Ferry", "topic": "no date here"}
+        llm_engine.normalize_thumbnail_fields(data)
+        self.assertEqual(data["thumbnail_badge"], "")
+
+    def test_the_writer_is_actually_asked_for_the_field(self):
+        self.assertIn("thumbnail_text", llm_engine.SYSTEM_PROMPT)
+
+    def test_the_shorts_pipeline_draws_and_uploads_one(self):
+        import inspect
+        src = inspect.getsource(main.main)
+        self.assertIn("build_thumbnail", src)
+        self.assertIn("thumbnail_path", src)
+
+    def test_thumbnail_failure_never_costs_the_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # A scene pointing at a file that is not an image.
+            broken = os.path.join(tmp, "not_an_image.jpg")
+            open(broken, "w").write("nope")
+            self.assertIsNone(main.build_thumbnail(
+                {"scenes": [{"image_path": broken}], "title": "A Title"}, tmp))
+
+
+class TestLongformEndCard(unittest.TestCase):
+    """The seven-minute videos reached the last sentence and simply stopped."""
+
+    def _events(self, total_duration):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "subs.ass")
+            longform_video.generate_subtitles(
+                [_scene("The port stayed open.")], out, [0.0],
+                total_duration=total_duration)
+            return open(out, encoding="utf-8").read()
+
+    def test_the_end_card_is_rendered_over_the_closing_seconds(self):
+        ass = self._events(120.0)
+        self.assertIn(longform_video.CTA_TEXT, ass)
+        self.assertIn("Cta,,", ass)
+
+    def test_the_style_the_end_card_uses_exists(self):
+        self.assertIn("Style: Cta,", longform_video.ASS_HEADER)
+
+    def test_a_video_shorter_than_the_card_gets_no_card(self):
+        self.assertNotIn(longform_video.CTA_TEXT, self._events(1.0))
+
+    def test_the_card_clears_the_narration_captions(self):
+        """Both sit at the bottom. If the margins collide the last thing a
+        viewer sees is two lines of text on top of each other."""
+        body = re.search(r"Style: Body,[^\n]*", longform_video.ASS_HEADER).group(0)
+        cta = re.search(r"Style: Cta,[^\n]*", longform_video.ASS_HEADER).group(0)
+        self.assertGreater(int(cta.split(",")[-2]), int(body.split(",")[-2]))
 
 
 if __name__ == "__main__":
