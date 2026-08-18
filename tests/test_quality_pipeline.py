@@ -633,10 +633,6 @@ class TestArchiveQueryCleaning(unittest.TestCase):
             "Chernobyl reactor 4")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestEncoreTopicMatching(unittest.TestCase):
     """The encore lane picks the topic from the channel's own numbers, so a
     published video has to map back to a pool entry reliably."""
@@ -743,3 +739,308 @@ class TestCloudflarePayload(unittest.TestCase):
 
     def test_a_failure_returns_none_so_pollinations_takes_over(self):
         self.assertIsNone(visual_engine.cloudflare_generate("x", 1080, 1920))
+
+
+# ---------------------------------------------------------------------------
+# Published-history memory.
+#
+# The channel published three duplicate pairs, each a couple of hours apart:
+# Light Brigade, Ariane 5 and the Great Fire of London. Every one of them was a
+# manual trigger landing on the same date-based topic as that day's scheduled
+# run. These tests are written against that exact history.
+# ---------------------------------------------------------------------------
+
+import datetime                                             # noqa: E402
+
+import published_history as ph                              # noqa: E402
+import topics                                               # noqa: E402
+
+
+def _video(title, hours_ago, duration="PT52S", description="", likes=0, views=0):
+    when = (datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(hours=hours_ago))
+    return {"videoId": title[:8], "title": title, "description": description,
+            "publishedAt": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "likes": likes, "views": views, "duration": duration}
+
+
+class TestTopicExclusion(unittest.TestCase):
+
+    def test_an_excluded_topic_is_skipped(self):
+        first = topics.pick_topic()
+        second = topics.pick_topic(exclude=[first])
+        self.assertNotEqual(first, second)
+        self.assertIn(second, topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS)
+
+    def test_exhausted_pool_returns_none_rather_than_a_repeat(self):
+        everything = topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS
+        self.assertIsNone(topics.pick_topic(exclude=everything))
+
+    def test_same_day_reruns_used_to_collide(self):
+        """The bug, stated as a test: without exclusion, two runs on one day get
+        the same topic. That is what produced the duplicate pairs."""
+        self.assertEqual(topics.pick_topic(), topics.pick_topic())
+
+    def test_published_topics_never_come_back_round(self):
+        """Every topic the channel has already covered is excluded at once, not
+        one per run."""
+        used = set(topics.CORE_TOPICS[:5])
+        for offset in range(10):
+            picked = topics.pick_topic(offset, exclude=used)
+            self.assertNotIn(picked, used)
+
+
+class TestDuplicateGuard(unittest.TestCase):
+
+    def test_the_real_ariane_pair_would_have_been_blocked(self):
+        """2026-08-07: 'The software error that destroyed the Ariane 5 rocket'
+        at 14:02, then 'The Reused Code That Destroyed Ariane 5 Flight 501' at
+        16:25. The second run is the one this guard stops."""
+        history = [_video("The software error that destroyed the Ariane 5 rocket", 2.4)]
+        self.assertTrue(ph.published_within(history))
+
+    def test_yesterdays_upload_does_not_block_today(self):
+        self.assertFalse(ph.published_within([_video("Yesterday's Short", 25)]))
+
+    def test_window_is_ordered_newest_first(self):
+        history = [_video("older", 8), _video("newest", 1), _video("middle", 4)]
+        self.assertEqual([v["title"] for v in ph.published_within(history)],
+                         ["newest", "middle", "older"])
+
+    def test_undated_videos_are_not_treated_as_recent(self):
+        self.assertFalse(ph.published_within([{"title": "x", "publishedAt": ""}]))
+
+
+class TestCoveredTopics(unittest.TestCase):
+
+    def test_the_exact_topic_line_in_a_description_is_matched(self):
+        topic = topics.CORE_TOPICS[0]
+        history = [_video("Any title at all", 100, description=f"blurb\n\n{topic}\n")]
+        self.assertIn(topic, ph.covered_topics(history))
+
+    def test_a_reworded_title_still_maps_back_to_its_topic(self):
+        """No description to read — this is the path for everything published
+        before main.py started writing the topic line."""
+        history = [_video("The Reused Code That Destroyed Ariane 5 Flight 501", 100)]
+        covered = ph.covered_topics(history)
+        self.assertTrue(any("Ariane 5" in t for t in covered), covered)
+
+    def test_longform_only_ignores_shorts(self):
+        title = "The Mayor's Dismissal That Burned London"
+        history = [_video(title, 100), _video(title, 90, duration="PT7M50S")]
+        self.assertEqual(len(ph.covered_topics(history, longform_only=True)), 1)
+        self.assertTrue(ph.covered_topics(history))
+
+
+class TestMatcherOnRealTitles(unittest.TestCase):
+    """Real titles from the channel, mapped back to real pool entries. Every one
+    of these decides whether a topic gets excluded from the rotation, so a wrong
+    answer here is a duplicate upload later."""
+
+    CASES = [
+        ("The Design Flaw That Destroyed HMS Hood", "HMS Hood"),
+        ("The Cheap Repair That Destroyed the Sultana", "Sultana"),
+        ("The Neglect That Killed 1,000 on the General Slocum", "General Slocum"),
+        ("The Reused Code That Destroyed Ariane 5 Flight 501", "Ariane 5"),
+        ("The Design Change That Killed 114 at Hyatt Regency", "Hyatt Regency"),
+        ("The Safety Test That Destroyed Chernobyl Reactor Four", "Chernobyl"),
+        ("The Launch Decision That Destroyed Challenger", "Challenger"),
+        ("The Mayor's Dismissal That Burned London", "Great Fire of London"),
+        ("The Math Error That Starved Air Canada Flight 143", "Gimli Glider"),
+        ("Zeebrugge Raid 1918: Why the Blockships Failed", "Zeebrugge"),
+        ("The Antikythera Mechanism: Why the First Computer Sank", "Antikythera"),
+    ]
+
+    def test_every_real_title_maps_to_its_own_story(self):
+        import channel_insights
+        for title, expected in self.CASES:
+            matched = channel_insights.match_topic(title) or ""
+            self.assertIn(expected, matched, f"{title!r} -> {matched[:60]!r}")
+
+    def test_the_title_formula_alone_never_matches(self):
+        """'design', 'destroyed', 'killed' and spoken numbers appear in nearly
+        every title on the channel and in nearly every topic. On their own they
+        are not evidence — this is what sent HMS Hood to the Tacoma Narrows."""
+        import channel_insights
+        self.assertIsNone(
+            channel_insights.match_topic("The Design Error That Destroyed Six"))
+
+
+class TestSeriesIdentity(unittest.TestCase):
+
+    def test_numbering_continues_from_the_channel(self):
+        history = [_video("Catastrophe Files #7 — A Thing #shorts", 10),
+                   _video("Catastrophe Files #6 — Another #shorts", 34)]
+        self.assertEqual(ph.next_episode_number(history, "Catastrophe Files"), 8)
+
+    def test_first_episode_when_none_are_published(self):
+        self.assertEqual(
+            ph.next_episode_number([_video("An old title", 5)],
+                                   "Catastrophe Files"), 1)
+
+    def test_unreadable_history_gives_no_number_rather_than_a_guess(self):
+        self.assertIsNone(ph.next_episode_number(None, "Catastrophe Files"))
+
+    def test_prefix_forms(self):
+        self.assertEqual(ph.series_prefix("Catastrophe Files", 3),
+                         "Catastrophe Files #3 — ")
+        self.assertEqual(ph.series_prefix("Catastrophe Files", None),
+                         "Catastrophe Files — ")
+        self.assertEqual(ph.series_prefix("", 3), "")
+
+    def test_recent_titles_are_newest_first(self):
+        history = [_video("old", 50), _video("new", 1)]
+        self.assertEqual(ph.recent_titles(history), ["new", "old"])
+
+
+class TestShortsTitleBudget(unittest.TestCase):
+
+    def setUp(self):
+        import main
+        self.main = main
+
+    def test_series_prefix_and_suffix_fit_inside_youtubes_limit(self):
+        prefix = ph.series_prefix("Catastrophe Files", 128)
+        title = self.main.sanitize_title("A" * 200, prefix)
+        self.assertLessEqual(len(title), 100)
+        self.assertTrue(title.startswith(prefix))
+        self.assertTrue(title.endswith(" #shorts"))
+
+    def test_a_normal_title_survives_intact(self):
+        prefix = ph.series_prefix("Catastrophe Files", 14)
+        body = "The Design Flaw That Destroyed HMS Hood"
+        self.assertEqual(self.main.sanitize_title(body, prefix),
+                         f"{prefix}{body} #shorts")
+
+    def test_the_writer_is_asked_for_a_title_that_actually_fits(self):
+        budget = self.main.title_budget(ph.series_prefix("Catastrophe Files", 14))
+        self.assertGreater(budget, 40)
+        self.assertLessEqual(budget + len("Catastrophe Files #14 — ")
+                             + len(" #shorts"), 100)
+
+    def test_the_description_states_the_series(self):
+        script = {"title": "A Title", "description": "Two sentences.",
+                  "topic": "A topic", "tags": ["x"],
+                  "scenes": [{"narration": "n"}]}
+        _, description, _ = self.main.build_metadata(script, episode=9)
+        self.assertIn("Catastrophe Files #9", description)
+
+
+class TestPlanRunStandsDown(unittest.TestCase):
+    """A run that would publish a second video hours after the first must stop
+    before it spends a single model request."""
+
+    def setUp(self):
+        import main
+        self.main = main
+        self._loader = main.load_published
+
+    def tearDown(self):
+        self.main.load_published = self._loader
+
+    def test_recent_upload_stops_the_run_cleanly(self):
+        self.main.load_published = lambda *a, **k: [
+            _video("The Arrogant Mayor Who Burned London", 1.7)]
+        with self.assertRaises(SystemExit) as caught:
+            self.main.plan_run()
+        # Exit 0, not 1: standing down is the correct outcome, not a failure.
+        self.assertEqual(caught.exception.code, 0)
+
+    def test_no_history_still_produces_a_topic(self):
+        self.main.load_published = lambda *a, **k: None
+        topic, avoid, episode = self.main.plan_run()
+        self.assertTrue(topic)
+        self.assertIsNone(episode)
+
+    def test_a_clear_day_plans_an_unpublished_topic(self):
+        covered = topics.CORE_TOPICS[0]
+        self.main.load_published = lambda *a, **k: [
+            _video("An old one", 200, description=f"x\n\n{covered}\n")]
+        topic, avoid, episode = self.main.plan_run()
+        self.assertNotEqual(topic, covered)
+        self.assertEqual(episode, 1)
+        self.assertEqual(avoid, ["An old one"])
+
+
+class TestWriterAvoidsPublishedTitles(unittest.TestCase):
+
+    def test_title_limit_is_enforced_against_the_caller_s_budget(self):
+        body = ("The written order named no target at all, and the officer who "
+                "carried it across the valley pointed at the wrong guns "
+                "entirely on that cold October morning.")
+        data = {"title": "T" * 70,
+                "scenes": [{"narration": "Six hundred cavalrymen charged the "
+                                         "wrong valley.", "image_prompt": "p"}]
+                          + [{"narration": body, "image_prompt": "p"}
+                             for _ in range(4)]}
+        self.assertTrue(llm_engine._validate(data, title_max=80))
+        self.assertFalse(llm_engine._validate(data, title_max=60))
+
+    def test_a_duplicate_report_from_the_writer_aborts_the_script(self):
+        import inspect
+        src = inspect.getsource(llm_engine.generate_video_script)
+        self.assertIn("ALREADY PUBLISHED ON THIS CHANNEL", src)
+        self.assertIn('data.get("duplicate")',
+                      inspect.getsource(llm_engine.generate_video_script))
+
+
+class TestEncoreLaneCannotRepeatItself(unittest.TestCase):
+    """The most-liked Short does not change week to week, so without this the
+    encore lane remakes the same video every Tuesday."""
+
+    def setUp(self):
+        import channel_insights
+        self.ci = channel_insights
+        self._fetch = channel_insights.fetch_recent_videos
+
+    def tearDown(self):
+        self.ci.fetch_recent_videos = self._fetch
+
+    def test_a_topic_already_covered_in_longform_is_skipped(self):
+        top, second = topics.ALL_TOPICS[0], topics.ALL_TOPICS[1]
+        self.ci.fetch_recent_videos = lambda *a, **k: [
+            _video("Top Short", 100, description=f"x\n\n{top}\n", likes=30),
+            _video("Runner Up", 90, description=f"x\n\n{second}\n", likes=20),
+            _video("The deep dive", 80, duration="PT7M50S",
+                   description=f"x\n\n{top}\n"),
+        ]
+        picked = self.ci.best_performing_topic()
+        self.assertIsNotNone(picked)
+        self.assertEqual(picked[0], second)
+
+    def test_without_a_longform_copy_the_top_short_wins(self):
+        top = topics.ALL_TOPICS[0]
+        self.ci.fetch_recent_videos = lambda *a, **k: [
+            _video("Top Short", 100, description=f"x\n\n{top}\n", likes=30)]
+        self.assertEqual(self.ci.best_performing_topic()[0], top)
+
+
+class TestTrendingLaneStaysOnNiche(unittest.TestCase):
+    """The trend picks the subject; the niche picks which story about it gets
+    told. Both published timely videos failed that second half."""
+
+    def test_a_decision_story_passes(self):
+        self.assertTrue(longform_llm._anchor_fits_niche(
+            "the 1918 decision to scuttle the Zeebrugge blockships in the wrong "
+            "position, which left the canal open"))
+
+    def test_the_swiss_bunker_law_is_rejected(self):
+        self.assertFalse(longform_llm._anchor_fits_niche(
+            "the 1963 Swiss civil protection law requiring a fallout shelter in "
+            "every new house"))
+
+    def test_the_connection_sentence_can_carry_the_niche(self):
+        self.assertTrue(longform_llm._anchor_fits_niche(
+            "the 1415 capture of Ceuta",
+            "Portugal chose to hold a city it could not supply and lost the "
+            "trade route it wanted"))
+
+    def test_the_prompt_names_the_format_and_the_avoid_list(self):
+        import inspect
+        src = inspect.getsource(longform_llm.select_historical_anchor)
+        self.assertIn("THIS CHANNEL'S KIND OF STORY", src)
+        self.assertIn("ALREADY COVERED ON THIS CHANNEL", src)
+
+
+if __name__ == "__main__":
+    unittest.main()

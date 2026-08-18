@@ -80,7 +80,8 @@ cinematic oil painting, visible expressive brushwork, rich texture, muted color 
 palette with one accent color, highly detailed, no text, no watermark"
 
 TITLE RULES (the title is the second filter, after the hook):
-- Under 80 characters, no ALL CAPS words, no clickbait the script does not deliver.
+- No ALL CAPS words, no clickbait the script does not deliver. The user message
+states the hard character limit; it is a ceiling, not a target.
 - Name the CONSEQUENCE, not the event. Titles that perform on this channel follow the \
 shape "the <decision> that <destroyed something>":
   "The Mistake That Killed the Light Brigade", "The Order That Killed Six Hundred", \
@@ -91,7 +92,7 @@ the video can also be found by people looking for that subject.
 
 OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
 {
-  "title": "consequence-first title under 80 chars, one searchable proper noun",
+  "title": "consequence-first title within the stated character limit, one searchable proper noun",
   "description": "2 sentences summarizing the story + 3 relevant hashtags",
   "tags": ["8-12 specific search tags, including the proper nouns from the story"],
   "scenes": [
@@ -304,7 +305,7 @@ def _validate_hook(hook: str) -> bool:
     return True
 
 
-def _validate(data: dict) -> bool:
+def _validate(data: dict, title_max: int = 80) -> bool:
     scenes = data.get("scenes")
     if not isinstance(scenes, list) or not (4 <= len(scenes) <= 6):
         return False
@@ -319,14 +320,26 @@ def _validate(data: dict) -> bool:
         return False
 
     title = (data.get("title") or "").strip()
-    if len(title) > 80:
-        print(f"⚠️ Script rejected: title is {len(title)} chars, needs <= 80.")
+    if len(title) > title_max:
+        print(f"⚠️ Script rejected: title is {len(title)} chars, "
+              f"needs <= {title_max}.")
         return False
     return True
 
 
-def generate_video_script(max_retries_per_model: int = 2):
-    """Generates the daily script. Rotates topic by date, falls through free models."""
+def generate_video_script(topic: str = None, avoid_titles=(),
+                         title_max: int = 80, max_retries_per_model: int = 2):
+    """Generates the daily script.
+
+    `topic` is chosen by the caller now, because choosing it well needs the
+    channel's published history and this module has no business calling the
+    YouTube API. Passing None keeps the old behaviour — the bare date rotation,
+    which is what the fallback path wants.
+
+    `avoid_titles` are the channel's most recent titles. They are shown to the
+    writer so it cannot answer a topic it has already covered with a reworded
+    version of the same title, which is the exact shape the duplicates took.
+    """
     print("🧠 Initializing LLM Engine...")
 
     # Same writer as the long-form lanes: Gemini's free tier when a key is
@@ -335,19 +348,38 @@ def generate_video_script(max_retries_per_model: int = 2):
     pool = get_pool()
     print(f"🤖 Writer: {describe_provider()}")
 
-    topic = pick_topic()
+    if topic is None:
+        topic = pick_topic()
+    if not topic:
+        print("❌ No topic available.")
+        return None
     print(f"📚 Today's topic: {topic}")
+
+    avoid_block = ""
+    recent = [t for t in (avoid_titles or []) if t][:30]
+    if recent:
+        listed = "\n".join(f"- {t}" for t in recent)
+        avoid_block = (
+            "\nALREADY PUBLISHED ON THIS CHANNEL — these stories are used up:\n"
+            f"{listed}\n"
+            "If the story you were given is the same event as any of these, say so "
+            'by returning {"duplicate": true} and nothing else. Otherwise write a '
+            "title that could not be mistaken for one of them.\n"
+        )
 
     user_prompt = (
         f"Write today's YouTube Short script about this specific true story:\n\n{topic}\n\n"
         "Stick to established facts about this event. "
         "Lead with the decision or error that caused the disaster — that is the point "
         "of this channel, not the event in general.\n"
+        f"{avoid_block}"
         "CRITICAL: the total narration across all 5 scenes combined must be "
         "130-150 words. Scripts under 120 words will be rejected.\n"
         "CRITICAL: scene 1 must be at most 12 words, must not begin with setup or a "
         "date, and must contain a number, a name, or a superlative. A scene 1 that "
         "reads as an introduction will be rejected.\n"
+        f"CRITICAL: the title must be at most {title_max} characters, including "
+        "spaces. A longer title will be rejected.\n"
         "Output ONLY the JSON object."
     )
 
@@ -369,7 +401,12 @@ def generate_video_script(max_retries_per_model: int = 2):
                 if not content or not content.strip():
                     raise ValueError("model returned empty content")
                 data = _extract_json(content)
-                if _validate(data):
+                if data.get("duplicate") and not data.get("scenes"):
+                    # The writer recognised the topic as one already published.
+                    # Trust it: the caller's exclusion list missed this one.
+                    print("🚫 Writer reports this story is already published.")
+                    return None
+                if _validate(data, title_max):
                     data["topic"] = topic
                     print(f"✅ Script generated by {response.model}")
                     return data

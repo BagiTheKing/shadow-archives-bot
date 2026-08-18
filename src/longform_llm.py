@@ -534,17 +534,59 @@ def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
     return False
 
 
-def select_historical_anchor(candidates, pool=None):
+# The channel's format, in words a regex can look for. The trending lane is
+# meant to be "hot subject, our kind of story" — the trend picks the SUBJECT,
+# the niche decides WHICH story about it gets told. Without this the lane drifts
+# into general explainer territory, which is how it published "Swiss Civil
+# Protection Law 1963" and "1984 PKK Uprising": both perfectly real history,
+# neither one a catastrophic decision, and both indistinguishable from any other
+# history channel.
+NICHE_MARKERS = (
+    "decision", "decided", "decide", "order", "ordered", "chose", "choice",
+    "refused", "refuse", "ignored", "ignore", "overruled", "rejected",
+    "mistake", "error", "miscalculation", "misjudged", "misread", "blunder",
+    "flaw", "failed", "failure", "collapse", "collapsed", "disaster",
+    "catastrophe", "botched", "underestimated", "backfired", "doomed",
+    "destroyed", "sank", "sunk", "killed", "defeat", "defeated", "lost",
+    "abandoned", "delayed", "wrong", "gamble", "misplaced", "broke", "broken",
+)
+
+
+def _anchor_fits_niche(topic: str, why: str = "") -> bool:
+    """True if the chosen event is a decision-and-consequence story.
+
+    Deliberately checked against the topic sentence rather than the subject: the
+    trending subject is a headline and is allowed to be anything. What has to
+    fit the channel is the story we tell about it.
+    """
+    text = f"{topic} {why}".lower()
+    return any(re.search(rf"\b{m}\b", text) for m in NICHE_MARKERS)
+
+
+def select_historical_anchor(candidates, pool=None, avoid_titles=(),
+                             attempts: int = 2):
     """Maps a trending subject onto a historical event old enough to be settled.
 
     Returns {"subject", "topic", "anchor_year", "why"} or None. None is not a
     failure — the caller falls back to the normal topic rotation, which is
     always preferable to publishing something the guardrail could not clear.
+
+    The trend supplies the subject; the niche supplies the story. An anchor that
+    is merely relevant history is rejected the same way one past the cutoff year
+    is, and re-asked once with the reason, because dropping to the rotation
+    throws away the only reason this lane exists.
     """
     if not candidates:
         return None
 
     pool = pool or get_pool()
+
+    avoid_block = ""
+    recent = [t for t in (avoid_titles or []) if t][:20]
+    if recent:
+        listed = "\n".join(f"- {t}" for t in recent)
+        avoid_block = ("\nALREADY COVERED ON THIS CHANNEL — do not choose an "
+                       f"event any of these is about:\n{listed}\n")
 
     listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
     prompt = (
@@ -568,6 +610,15 @@ def select_historical_anchor(candidates, pool=None):
         f"- The event must have CONCLUDED in {HISTORY_CUTOFF_YEAR} or earlier. "
         "Anything more recent is rejected.\n"
         "- Pick a settled, documented event, not a live dispute.\n"
+        "- THE STORY MUST BE THIS CHANNEL'S KIND OF STORY: one decision, order, "
+        "refusal or miscalculation, and the disaster that followed it. Not a "
+        "law, not a treaty, not a general overview of a conflict, unless the "
+        "point of the video is the choice someone made and what it cost.\n"
+        "  GOOD: 'the 1918 decision to scuttle the Zeebrugge blockships in the "
+        "wrong position, which left the canal open'.\n"
+        "  BAD:  'the 1963 Swiss law requiring a bunker in every house' — real "
+        "history, but nobody decided anything that went wrong.\n"
+        f"{avoid_block}"
         "- Do not take a side, assign blame between present-day states, or "
         "describe current politics. You are choosing a history topic, not "
         "commenting on the news.\n"
@@ -579,38 +630,60 @@ def select_historical_anchor(candidates, pool=None):
         'how this event produced the situation in the headline"}'
     )
 
-    # 3,000 tokens for a four-line JSON object looks absurd, but free reasoning
-    # models spend their ceiling thinking before they emit anything: at 600 this
-    # call truncated on three models in a row on a live run, wasting three
-    # requests from the 50/day budget before a single chapter was written.
-    data = _call(pool,
-                 "You choose historical documentary topics. Output only JSON.",
-                 prompt, max_tokens=3000)
-    if not data or not data.get("topic"):
-        print("⚠️ No usable anchor returned.")
-        return None
+    feedback = ""
+    for attempt in range(1, max(1, attempts) + 1):
+        # 3,000 tokens for a four-line JSON object looks absurd, but free
+        # reasoning models spend their ceiling thinking before they emit
+        # anything: at 600 this call truncated on three models in a row on a
+        # live run, wasting three requests from the 50/day budget before a
+        # single chapter was written.
+        data = _call(pool,
+                     "You choose historical documentary topics. Output only JSON.",
+                     prompt + feedback, max_tokens=3000)
+        if not data or not data.get("topic"):
+            print("⚠️ No usable anchor returned.")
+            return None
 
-    try:
-        year = int(data.get("anchor_year", 9999))
-    except (TypeError, ValueError):
-        year = 9999
+        try:
+            year = int(data.get("anchor_year", 9999))
+        except (TypeError, ValueError):
+            year = 9999
 
-    if year > HISTORY_CUTOFF_YEAR:
-        print(f"⚠️ Anchor rejected: year {year} is later than the "
-              f"{HISTORY_CUTOFF_YEAR} cutoff. ({data.get('topic', '')[:70]})")
-        return None
+        reason = None
+        if year > HISTORY_CUTOFF_YEAR:
+            reason = (f"the event you chose concluded in {year}, later than the "
+                      f"{HISTORY_CUTOFF_YEAR} cutoff")
+            print(f"⚠️ Anchor rejected: year {year} is later than the "
+                  f"{HISTORY_CUTOFF_YEAR} cutoff. ({data.get('topic', '')[:70]})")
+        elif not _anchor_is_relevant(data.get("subject", ""),
+                                     data.get("topic", ""),
+                                     data.get("why", "")):
+            reason = ("the event you chose does not name anyone or anywhere "
+                      "from the headline, so it explains nothing about it")
+            print("⚠️ Anchor rejected: does not name any actor from the trending "
+                  "subject, so it is background about the country rather than an "
+                  "explanation of the story.")
+        elif not _anchor_fits_niche(data.get("topic", ""), data.get("why", "")):
+            reason = ("the event you chose is not a decision-and-consequence "
+                      "story — name the choice someone made and the disaster it "
+                      "caused, not a law, a treaty or a general overview")
+            print(f"⚠️ Anchor rejected: not a catastrophic-decision story. "
+                  f"({data.get('topic', '')[:70]})")
 
-    if not _anchor_is_relevant(data.get("subject", ""), data.get("topic", ""),
-                               data.get("why", "")):
-        print("⚠️ Anchor rejected: does not name any actor from the trending "
-              "subject, so it is background about the country rather than an "
-              "explanation of the story.")
-        return None
+        if not reason:
+            print(f"🧭 Trending subject: {data.get('subject', '?')}")
+            print(f"   Anchored to {year}: {data['topic'][:100]}")
+            return {"subject": data.get("subject", ""), "topic": data["topic"],
+                    "anchor_year": year, "why": data.get("why", "")}
 
-    print(f"🧭 Trending subject: {data.get('subject', '?')}")
-    print(f"   Anchored to {year}: {data['topic'][:100]}")
-    return {"subject": data.get("subject", ""), "topic": data["topic"],
-            "anchor_year": year, "why": data.get("why", "")}
+        if attempt >= attempts:
+            break
+        print("   Re-asking once with the rejection reason.")
+        feedback = (f"\n\nYour previous answer was rejected because {reason}. "
+                    "Choose a different subject from the list if that is what it "
+                    "takes. Output ONLY the JSON object.")
+
+    return None
 
 
 def _chapter_usable(data, enforce_history=False):
@@ -761,6 +834,11 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     if topic is None:
         offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
         topic = pick_topic(offset)
+    if not topic:
+        # pick_topic returns None once the pool is exhausted. Publishing nothing
+        # beats publishing a repeat, which is the whole point of the exclusion.
+        print("❌ No topic available — the pool is exhausted.")
+        return None
     era_year = era_year or _era_from_topic(topic)
     print(f"📚 Deep dive topic: {topic}")
     if era_year:

@@ -4,6 +4,10 @@ import re
 import shutil
 
 from llm_engine import generate_video_script
+from topics import pick_topic
+from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
+                               load_published, next_episode_number,
+                               published_within, recent_titles, series_prefix)
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
 from video_engine import generate_video_pipeline
@@ -16,14 +20,22 @@ def cleanup_build_dir(build_dir="build"):
     os.makedirs(build_dir)
 
 
-def sanitize_title(title: str) -> str:
+SUFFIX = " #shorts"
+
+
+def title_budget(prefix: str = "") -> int:
+    """Characters left for the story title itself. YouTube's ceiling is 100 and
+    both the series prefix and the #shorts suffix are spent out of it."""
+    return 100 - len(SUFFIX) - len(prefix)
+
+
+def sanitize_title(title: str, prefix: str = "") -> str:
     """YouTube: max 100 chars, no angle brackets. Cut on a word boundary."""
     clean = re.sub(r"[<>]", "", title or "").strip()
-    suffix = " #shorts"
-    max_body = 100 - len(suffix)
+    max_body = title_budget(prefix)
     if len(clean) > max_body:
         clean = clean[:max_body].rsplit(" ", 1)[0].rstrip(".,;:")
-    return clean + suffix
+    return prefix + clean + SUFFIX
 
 
 # The channel is "The Archive Paradox". The pipeline used to write "The Shadow
@@ -34,15 +46,21 @@ CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 # Stated in the description so the promise matches what the schedule delivers.
 UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "five days a week")
 
+# The series name and number are the channel's only recurring format. Nothing
+# published so far tells a viewer there is a next one, which is most of why
+# 9,000 views converted 25 subscribers. Set SERIES_NAME="" to publish untitled.
+SERIES_NAME = os.getenv("SERIES_NAME", "Catastrophe Files")
+
 # Broad tags are close to worthless on their own, but they cost nothing and the
 # specific ones from the script are what give the video a chance in search.
 BASE_TAGS = ["history", "shorts", "history shorts", "military history",
              "historical disasters", "engineering failures", "documentary"]
 
 
-def build_metadata(script_data: dict):
+def build_metadata(script_data: dict, episode=None):
+    prefix = series_prefix(SERIES_NAME, episode)
     title = sanitize_title(script_data.get("title")
-                           or script_data["scenes"][0]["narration"])
+                           or script_data["scenes"][0]["narration"], prefix)
 
     description = script_data.get("description", "").strip()
 
@@ -52,6 +70,12 @@ def build_metadata(script_data: dict):
     if topic:
         description += f"\n\n{topic}"
 
+    series_line = ""
+    if SERIES_NAME:
+        numbered = f" #{episode}" if episode else ""
+        series_line = (f"\n\n{SERIES_NAME}{numbered} — every episode is one "
+                       "decision and what it cost.")
+    description += series_line
     description += (
         f"\n\n{CHANNEL_NAME} — one catastrophic decision, explained, {UPLOAD_CADENCE}."
         f"\nSubscribe if you want the next one."
@@ -76,13 +100,65 @@ def build_metadata(script_data: dict):
     return title, description, trimmed
 
 
+def plan_run():
+    """Reads the channel back before writing anything.
+
+    Returns (topic, avoid_titles, episode). Raises SystemExit(0) — a clean stop,
+    not a failure — when another upload already went out inside the guard window,
+    because a second video on the same day is the one thing this channel has
+    proven it must not do again.
+    """
+    history = load_published()
+    print(f"🧾 History: {describe(history)}")
+
+    if history is None:
+        # No memory this run. The rotation still varies by date, so a scheduled
+        # run is fine; what is unavailable is protection against a same-day
+        # re-run. Say so loudly rather than pretending the guard ran.
+        print("⚠️ Duplicate guard INACTIVE — cannot see what is already "
+              "published. Do not trigger this workflow manually today.")
+        return pick_topic(), [], None
+
+    recent = published_within(history)
+    if recent and not FORCE:
+        newest = recent[0]
+        print(f"🛑 {len(recent)} upload(s) in the last {GUARD_HOURS:g}h — "
+              f"most recently {newest.get('title', '')[:70]!r}.")
+        print("   Stopping before generation. Two videos hours apart is what "
+              "produced the duplicate clusters, so this run stands down.")
+        print("   Set FORCE_PUBLISH=1 to override deliberately.")
+        raise SystemExit(0)
+    if recent and FORCE:
+        print(f"⚠️ FORCE_PUBLISH=1 — publishing despite {len(recent)} upload(s) "
+              f"in the last {GUARD_HOURS:g}h.")
+
+    used = covered_topics(history)
+    print(f"📕 {len(used)} pool topic(s) already published — excluded.")
+    topic = pick_topic(exclude=used)
+    episode = next_episode_number(history, SERIES_NAME)
+    return topic, recent_titles(history), episode
+
+
 def main():
     print(f"🚀 Initiating the {CHANNEL_NAME} pipeline...")
     build_dir = "build"
     cleanup_build_dir(build_dir)
 
+    # Phase 0: memory. Everything about what to make depends on what already
+    # exists, so this runs before a single token is spent.
+    topic, avoid_titles, episode = plan_run()
+    if not topic:
+        print("❌ Pipeline halted: every topic in the pool is already published.")
+        print("   Add new entries to CORE_TOPICS in src/topics.py.")
+        raise SystemExit(1)
+    if episode:
+        print(f"🔢 {SERIES_NAME} #{episode}")
+
     # Phase 1: script
-    script_data = generate_video_script()
+    script_data = generate_video_script(
+        topic=topic,
+        avoid_titles=avoid_titles,
+        title_max=min(80, title_budget(series_prefix(SERIES_NAME, episode))))
     if not script_data:
         print("❌ Pipeline halted: script generation failed.")
         raise SystemExit(1)
@@ -105,7 +181,7 @@ def main():
     final_video_path = generate_video_pipeline(script_data, build_dir)
 
     # Phase 4: metadata + upload
-    title, description, tags = build_metadata(script_data)
+    title, description, tags = build_metadata(script_data, episode)
     print(f"📋 Title: {title}")
 
     if os.getenv("SKIP_UPLOAD") == "1":

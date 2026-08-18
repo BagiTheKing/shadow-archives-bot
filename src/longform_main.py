@@ -19,9 +19,17 @@ from longform_visual import generate_longform_visuals
 from longform_video import generate_longform_video, timestamp
 from thumbnail_engine import make_thumbnail, pick_source_scene
 from audio_engine import generate_audio_pipeline
+from published_history import (covered_topics, describe, load_published,
+                               recent_titles)
+from topics import pick_topic
 from youtube_publisher import upload_video_to_youtube
 
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
+
+# Same series as the Shorts, so the two formats read as one channel. It stays
+# out of the long-form TITLE on purpose: these videos are aimed at search, and
+# a prefix pushes the searchable words past where YouTube truncates them.
+SERIES_NAME = os.getenv("SERIES_NAME", "Catastrophe Files")
 BUILD_DIR = "build"
 
 BASE_TAGS = ["history documentary", "disaster documentary", "engineering failure",
@@ -110,9 +118,12 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
     # Only claim a companion Short exists when the topic actually came from one.
     cross_promo = ("\nThe 60-second version of this story is on the channel."
                    if script.get("has_short") else "")
+    series_line = (f"\nThe {SERIES_NAME} series covers one decision and what it "
+                   "cost, in full length here and in 60 seconds on Shorts."
+                   if SERIES_NAME else "")
     parts.append(
         f"{CHANNEL_NAME} — one catastrophic decision, examined in full."
-        f"{cross_promo}\nSubscribe for the next one."
+        f"{cross_promo}{series_line}\nSubscribe for the next one."
     )
 
     scenes = scenes or []
@@ -147,7 +158,7 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
     return title, description, trimmed
 
 
-def resolve_topic(lane: str):
+def resolve_topic(lane: str, history=None):
     """Chooses this run's topic.
     Returns (topic, enforce_history, from_short, era_year).
 
@@ -162,25 +173,35 @@ def resolve_topic(lane: str):
 
     Both lanes fall back to the date rotation, which always works offline. A
     failed insight or a dead trend feed must cost the run its *choice* of topic,
-    never the video itself.
+    never the video itself. The fallback now skips anything already covered in
+    long form, so a fallback week cannot quietly remake last week's video.
     """
+    covered = covered_topics(history, longform_only=True) if history else set()
+    if covered:
+        print(f"📕 {len(covered)} topic(s) already covered in long form.")
+
+    def fallback():
+        offset = int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7"))
+        return pick_topic(offset, exclude=covered)
+
     if lane == "encore":
         # Expand whichever Short actually earned the most likes.
         try:
             from channel_insights import best_performing_topic
-            picked = best_performing_topic()
+            picked = best_performing_topic(exclude=covered)
             if picked:
                 return picked[0], False, True, None
         except Exception as e:
             print(f"⚠️ Encore selection failed ({type(e).__name__}: {e}).")
         print("↩️  Falling back to the date rotation.")
-        return None, False, False, None
+        return fallback(), False, False, None
 
     if lane == "timely":
         try:
             from trend_source import get_trending_subjects
             region, candidates = get_trending_subjects()
-            anchor = select_historical_anchor(candidates)
+            anchor = select_historical_anchor(
+                candidates, avoid_titles=recent_titles(history, 20))
             if anchor:
                 return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
@@ -190,9 +211,9 @@ def resolve_topic(lane: str):
         except Exception as e:
             print(f"⚠️ Trending selection failed ({type(e).__name__}: {e}).")
         print("↩️  No anchor cleared the history rule — using the date rotation.")
-        return None, False, False, None
+        return fallback(), False, False, None
 
-    return None, False, False, None
+    return fallback(), False, False, None
 
 
 def main():
@@ -204,8 +225,15 @@ def main():
     # selection is itself an LLM call, so it can hit the wall first — it did, and
     # the handler used to sit below it, letting the exception escape as a raw
     # traceback instead of the explanation it exists to print.
+    history = load_published()
+    print(f"🧾 History: {describe(history)}")
+
     try:
-        topic, enforce_history, from_short, era_year = resolve_topic(lane)
+        topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
+        if not topic:
+            print("❌ Halted: every topic in the pool is already published. "
+                  "Add new entries to CORE_TOPICS in src/topics.py.")
+            raise SystemExit(1)
         script = generate_longform_script(topic=topic,
                                           enforce_history=enforce_history,
                                           era_year=era_year)

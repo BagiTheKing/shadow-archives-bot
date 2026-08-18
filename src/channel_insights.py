@@ -41,9 +41,56 @@ def _stem(word):
     return word
 
 
+# The channel's title formula, plus spoken numbers. These words are rare enough
+# in the pool that rarity-weighting alone still trusts them, but they carry no
+# information about WHICH story a title is: every title on the channel is "The
+# <error> That <destroyed> <something>", and every topic entry describes a
+# decision and a disaster. Matching on them produced real mistakes — "The Math
+# Error That Starved Air Canada Flight 143" matched Ariane 5 on the word
+# "flight", and "The Order That Killed Six Hundred" matched the Sultana on
+# "six". Stemmed forms, because that is what the tokeniser emits.
+FORMULA_WORDS = {
+    "design", "destroy", "kill", "order", "mistake", "error", "decision",
+    "decid", "flaw", "machine", "flight", "disaster", "failur", "fail",
+    "wrong", "cost", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "hundred", "thousand", "million",
+}
+
+
 def _tokens(text):
-    return {_stem(w) for w in re.findall(r"[a-z]+", (text or "").lower())
-            if len(w) > 2 and w not in STOPWORDS}
+    return {t for t in
+            (_stem(w) for w in re.findall(r"[a-z]+", (text or "").lower())
+             if len(w) > 2 and w not in STOPWORDS)
+            if t not in FORMULA_WORDS}
+
+
+# How many pool topics each token appears in. Every title on this channel is
+# built from the same formula — "The <design flaw> That <destroyed> <thing>" —
+# so words like "design", "destroyed" and "killed" are in most titles AND most
+# topics, and matching on them is matching on nothing. Weighting each shared
+# token by how rare it is in the pool fixes that: "hood" and "ariane" decide the
+# match, "destroyed" barely moves it.
+#
+# The bug this replaces was real and silent: "The Design Flaw That Destroyed HMS
+# Hood" matched the Tacoma Narrows Bridge (shared: design, destroyed) ahead of
+# the HMS Hood entry (shared: hms, hood), so the Hood topic stayed unexcluded
+# and was free to come round again as a duplicate.
+_DOC_FREQ = {}
+for _topic in ALL_TOPICS:
+    for _t in {_stem(w) for w in re.findall(r"[a-z]+", _topic.lower())
+               if len(w) > 2 and w not in STOPWORDS}:
+        _DOC_FREQ[_t] = _DOC_FREQ.get(_t, 0) + 1
+
+
+def _weight(token):
+    """A token found in one topic is worth a full point; one found in twenty is
+    worth a twentieth."""
+    return 1.0 / _DOC_FREQ.get(token, 1)
+
+
+# A single distinctive word ("Ariane", "Hood", "Slocum") is enough. Two
+# formula words are not: "design" and "destroyed" together score around 0.2.
+MATCH_FLOOR = 0.55
 
 
 def match_topic(title: str, description: str = ""):
@@ -69,16 +116,13 @@ def match_topic(title: str, description: str = ""):
         have = _tokens(topic)
         if not have:
             continue
-        overlap = len(want & have)
+        overlap = want & have
         if not overlap:
             continue
-        # Normalised against the title, so a long topic entry is not favoured
-        # purely for containing more words.
-        score = overlap / max(3, len(want)) + overlap * 0.05
+        score = sum(_weight(t) for t in overlap)
         if score > best_score:
             best, best_score = topic, score
-    # Two solid content words in common is the floor for a confident match.
-    return best if best_score >= 0.34 else None
+    return best if best_score >= MATCH_FLOOR else None
 
 
 def fetch_recent_videos(limit=50):
@@ -117,6 +161,8 @@ def fetch_recent_videos(limit=50):
                     # given one, so the reliable path was dead code and every
                     # match fell through to fuzzy title overlap.
                     "description": v["snippet"].get("description", ""),
+                    # Read by published_history's same-day duplicate guard.
+                    "publishedAt": v["snippet"].get("publishedAt", ""),
                     "likes": int(stats.get("likeCount", 0) or 0),
                     "views": int(stats.get("viewCount", 0) or 0),
                     "duration": v["contentDetails"].get("duration", ""),
@@ -149,15 +195,29 @@ def _is_short(duration_iso: str) -> bool:
     return mins * 60 + secs <= 180
 
 
-def best_performing_topic(min_likes=2):
+def best_performing_topic(min_likes=2, exclude=None):
     """The topic behind the most-liked Short. Returns (topic, meta) or None.
 
     Walks candidates in order, so if the top video's title cannot be matched
     back to a pool entry, the next one is tried rather than giving up.
+
+    Anything the long-form side has already covered is skipped. Without that the
+    lane is a repeat generator by construction: the most-liked Short does not
+    change from week to week, so every run would expand the same story again.
+    `exclude` adds to the topics read off the channel's own long-form uploads.
     """
     videos = fetch_recent_videos()
     if not videos:
         return None
+
+    already = set(exclude or ())
+    for v in videos:
+        if not _is_short(v["duration"]):
+            done = match_topic(v["title"], v.get("description", ""))
+            if done:
+                already.add(done)
+    if already:
+        print(f"🚫 {len(already)} topic(s) already covered in long form — skipping.")
 
     shorts = [v for v in videos if _is_short(v["duration"])]
     ranked = sorted(shorts, key=lambda v: (-v["likes"], -v["views"]))
@@ -169,11 +229,15 @@ def best_performing_topic(min_likes=2):
         if v["likes"] < min_likes:
             break
         topic = match_topic(v["title"], v.get("description", ""))
-        if topic:
-            print(f"🏆 Encore pick: {v['title'][:70]!r} ({v['likes']} likes)")
-            print(f"   -> {topic[:100]}")
-            return topic, v
-        print(f"   (no topic match for {v['title'][:50]!r}, trying next)")
+        if not topic:
+            print(f"   (no topic match for {v['title'][:50]!r}, trying next)")
+            continue
+        if topic in already:
+            print(f"   (already covered in long form: {v['title'][:50]!r})")
+            continue
+        print(f"🏆 Encore pick: {v['title'][:70]!r} ({v['likes']} likes)")
+        print(f"   -> {topic[:100]}")
+        return topic, v
 
-    print("⚠️ No most-liked Short could be matched to a topic.")
+    print("⚠️ No most-liked Short could be matched to an uncovered topic.")
     return None

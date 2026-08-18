@@ -39,10 +39,24 @@ that fits "one mistake, one catastrophe" in CORE_TOPICS.
 """
 
 import datetime
+import os
 
-# One experiment topic every N slots. 7 keeps the channel ~86% on-niche while
-# still testing new ground roughly once a week. Set to 0 to go pure core.
-EXPERIMENT_EVERY = 7
+# One experiment topic every N slots. Set to 0 to publish nothing but the core
+# niche, which is the default now.
+#
+# WHY THE DEFAULT IS 0 (August 2026)
+# ----------------------------------
+# The channel is running two identities at once and the algorithm cannot profile
+# it. Thirty days of nothing but catastrophe-decision stories is the cheapest way
+# to find out whether a single identity performs better than a split one.
+#
+# Honest caveat, because the numbers do not fully support switching the lane off
+# permanently: the single most-liked video on the channel is an experiment topic
+# (the Antikythera Mechanism, 588 views / 32 likes — more likes than any
+# catastrophe Short). The experiment lane has a worse average, not a worse
+# ceiling. So this is a deliberate 30-day test, not a verdict, and restoring it
+# is one line: set EXPERIMENT_EVERY=7 in the workflow env.
+EXPERIMENT_EVERY = int(os.getenv("EXPERIMENT_EVERY", "0"))
 
 CORE_TOPICS = [
     # --- Orders and decisions that destroyed armies ---
@@ -75,7 +89,7 @@ CORE_TOPICS = [
     "The Johnstown Flood (1889), the dam a private club lowered and modified until it failed and killed 2,209 people downstream",
     "The Ariane 5 Flight 501 explosion (1996), destroyed 39 seconds after launch by reused software converting a number into a variable too small to hold it",
     "The Mars Climate Orbiter (1999), lost because one team worked in pound-force and the other in newtons",
-    "The Gimli Glider (1983), the airliner that ran out of fuel at 41,000 feet after a conversion between pounds and kilograms",
+    "The Gimli Glider (1983), Air Canada Flight 143, the airliner that ran out of fuel at 41,000 feet after a conversion between pounds and kilograms",
     "The Tenerife airport disaster (1977), the deadliest crash in aviation history, caused by an ambiguous radio exchange in fog",
     "The sinking of HMS Hood (1941), the battlecruiser lost in about three minutes with 1,415 men and three survivors",
     "The loss of the Kursk (2000), the submarine sunk by its own torpedo propellant leaking in the tube",
@@ -155,15 +169,8 @@ PUBLISHED_TOPICS = [
 ALL_TOPICS = CORE_TOPICS + EXPERIMENT_TOPICS + PUBLISHED_TOPICS
 
 
-def pick_topic(offset: int = 0) -> str:
-    """Deterministically rotates by date so every run gets a different topic.
-
-    Six slots out of seven come from CORE_TOPICS (the proven niche); the seventh
-    is an experiment. Both pools advance independently, so neither repeats until
-    it has been fully consumed.
-    """
-    slot = datetime.date.today().toordinal() + offset
-
+def _topic_for_slot(slot: int) -> str:
+    """The pool entry a given rotation slot maps to."""
     if EXPERIMENT_EVERY and slot % EXPERIMENT_EVERY == 0 and EXPERIMENT_TOPICS:
         return EXPERIMENT_TOPICS[(slot // EXPERIMENT_EVERY) % len(EXPERIMENT_TOPICS)]
 
@@ -173,10 +180,38 @@ def pick_topic(offset: int = 0) -> str:
     return CORE_TOPICS[core_slot % len(CORE_TOPICS)]
 
 
+def pick_topic(offset: int = 0, exclude=()) -> str:
+    """The topic for today's slot, skipping anything already published.
+
+    The date rotation alone is not memory. Two runs on the same day — a manual
+    trigger and the scheduled one — land on the same slot and therefore the same
+    subject, which is exactly how the channel ended up with four Light Brigade
+    Shorts, two Ariane 5s and two Great Fires. `exclude` is what published_history
+    reads back off the channel, and it is what makes a re-run safe.
+
+    Returns None when every topic in the pool has already been published. That is
+    deliberate: publishing nothing is better than publishing a duplicate, and the
+    caller halts with a message asking for new topics.
+    """
+    exclude = {e.strip() for e in exclude if isinstance(e, str) and e.strip()}
+    slot = datetime.date.today().toordinal() + offset
+
+    for step in range(len(CORE_TOPICS) + len(EXPERIMENT_TOPICS) + 1):
+        topic = _topic_for_slot(slot + step)
+        if topic not in exclude:
+            if step:
+                print(f"↪️  Skipped {step} already-published topic(s) "
+                      f"in the rotation.")
+            return topic
+
+    print("❌ Every topic in the pool has already been published.")
+    return None
+
+
 if __name__ == "__main__":
     # Preview the next three weeks of scheduling.
     for i in range(21):
         day = datetime.date.today() + datetime.timedelta(days=i)
         slot = day.toordinal()
         tag = "EXP " if EXPERIMENT_EVERY and slot % EXPERIMENT_EVERY == 0 else "core"
-        print(f"{day} [{tag}] {pick_topic(i)[:88]}")
+        print(f"{day} [{tag}] {(pick_topic(i) or '(pool exhausted)')[:88]}")

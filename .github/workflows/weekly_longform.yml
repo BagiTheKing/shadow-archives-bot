@@ -79,11 +79,17 @@ jobs:
           # real b-roll clips between the stills. Absent, the pipeline simply
           # uses no stock video — nothing fails.
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          # Deliberately NOT public for the first runs. This pipeline has never
-          # executed in CI, and an eight-minute video is a much bigger thing to
-          # get wrong in public than a 45-second Short. Watch one render, then
-          # change this to 'public' — the Shorts workflow shipped the same way.
-          PRIVACY_STATUS: unlisted
+          # PUBLIC since 2026-08-18. Every long-form video before this date was
+          # published unlisted, which is why seven of them total ~90 views: they
+          # were never visible to anyone who did not have the link. Nothing about
+          # the content was the problem. Keep this 'public'.
+          PRIVACY_STATUS: public
+          # Named in the description so both formats read as one
+          # channel. Not put in the long-form title on purpose —
+          # these videos live on search, and a prefix pushes the
+          # searchable words past where YouTube truncates them.
+          SERIES_NAME: Catastrophe Files
+          EXPERIMENT_EVERY: '0'
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           LONGFORM_LANE: encore
           LONGFORM_TOPIC_OFFSET: ${{ inputs.topic_offset || '-7' }}
