@@ -112,14 +112,18 @@ def next_episode_number(videos, series_name: str):
     """
     if videos is None or not series_name:
         return None
-    pattern = re.compile(rf"{re.escape(series_name)}\s*#(\d+)", re.IGNORECASE)
+    # Every form the channel has published under: "#14" for the first fifty,
+    # "No. 14" from here on. The count must not restart when the form changes.
+    pattern = re.compile(
+        rf"{re.escape(series_name)}\s*(?:#|No\.?\s*|Episode\s*)(\d+)",
+        re.IGNORECASE)
     numbers = [int(m.group(1)) for v in videos
                for m in [pattern.search(v.get("title", "") or "")] if m]
     return max(numbers) + 1 if numbers else 1
 
 
 def series_suffix(series_name: str, number) -> str:
-    """` — Catastrophe Files #14`, or an unnumbered suffix, or nothing.
+    """` — Catastrophe Files No. 14`, or an unnumbered suffix, or nothing.
 
     A named, numbered series is still the cheapest subscribe reason there is —
     that part of the diagnosis stands. What was wrong was where it sat.
@@ -135,10 +139,15 @@ def series_suffix(series_name: str, number) -> str:
     story gets the space that decides the click. next_episode_number searches
     the whole title rather than anchoring, so the numbering carries across the
     change without a gap.
+
+    "No. 14" rather than "#14" because YouTube reads a "#" anywhere in a title
+    or description as a hashtag, and the first three it finds are rendered above
+    the video as its category. An episode number is not a category, and it was
+    arriving ahead of the three the channel actually chose.
     """
     if not series_name:
         return ""
-    return f" — {series_name} #{number}" if number else f" — {series_name}"
+    return f" — {series_name} No. {number}" if number else f" — {series_name}"
 
 
 def describe(videos) -> str:

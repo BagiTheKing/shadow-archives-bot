@@ -1163,7 +1163,7 @@ class TestSeriesIdentity(unittest.TestCase):
 
     def test_suffix_forms(self):
         self.assertEqual(ph.series_suffix("Catastrophe Files", 3),
-                         " — Catastrophe Files #3")
+                         " — Catastrophe Files No. 3")
         self.assertEqual(ph.series_suffix("Catastrophe Files", None),
                          " — Catastrophe Files")
         self.assertEqual(ph.series_suffix("", 3), "")
@@ -1171,7 +1171,7 @@ class TestSeriesIdentity(unittest.TestCase):
     def test_numbering_survives_the_move_from_prefix_to_suffix(self):
         """The first fifty titles carry the marker in front and everything
         after carries it at the end. The count must not restart at 1."""
-        history = [_video("The Bolt That Sank Her — Catastrophe Files #51", 2),
+        history = [_video("The Bolt That Sank Her — Catastrophe Files No. 51", 2),
                    _video("Catastrophe Files #50 — An Older One #shorts", 40)]
         self.assertEqual(ph.next_episode_number(history, "Catastrophe Files"), 52)
 
@@ -1211,15 +1211,24 @@ class TestShortsTitleBudget(unittest.TestCase):
     def test_the_writer_is_asked_for_a_title_that_actually_fits(self):
         budget = self.main.title_budget(ph.series_suffix("Catastrophe Files", 14))
         self.assertGreater(budget, 40)
-        self.assertLessEqual(budget + len(" — Catastrophe Files #14")
+        self.assertLessEqual(budget + len(" — Catastrophe Files No. 14")
                              + len(" #shorts"), 100)
+
+    def test_the_episode_number_is_not_a_hashtag(self):
+        """YouTube reads any '#' in a title or description as a hashtag and
+        renders the first three above the video. '#14' was arriving ahead of
+        the three the channel chose."""
+        title = self.main.sanitize_title(
+            "A Story", ph.series_suffix("Catastrophe Files", 14))
+        self.assertIn("No. 14", title)
+        self.assertNotIn("#14", title)
 
     def test_the_description_states_the_series(self):
         script = {"title": "A Title", "description": "Two sentences.",
                   "topic": "A topic", "tags": ["x"],
                   "scenes": [{"narration": "n"}]}
         _, description, _ = self.main.build_metadata(script, episode=9)
-        self.assertIn("Catastrophe Files #9", description)
+        self.assertIn("Catastrophe Files No. 9", description)
 
 
 class TestPlanRunStandsDown(unittest.TestCase):
@@ -2603,6 +2612,75 @@ class TestTheScoreChangesWithTheStory(unittest.TestCase):
     def test_a_video_with_no_pivot_gets_one_act(self):
         self.assertEqual(
             len(longform_video.plan_score(self.MARKS, None, 350.0, 6)), 1)
+
+class TestSearchMetadata(unittest.TestCase):
+    """BASE_TAGS went onto every upload, so a DESIGN story about an airliner
+    was tagged 'military history' and an ORDER story about a cavalry charge was
+    tagged 'engineering failures'."""
+
+    def _tags(self, fmt):
+        script = {"title": "A Title", "description": "Two sentences.",
+                  "topic": "A topic", "tags": ["specific term"], "format": fmt,
+                  "scenes": [{"narration": "n"}]}
+        return main.build_metadata(script, episode=1)[2]
+
+    def test_base_tags_carry_no_format_signal(self):
+        for tag in main.BASE_TAGS + longform_main.BASE_TAGS:
+            self.assertNotIn("military", tag.lower())
+            self.assertNotIn("engineering", tag.lower())
+
+    def test_a_design_episode_is_not_tagged_military(self):
+        self.assertNotIn("military history", self._tags("design"))
+        self.assertIn("engineering failure", self._tags("design"))
+
+    def test_an_order_episode_is_not_tagged_engineering(self):
+        self.assertNotIn("engineering failure", self._tags("order"))
+        self.assertIn("military history", self._tags("order"))
+
+    def test_the_scripts_own_terms_come_first(self):
+        """Tags are weighted by order, and the specific ones are the only
+        reason a small channel appears in search at all."""
+        self.assertEqual(self._tags("order")[0], "specific term")
+
+    def test_tags_stay_inside_youtubes_limit(self):
+        script = {"title": "A Title", "description": "d", "topic": "t",
+                  "format": "order", "tags": ["x" * 60] * 15,
+                  "scenes": [{"narration": "n"}]}
+        tags = main.build_metadata(script, episode=1)[2]
+        self.assertLessEqual(sum(len(t) + 1 for t in tags), 500)
+
+
+class TestDescriptionHashtags(unittest.TestCase):
+    """YouTube counts the first three hashtags found anywhere and renders them
+    above the title, so a writer sprinkling its own picked the category."""
+
+    def _description(self, fmt, body):
+        script = {"title": "A Title", "description": body, "topic": "A topic",
+                  "tags": ["x"], "format": fmt, "scenes": [{"narration": "n"}]}
+        return main.build_metadata(script, episode=1)[1]
+
+    def test_the_writers_hashtags_are_stripped_from_the_body(self):
+        d = self._description("design", "A jetliner glided. #history #aviation")
+        self.assertNotIn("#aviation", d)
+        self.assertIn("A jetliner glided.", d)
+
+    def test_exactly_three_hashtags_are_written(self):
+        d = self._description("design", "No tags here.")
+        self.assertEqual(d.count("#"), 3)
+
+    def test_the_format_picks_them(self):
+        self.assertIn("#engineering", self._description("design", "x"))
+        self.assertIn("#mystery", self._description("unsolved", "x"))
+        self.assertIn("#militaryhistory", self._description("order", "x"))
+
+    def test_shorts_keeps_its_placement_tag_first(self):
+        d = self._description("order", "x").strip()
+        self.assertTrue(d.split("\n")[-1].startswith("#shorts"))
+
+    def test_stripping_leaves_ordinary_text_alone(self):
+        self.assertEqual(main._strip_hashtags("A sentence, and another."),
+                         "A sentence, and another.")
+        self.assertEqual(main._strip_hashtags(""), "")
 
 
 if __name__ == "__main__":

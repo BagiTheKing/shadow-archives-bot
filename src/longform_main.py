@@ -43,8 +43,11 @@ PLAYLIST_DESCRIPTION = (
     "Every episode is a real event, a real choice, and what it cost."
 )
 
-BASE_TAGS = ["history documentary", "disaster documentary", "engineering failure",
-             "history explained", "what went wrong", "military history"]
+# Format-NEUTRAL only — formats.tags_of supplies "military history" and
+# "engineering failure" to the episodes those actually describe. Leaving them
+# here put both on every video regardless of what it was about.
+BASE_TAGS = ["history documentary", "disaster documentary",
+             "history explained", "what went wrong"]
 
 # YouTube only renders chapters when the first mark is 00:00, there are at least
 # three of them, and each is at least ten seconds long.

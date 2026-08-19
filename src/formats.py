@@ -41,6 +41,10 @@ FORMATS = {
             "Never end on a moral."),
         "tags": ["military history", "military blunders", "history documentary",
                  "command decisions"],
+        # The three that render above the title. Chosen per format because
+        # YouTube counts the first three hashtags anywhere in the description
+        # and shows them as the video's visible category.
+        "hashtags": ["#history", "#militaryhistory", "#disaster"],
     },
     "design": {
         "name": "THE DESIGN",
@@ -56,6 +60,7 @@ FORMATS = {
             "The object is the antagonist."),
         "tags": ["engineering failure", "engineering disasters",
                  "structural failure", "how it failed"],
+        "hashtags": ["#engineering", "#disaster", "#history"],
     },
     "unsolved": {
         "name": "THE UNSOLVED",
@@ -70,6 +75,7 @@ FORMATS = {
             "here. End on the open question, not on an answer you invented."),
         "tags": ["unsolved mysteries", "historical mysteries", "archaeology",
                  "unexplained"],
+        "hashtags": ["#unsolved", "#mystery", "#history"],
     },
 }
 
@@ -96,3 +102,10 @@ def brief_of(key: str) -> str:
 
 def tags_of(key: str) -> list:
     return list(get(key)["tags"])
+
+
+def hashtags_of(key: str) -> list:
+    """The three that render above the title. YouTube counts the first three
+    hashtags found anywhere in the description, so they are worth choosing
+    rather than letting the writer scatter its own through the text."""
+    return list(get(key)["hashtags"])

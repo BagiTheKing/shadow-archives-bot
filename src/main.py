@@ -71,8 +71,25 @@ PLAYLIST_DESCRIPTION = (
 
 # Broad tags are close to worthless on their own, but they cost nothing and the
 # specific ones from the script are what give the video a chance in search.
-BASE_TAGS = ["history", "shorts", "history shorts", "military history",
-             "historical disasters", "engineering failures", "documentary"]
+#
+# Format-NEUTRAL only. "military history" and "engineering failures" used to sit
+# here and went onto every upload, so a DESIGN story about an airliner was
+# tagged military and an ORDER story about a cavalry charge was tagged
+# engineering. formats.tags_of supplies those now, correctly, per episode.
+BASE_TAGS = ["history", "shorts", "history shorts", "historical disasters",
+             "documentary"]
+
+
+def _strip_hashtags(text: str) -> str:
+    """Removes the writer's own hashtags from the description body.
+
+    YouTube counts the first three hashtags it finds ANYWHERE and renders them
+    above the title, so a writer that sprinkles its own decides the video's
+    visible category by accident. The channel picks them instead, once, at the
+    bottom — see formats.hashtags_of.
+    """
+    cleaned = re.sub(r"(?:^|\s)#[\w]+", " ", text or "")
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
 
 
 def build_metadata(script_data: dict, episode=None):
@@ -80,7 +97,7 @@ def build_metadata(script_data: dict, episode=None):
     title = sanitize_title(script_data.get("title")
                            or script_data["scenes"][0]["narration"], series)
 
-    description = script_data.get("description", "").strip()
+    description = _strip_hashtags(script_data.get("description", ""))
 
     # Restating the subject in plain words gives the description something
     # indexable — right now 96% of views come from the Shorts feed alone.
@@ -90,16 +107,21 @@ def build_metadata(script_data: dict, episode=None):
 
     series_line = ""
     if SERIES_NAME:
-        numbered = f" #{episode}" if episode else ""
+        numbered = f" No. {episode}" if episode else ""
         fmt = formats.get(script_data.get("format"))
         series_line = (f"\n\n{SERIES_NAME}{numbered} · {fmt['name']} — "
                        f"{fmt['promise']}.")
     description += series_line
+    # Exactly three: #shorts earns the format placement, and the two most
+    # valuable from the episode format fill the rest. A fourth would never
+    # render, so it is not written.
+    tags_line = " ".join(
+        ["#shorts"] + formats.hashtags_of(script_data.get("format"))[:2])
     description += (
         f"\n\n{CHANNEL_NAME} — one catastrophic decision, explained, {UPLOAD_CADENCE}."
         f"\nSubscribe if you want the next one."
         "\n\nNote: visuals in this video are AI-generated illustrations of real"
-        " historical events.\n#shorts #history #disaster"
+        f" historical events.\n{tags_line}"
     )
 
     tags = script_data.get("tags") or []
