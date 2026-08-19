@@ -341,16 +341,43 @@ def _shot_durations(duration: float, n: int, overlap: float = INNER_XFADE):
     return [each] * n
 
 
+# ---------------------------------------------------------------------------
+# Why every clip runs XFADE longer than its narration
+#
+# The picture dissolves between scenes; the narration must not. Those are two
+# different requirements and they used to be served by one number: the clips
+# overlapped by XFADE and BOTH streams were crossfaded across that overlap.
+#
+# That only ever worked by accident. edge-tts leaves about a fifth of a second
+# of silence at each end of every clip, so the overlap was mostly silence
+# meeting silence and nobody heard the seam. The moment the dead-air trim
+# removed that padding, the same crossfade started mixing the last half second
+# of one sentence into the first half second of the next — two voices at once,
+# forty-five times in six minutes. It sounds exactly like what it is: a badly
+# cut edit.
+#
+# So the two are now separate. Each clip carries XFADE seconds of extra picture
+# and XFADE seconds of silence after its narration ends. The video still
+# dissolves across that overlap. The audio does not cross-fade at all: each
+# scene's speech is laid down at the exact moment the previous scene's speech
+# ended, and what overlaps the incoming line is the outgoing clip's silence.
+# Speech is continuous and untouched; only the image dissolves.
+# ---------------------------------------------------------------------------
+
 def _scene_clip(scene, out, style):
-    """One scene -> one clip. Three shapes:
+    """One scene -> one clip, XFADE longer than its narration. Three shapes:
     - video_path: real muted b-roll, cover-cropped, looped to the narration.
     - one image: classic Ken Burns.
     - several images: Ken Burns per shot, crossfaded inside the scene, so a
       long narration segment no longer means a frozen frame."""
     audio, duration = scene["audio_path"], scene["duration"]
-    tail = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+    clip_len = duration + XFADE
+    # The picture runs on past the last word; the audio is padded to match so
+    # the muxed clip has one length and the dissolve has something to dissolve.
+    tail = ["-af", f"apad=pad_dur={XFADE:.3f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
             "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
-            "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out]
+            "-pix_fmt", "yuv420p", "-t", f"{clip_len:.3f}", out]
 
     if scene.get("video_path"):
         vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
@@ -363,10 +390,10 @@ def _scene_clip(scene, out, style):
     if len(images) == 1:
         _run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS),
               "-i", images[0], "-i", audio,
-              "-vf", _ken_burns(duration, style), *tail])
+              "-vf", _ken_burns(clip_len, style), *tail])
         return
 
-    durs = _shot_durations(duration, len(images))
+    durs = _shot_durations(clip_len, len(images))
     inputs = []
     for img, d in zip(images, durs):
         inputs += ["-loop", "1", "-framerate", str(FPS),
@@ -387,9 +414,20 @@ def _scene_clip(scene, out, style):
 
 
 def _xfade_chapter(clips, durations, out, cut_index=0):
-    """Crossfades one chapter's clips, rotating transition style per cut.
-    cut_index continues across chapters so the pattern does not restart every
-    chapter. Returns (within-chapter offsets, total)."""
+    """Assembles one chapter. The picture crossfades, the narration does not.
+
+    `durations` are clip lengths, each already XFADE longer than its narration
+    (see _scene_clip). So consecutive clips overlap by exactly XFADE, and a
+    scene's speech begins the instant the previous scene's speech ended.
+
+    The video is crossfaded, rotating transition style per cut; cut_index
+    continues across chapters so the pattern does not restart every chapter.
+    The audio is NOT crossfaded — each clip's track is delayed to its own start
+    and the tracks are summed. What overlaps an incoming line is the outgoing
+    clip's trailing silence, so nothing is ever mixed into speech.
+
+    Returns (within-chapter offsets, total).
+    """
     if len(clips) == 1:
         os.replace(clips[0], out)
         return [0.0], durations[0]
@@ -402,16 +440,23 @@ def _xfade_chapter(clips, durations, out, cut_index=0):
         t += durations[i] - XFADE
         offsets.append(t)
 
-    fc, vprev, aprev = [], "[0:v]", "[0:a]"
     n = len(clips)
+    fc, vprev = [], "[0:v]"
     for i in range(1, n):
         vout = f"[v{i}]" if i < n - 1 else "[vout]"
-        aout = f"[a{i}]" if i < n - 1 else "[aout]"
         trans = TRANSITIONS[(cut_index + i - 1) % len(TRANSITIONS)]
         fc.append(f"{vprev}[{i}:v]xfade=transition={trans}:duration={XFADE}"
                   f":offset={offsets[i]:.3f}{vout}")
-        fc.append(f"{aprev}[{i}:a]acrossfade=d={XFADE}{aout}")
-        vprev, aprev = vout, aout
+        vprev = vout
+
+    # Summed, not cross-faded. adelay places each track at the exact moment its
+    # narration is due; normalize=0 keeps the level of a lone speaking track
+    # untouched instead of dividing it by the number of inputs.
+    for i, offset in enumerate(offsets):
+        ms = int(round(offset * 1000))
+        fc.append(f"[{i}:a]adelay={ms}|{ms}[d{i}]")
+    fc.append("".join(f"[d{i}]" for i in range(n)) +
+              f"amix=inputs={n}:duration=longest:normalize=0[aout]")
 
     _run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),
           "-map", "[vout]", "-map", "[aout]",
@@ -420,13 +465,111 @@ def _xfade_chapter(clips, durations, out, cut_index=0):
     return offsets, sum(durations) - XFADE * (n - 1)
 
 
-def _pick_music():
+def _music_tracks():
+    """Every usable track in the music directory, in a stable order."""
     if not os.path.isdir(MUSIC_DIR):
+        return []
+    return [os.path.join(MUSIC_DIR, f) for f in sorted(os.listdir(MUSIC_DIR))
+            if f.lower().endswith((".mp3", ".wav", ".m4a", ".ogg"))]
+
+
+def _pick_music():
+    tracks = _music_tracks()
+    return tracks[random.randrange(len(tracks))] if tracks else None
+
+
+# How long one track takes to become the next. Long enough to read as a
+# transition rather than a skip, short enough not to muddy both.
+SCORE_CROSSFADE = 2.5
+
+# An act needs to be long enough that changing the music is an event rather
+# than a fidget. Below this the acts are merged into their neighbour.
+MIN_ACT_SECONDS = 45.0
+
+
+def plan_score(chapter_starts, pivot_start, total: float, track_count: int):
+    """Which track plays when, as [(track_index, start, end), ...].
+
+    Three acts, not six: a change every chapter is restless, and the two
+    boundaries worth scoring are the ones the arc already has — the midpoint,
+    where the story turns, and the cost, where it stops being about a decision
+    and starts being about the people who paid for it. A viewer does not need
+    to be told these are different; they need to hear it.
+    """
+    if track_count < 1 or total <= 0:
+        return []
+    if track_count == 1:
+        return [(0, 0.0, total)]
+
+    # Act boundaries: the midpoint, then the chapter two along from it.
+    marks = []
+    if pivot_start and 0 < pivot_start < total:
+        marks.append(pivot_start)
+        later = [c for c in (chapter_starts or []) if c > pivot_start + 1.0]
+        if len(later) >= 2:
+            marks.append(later[1])
+        elif later:
+            marks.append(later[0])
+
+    bounds = [0.0] + sorted(marks) + [total]
+    # Drop any act too short to be worth a track of its own.
+    merged = [bounds[0]]
+    for edge in bounds[1:]:
+        if edge - merged[-1] < MIN_ACT_SECONDS and edge != bounds[-1]:
+            continue
+        merged.append(edge)
+    if len(merged) > 2 and merged[-1] - merged[-2] < MIN_ACT_SECONDS:
+        del merged[-2]
+
+    return [(i % track_count, merged[i], merged[i + 1])
+            for i in range(len(merged) - 1)]
+
+
+def build_score(acts, tracks, total: float, out: str):
+    """Renders the acts into one continuous bed, crossfading at each change.
+
+    Returns the path, or None — a failure here costs the video its music, not
+    the run, and a silent bed beats no video.
+    """
+    if not acts or not tracks:
         return None
-    tracks = [f for f in os.listdir(MUSIC_DIR)
-              if f.lower().endswith((".mp3", ".wav", ".m4a", ".ogg"))]
-    return os.path.join(MUSIC_DIR, sorted(tracks)[random.randrange(len(tracks))]) \
-        if tracks else None
+    try:
+        n = len(acts)
+        if n == 1:
+            index, start, end = acts[0]
+            _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                  "-stream_loop", "-1", "-i", tracks[index],
+                  "-t", f"{total:.3f}", "-c:a", "pcm_s16le",
+                  "-ar", "44100", "-ac", "2", out])
+            return out
+
+        # acrossfade eats SCORE_CROSSFADE seconds per join, so each segment is
+        # rendered that much longer and the sum still lands on `total`.
+        inputs, names = [], []
+        for i, (index, start, end) in enumerate(acts):
+            length = (end - start) + (SCORE_CROSSFADE if i < n - 1 else 0.0)
+            inputs += ["-stream_loop", "-1", "-t", f"{length:.3f}",
+                       "-i", tracks[index]]
+            names.append(f"[{i}:a]")
+
+        fc, prev = [], names[0]
+        for i in range(1, n):
+            label = f"[x{i}]" if i < n - 1 else "[out]"
+            fc.append(f"{prev}{names[i]}acrossfade=d={SCORE_CROSSFADE}"
+                      f":c1=tri:c2=tri{label}")
+            prev = label
+        _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *inputs,
+              "-filter_complex", ";".join(fc), "-map", "[out]",
+              "-t", f"{total:.3f}", "-c:a", "pcm_s16le",
+              "-ar", "44100", "-ac", "2", out])
+        listing = ", ".join(os.path.basename(tracks[i]).rsplit(" - ", 1)[0]
+                            for i, _, _ in acts)
+        print(f"🎼 Score in {n} act(s): {listing}")
+        return out
+    except Exception as e:
+        print(f"⚠️ Score assembly failed ({type(e).__name__}: {e}) — "
+              f"falling back to a single track.")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -443,11 +586,15 @@ def _pick_music():
 # files to license, no downloads to fail in CI, no repository bloat:
 #
 #   an impact   a short low hit under each number callout, so the figure lands
-#   a riser     a rising tone into each chapter card, so the change is heard
-#               a beat before it is read
 #
-# And the bed itself now moves: it ducks into the midpoint, comes back up
-# under it, lifts under each chapter card, and swells for the closing lines.
+# A riser under each chapter card was tried and cut: on the first published
+# video it read as a swoosh under sliding text, which is the one thing this
+# channel's voice cannot carry. The generator still knows how to make one —
+# _sfx_sources takes "riser" — but nothing asks for it any more.
+#
+# And the score itself now moves. Not just in level: the TRACK changes at the
+# midpoint and again at the cost, so the reset a viewer hears is a different
+# piece of music rather than the same loop at a different volume.
 # ---------------------------------------------------------------------------
 
 # Held low on purpose. These are punctuation, not effects — the moment a viewer
@@ -597,8 +744,8 @@ def generate_longform_video(scenes, build_dir="build"):
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
         offs, total = _xfade_chapter([g["_clip"] for g in group],
-                                     [g["duration"] for g in group], reel,
-                                     cut_index=cuts)
+                                     [g["duration"] + XFADE for g in group],
+                                     reel, cut_index=cuts)
         cuts += max(0, len(group) - 1)
         heading = group[0].get("chapter_heading", f"Part {c_idx + 1}")
         chapter_marks.append((heading, cursor))
@@ -671,24 +818,38 @@ def generate_longform_video(scenes, build_dir="build"):
           f"fade=t=in:st=0:d=0.8,"
           f"fade=t=out:st={max(total_duration - 1.0, 0):.2f}:d=1.0")
 
-    # Sound design: a hit under every number callout, a riser into every
-    # chapter card. Rendered to one track so the mix below stays a three-input
-    # graph however many cues there are.
+    # Rendered to one track so the mix below stays a three-input graph however
+    # many cues there are.
+    # Number callouts only. There was a riser under every chapter card too; the
+    # channel owner's verdict on the first published cut was that a swoosh under
+    # sliding text reads as silly, and he is right — it is the one piece of
+    # sound design that announces itself, on a channel whose whole voice is
+    # that it does not. The impacts stay: they sit under a figure, they are
+    # felt rather than heard, and nothing was wrong with them.
     sfx_cues = [("impact", start) for start, _, _ in stat_cues]
-    sfx_cues += [("riser", max(0.0, cue[0] - 0.55)) for cue in chapter_titles]
     sfx = build_sfx_bed(sfx_cues, total_duration,
                         os.path.join(build_dir, "lf_sfx.wav"))
 
     inputs, mix_parts, mix_labels = ["-i", merged], [], ["[0:a]"]
 
-    music = _pick_music()
-    if music:
-        print(f"🎵 Bed: {os.path.basename(music)}")
+    # The score. Three acts with a different track each, changing at the
+    # midpoint and again at the cost chapter, so the reset a viewer hears is a
+    # new piece of music rather than the same loop at a different volume.
+    tracks = _music_tracks()
+    acts = plan_score([m[1] for m in chapter_marks], pivot_start,
+                      total_duration, len(tracks))
+    score = build_score(acts, tracks, total_duration,
+                        os.path.join(build_dir, "lf_score.wav")) if acts else None
+    if score is None:
+        score = _pick_music()
+        if score:
+            print(f"🎵 Bed: {os.path.basename(score)}")
+
+    if score:
         idx = len(inputs) // 2
-        inputs += ["-i", music]
-        # The bed is no longer a fixed 10%. It ducks into the midpoint, comes
-        # back over the top of it, lifts under each chapter card, and swells
-        # for the closing lines — see music_envelope.
+        inputs += ["-i", score]
+        # Level still moves inside an act: it ducks into the midpoint and
+        # swells for the closing lines — see music_envelope.
         envelope = music_envelope(card_starts, pivot_start, total_duration)
         mix_parts.append(
             f"[{idx}:a]aloop=loop=-1:size=2e9,atrim=0:{total_duration:.3f},"

@@ -2505,5 +2505,105 @@ class TestOneProviderRunningDryDoesNotEndTheRun(unittest.TestCase):
         self.assertIn("remaining = _usable_models(pool.models)", quota_branch)
 
 
+class TestNarrationIsNeverMixedIntoNarration(unittest.TestCase):
+    """The first published cut of this work had two voices at once for 0.36s
+    at every one of its 45 seams. The dead-air trim removed the TTS padding
+    that had been absorbing the 0.5s audio crossfade, so the crossfade started
+    mixing the end of each sentence into the start of the next."""
+
+    def test_the_audio_is_summed_not_crossfaded(self):
+        src = inspect.getsource(longform_video._xfade_chapter)
+        self.assertNotIn("acrossfade", src)
+        self.assertIn("adelay", src)
+        self.assertIn("amix", src)
+
+    def test_the_picture_still_crossfades(self):
+        src = inspect.getsource(longform_video._xfade_chapter)
+        self.assertIn("xfade=transition=", src)
+
+    def test_a_clip_runs_longer_than_its_narration(self):
+        """The overlap the dissolve needs has to be silence, so every clip
+        carries XFADE seconds of extra picture and extra quiet."""
+        src = inspect.getsource(longform_video._scene_clip)
+        self.assertIn("clip_len = duration + XFADE", src)
+        self.assertIn("apad", src)
+
+    def test_the_assembler_is_given_those_longer_lengths(self):
+        src = inspect.getsource(longform_video.generate_longform_video)
+        self.assertIn('g["duration"] + XFADE', src)
+
+    def test_summing_keeps_a_lone_speaking_track_at_its_own_level(self):
+        """normalize=1 would divide every line by the number of scenes in the
+        chapter, so an 11-scene chapter would be inaudible."""
+        src = inspect.getsource(longform_video._xfade_chapter)
+        self.assertIn("normalize=0", src)
+
+
+class TestTheChapterCardIsSilent(unittest.TestCase):
+    """Owner's verdict on the first published cut: a swoosh under sliding text
+    reads as silly. It was the only sound design that announced itself."""
+
+    def test_no_riser_is_scheduled(self):
+        src = inspect.getsource(longform_video.generate_longform_video)
+        cue_line = [l for l in src.splitlines() if "sfx_cues" in l]
+        self.assertTrue(cue_line)
+        self.assertFalse(any("riser" in l for l in cue_line))
+
+    def test_number_callouts_still_get_their_impact(self):
+        src = inspect.getsource(longform_video.generate_longform_video)
+        self.assertIn('("impact", start)', src)
+
+
+class TestTheScoreChangesWithTheStory(unittest.TestCase):
+    """One bed looped for six minutes, at one level. The midpoint reset was a
+    volume move on the same music a viewer had already heard twice."""
+
+    MARKS = [0.0, 25.0, 111.0, 180.0, 250.0, 300.0]
+
+    def test_the_track_changes_at_the_midpoint(self):
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 6)
+        starts = [start for _, start, _ in acts]
+        self.assertIn(111.0, starts)
+
+    def test_three_acts_not_six(self):
+        """A change every chapter is restless; the arc has two boundaries
+        worth scoring."""
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 6)
+        self.assertEqual(len(acts), 3)
+
+    def test_consecutive_acts_use_different_tracks(self):
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 6)
+        for a, b in zip(acts, acts[1:]):
+            self.assertNotEqual(a[0], b[0])
+
+    def test_the_acts_cover_the_whole_video_without_gaps(self):
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 6)
+        self.assertEqual(acts[0][1], 0.0)
+        self.assertAlmostEqual(acts[-1][2], 350.0)
+        for a, b in zip(acts, acts[1:]):
+            self.assertEqual(a[2], b[1])
+
+    def test_a_single_track_library_still_scores_the_video(self):
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 1)
+        self.assertEqual(acts, [(0, 0.0, 350.0)])
+
+    def test_an_empty_music_directory_is_not_an_error(self):
+        self.assertEqual(longform_video.plan_score(self.MARKS, 111.0, 350.0, 0), [])
+
+    def test_a_short_video_is_not_chopped_into_stubs(self):
+        """Changing the music twice inside ninety seconds is a fidget."""
+        acts = longform_video.plan_score([0.0, 30.0, 60.0], 30.0, 80.0, 6)
+        self.assertEqual(len(acts), 1)
+
+    def test_every_act_is_long_enough_to_be_worth_a_track(self):
+        acts = longform_video.plan_score(self.MARKS, 111.0, 350.0, 6)
+        for _, start, end in acts:
+            self.assertGreaterEqual(end - start, longform_video.MIN_ACT_SECONDS)
+
+    def test_a_video_with_no_pivot_gets_one_act(self):
+        self.assertEqual(
+            len(longform_video.plan_score(self.MARKS, None, 350.0, 6)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
