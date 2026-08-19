@@ -35,6 +35,16 @@ concurrency:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    # This was the only workflow with no ceiling, so a hung run inherited
+    # GitHub's 6-hour default. On 2026-08-19 two runs had to be killed by hand
+    # at 79 and 77 minutes — 157 minutes for nothing, against a 2,000/month
+    # budget on a private repo.
+    #
+    # 50, not 30. Across all 68 runs to date the slowest SUCCESSFUL publish was
+    # 41.7 min and the median was 13.1, so a 30-minute cap would have thrown
+    # away two videos that did finish. 50 clears the worst good run with room
+    # to spare and still turns a hang into 50 wasted minutes instead of 360.
+    timeout-minutes: 50
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4

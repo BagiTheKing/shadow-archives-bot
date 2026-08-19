@@ -11,6 +11,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Pushing three times in a minute used to leave three full test runs going. The
+# older ones are testing code nobody will ship, so cancel them and keep only the
+# newest per branch. Keyed on ref, so branches never cancel each other.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
