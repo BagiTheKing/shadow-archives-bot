@@ -167,16 +167,27 @@ def _ken_burns_filter(duration: float, style: int) -> str:
 
 
 def create_scene_clip(image_path, audio_path, duration, output_path, style):
-    vf = _ken_burns_filter(duration, style)
+    """One scene, rendered XFADE seconds longer than its narration.
+
+    The extra tail is silence, and it exists so the picture has something to
+    dissolve across that is not speech. Consecutive clips overlap by exactly
+    XFADE: the video crossfades over that overlap, the audio does not, and the
+    narration of one scene therefore never plays under the narration of the
+    next. That overlap was audible on every published Short — "Two thousand
+    died because a harbour had..." still fading while the next line started.
+    """
+    clip_len = duration + XFADE
+    vf = _ken_burns_filter(clip_len, style)
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1", "-framerate", str(FPS), "-i", image_path,
         "-i", audio_path,
         "-vf", vf,
+        "-af", f"apad=pad_dur={XFADE:.3f}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
         "-pix_fmt", "yuv420p",
-        "-t", f"{duration:.3f}",
+        "-t", f"{clip_len:.3f}",
         output_path,
     ]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
@@ -214,24 +225,41 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     if n == 1:
         os.replace(clips[0], merged)
         offsets = [0.0]
-        total = durations[0]
+        # The clip carries the same XFADE of padded silence as any other, so
+        # the length has to account for it or the end card lands early.
+        total = durations[0] + XFADE
     else:
         inputs = []
         for c in clips:
             inputs += ["-i", c]
+
+        # Each clip is XFADE longer than its narration, so consecutive clips
+        # overlap by exactly XFADE and scene i starts when scene i-1 stopped
+        # speaking. offsets are therefore the cumulative narration lengths —
+        # which is also exactly where each scene's captions belong.
         fc, offsets, t = [], [0.0], 0.0
         for i in range(n - 1):
-            t += durations[i] - XFADE
+            t += durations[i]
             offsets.append(t)
-        vprev, aprev = "[0:v]", "[0:a]"
+
+        vprev = "[0:v]"
         for i in range(1, n):
             vout = f"[v{i}]" if i < n - 1 else "[vout]"
-            aout = f"[a{i}]" if i < n - 1 else "[aout]"
             fc.append(f"{vprev}[{i}:v]xfade=transition=fade:duration={XFADE}"
                       f":offset={offsets[i]:.3f}{vout}")
-            fc.append(f"{aprev}[{i}:a]acrossfade=d={XFADE}{aout}")
-            vprev, aprev = vout, aout
-        total = sum(durations) - XFADE * (n - 1)
+            vprev = vout
+
+        # Summed, not cross-faded. Each track is delayed to the moment its own
+        # scene begins, so the tails overlap only with the following scene's
+        # padded silence. acrossfade here was mixing the end of one sentence
+        # into the start of the next, which is what made the edit sound broken.
+        for i in range(n):
+            ms = int(round(offsets[i] * 1000))
+            fc.append(f"[{i}:a]adelay={ms}|{ms}[d{i}]")
+        fc.append("".join(f"[d{i}]" for i in range(n))
+                  + f"amix=inputs={n}:duration=longest:normalize=0[aout]")
+
+        total = sum(durations) + XFADE
         cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),
                "-map", "[vout]", "-map", "[aout]",
                "-c:v", "libx264", "-preset", "medium", "-crf", "20",

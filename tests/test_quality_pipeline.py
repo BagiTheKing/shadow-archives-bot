@@ -2683,5 +2683,106 @@ class TestDescriptionHashtags(unittest.TestCase):
         self.assertEqual(main._strip_hashtags(""), "")
 
 
+class TestNarrationDoesNotOverlap(unittest.TestCase):
+    """Reported from a published Short: "line B comes while A is fading".
+    acrossfade was mixing the tail of one sentence into the head of the next.
+    The long-form engine was fixed for this; the Shorts engine was not."""
+
+    @staticmethod
+    def _code(fn):
+        """Source with comments stripped — the narration crossfade is named in
+        a comment explaining its removal, and that must not read as its use."""
+        import inspect
+        return "\n".join(line.split("#")[0]
+                         for line in inspect.getsource(fn).split("\n"))
+
+    def test_the_audio_is_summed_not_crossfaded(self):
+        code = self._code(video_engine.generate_video_pipeline)
+        self.assertNotIn("acrossfade", code)
+        self.assertIn("adelay", code)
+        self.assertIn("amix", code)
+
+    def test_each_clip_carries_a_silent_tail_to_dissolve_across(self):
+        import inspect
+        src = inspect.getsource(video_engine.create_scene_clip)
+        self.assertIn("apad", src)
+        self.assertIn("duration + XFADE", src)
+
+    def test_scene_offsets_are_the_cumulative_narration(self):
+        """With clips XFADE longer and overlapping by XFADE, scene i begins
+        exactly when scene i-1 stopped speaking — which is also where its
+        captions and transcript cues belong."""
+        import inspect
+        src = inspect.getsource(video_engine.generate_video_pipeline)
+        self.assertIn("t += durations[i]", src)
+        self.assertNotIn("t += durations[i] - XFADE", src)
+
+    def test_total_duration_accounts_for_the_tail(self):
+        import inspect
+        src = inspect.getsource(video_engine.generate_video_pipeline)
+        self.assertIn("total = sum(durations) + XFADE", src)
+
+
+class TestVisualQualityGate(unittest.TestCase):
+    """On 19 August the day's third run found Cloudflare's free allocation
+    spent, rendered all five frames on the fallback, and published anyway."""
+
+    def setUp(self):
+        os.environ["CF_ACCOUNT_ID"] = "test"
+        os.environ["CF_API_TOKEN"] = "test"
+        os.environ.pop("MIN_PREFERRED_FRAMES", None)
+
+    def tearDown(self):
+        os.environ.pop("CF_ACCOUNT_ID", None)
+        os.environ.pop("CF_API_TOKEN", None)
+
+    def _check(self, sources):
+        main.check_visual_quality(
+            {"scenes": [{"image_source": s} for s in sources]})
+
+    def test_an_all_fallback_video_is_not_published(self):
+        with self.assertRaises(SystemExit):
+            self._check(["pollinations/flux"] * 5)
+
+    def test_a_mostly_fallback_video_is_not_published(self):
+        with self.assertRaises(SystemExit):
+            self._check(["workers-ai"] + ["pollinations/flux"] * 4)
+
+    def test_a_single_rescued_frame_is_fine(self):
+        self._check(["workers-ai"] * 4 + ["pollinations/flux"])
+
+    def test_a_clean_run_passes(self):
+        self._check(["workers-ai"] * 5)
+
+    def test_the_floor_is_a_share_not_a_count(self):
+        """Scripts have four to six scenes; a fixed count would gate them
+        differently for no reason."""
+        self._check(["workers-ai"] * 3 + ["pollinations/flux"])   # 4 scenes
+        self._check(["workers-ai"] * 4 + ["pollinations/flux"] * 2)  # 6 scenes
+
+    def test_no_cloudflare_key_means_no_gate(self):
+        """Without credentials Pollinations IS the intended generator, and
+        gating would refuse to publish at all."""
+        os.environ.pop("CF_ACCOUNT_ID", None)
+        os.environ.pop("CF_API_TOKEN", None)
+        self._check(["pollinations/flux"] * 5)
+
+    def test_the_gate_can_be_overridden(self):
+        import importlib
+        os.environ["MIN_PREFERRED_FRAMES"] = "0"
+        try:
+            importlib.reload(main)
+            main.check_visual_quality(
+                {"scenes": [{"image_source": "pollinations/flux"}] * 5})
+        finally:
+            os.environ.pop("MIN_PREFERRED_FRAMES", None)
+            importlib.reload(main)
+
+    def test_the_generator_is_recorded_on_every_frame(self):
+        import inspect
+        src = inspect.getsource(visual_engine.generate_visual_pipeline)
+        self.assertIn("image_source", src)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -224,6 +224,50 @@ def build_thumbnail(script_data: dict, build_dir: str):
         return None
 
 
+# The look of this channel is FLUX-1-schnell on Workers AI. Pollinations serves
+# the same prompt from a shared free endpoint and the result is visibly worse —
+# which is fine as a rescue for one frame and not fine as the whole video.
+#
+# On 19 August the day's third manual run found Cloudflare's 10,000-neuron free
+# allocation already spent by the two scheduled runs, quietly rendered all five
+# frames on the fallback, and published. Nothing in the log said the video was
+# below standard, because nothing was checking.
+#
+# The floor is a share of frames, not a count, so it holds however many scenes a
+# script has. Set MIN_PREFERRED_FRAMES=0 to publish anyway.
+MIN_PREFERRED_FRAMES = float(os.getenv("MIN_PREFERRED_FRAMES", "0.6"))
+
+
+def check_visual_quality(script_data: dict) -> None:
+    """Halts before upload when the frames did not come from the good generator.
+
+    Only applies when Workers AI is actually configured. With no Cloudflare
+    credentials Pollinations IS the intended generator, and refusing to publish
+    would be refusing to publish at all.
+    """
+    from visual_engine import cloudflare_available
+    if not cloudflare_available() or MIN_PREFERRED_FRAMES <= 0:
+        return
+
+    scenes = script_data.get("scenes") or []
+    if not scenes:
+        return
+    preferred = sum(1 for s in scenes if s.get("image_source") == "workers-ai")
+    share = preferred / len(scenes)
+    if share >= MIN_PREFERRED_FRAMES:
+        return
+
+    print(f"\n❌ Halted: only {preferred}/{len(scenes)} frames came from Workers "
+          f"AI (floor is {MIN_PREFERRED_FRAMES:.0%}).")
+    print("   Cloudflare's free allocation is 10,000 neurons a day and resets at "
+          "00:00 UTC. Three runs of five frames is roughly all of it, so a manual "
+          "run stacked on the day's scheduled one will land here.")
+    print("   Publishing this would put a visibly worse video on the channel "
+          "under the same title and thumbnail as a good one.")
+    print("   Wait for the reset, or set MIN_PREFERRED_FRAMES=0 to publish anyway.")
+    raise SystemExit(1)
+
+
 def plan_run():
     """Reads the channel back before writing anything.
 
@@ -311,6 +355,10 @@ def main():
     if len(usable) < 3:
         print("❌ Pipeline halted: fewer than 3 usable scenes.")
         raise SystemExit(1)
+
+    # Before spending the render, not after: a video nobody should publish is
+    # not worth eight minutes of Actions time either.
+    check_visual_quality(script_data)
 
     # Phase 3: render
     final_video_path = generate_video_pipeline(script_data, build_dir)

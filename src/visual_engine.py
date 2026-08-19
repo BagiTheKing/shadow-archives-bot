@@ -284,7 +284,7 @@ def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RET
                 img = Image.open(io.BytesIO(blob)).convert("RGB")
                 _fit_cover(img, width, height).save(output_path, "JPEG",
                                                     quality=93)
-                return True
+                return "workers-ai"
             if cf_attempt == 0:
                 time.sleep(4)
         print("   ↩️ Workers AI unavailable — using Pollinations for this frame.")
@@ -325,7 +325,7 @@ def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RET
                 if (img.width, img.height) != (width, height):
                     img = img.resize((width, height), Image.LANCZOS)
                 img.save(output_path, "JPEG", quality=92)
-                return True
+                return f"pollinations/{label}"
             if response.status_code == 429:
                 wait = 15 * attempt
                 print(f"⚠️ Rate limited. Waiting {wait}s (attempt {attempt}/{max_retries})...")
@@ -336,7 +336,7 @@ def download_image(prompt: str, output_path: str, max_retries: int = GEN_MAX_RET
         except Exception as e:
             print(f"⚠️ Network error: {e}. Retrying in 8s...")
             time.sleep(8)
-    return False
+    return ""
 
 
 def make_fallback_image(output_path: str, seed: int = 0,
@@ -385,15 +385,27 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
         prompt = scene.get("image_prompt", "dark atmospheric historical scene, cinematic")
 
         print(f"🖼️ Generating image for scene {idx}...")
-        if download_image(prompt, image_path, era_year=era_year):
-            print(f"📸 Saved {image_path}")
+        source = download_image(prompt, image_path, era_year=era_year)
+        if source:
+            print(f"📸 Saved {image_path} [{source}]")
         else:
             print(f"⚠️ Scene {idx}: all attempts failed — using designed fallback frame.")
             make_fallback_image(image_path, seed=idx)
+            source = "designed-fallback"
         scene["image_path"] = image_path
+        # Which generator drew this frame. main.py gates the upload on it: the
+        # look of the channel depends on WHICH model rendered the prompt, not
+        # merely on whether a frame came back.
+        scene["image_source"] = source
 
         if idx < len(scenes) - 1:
             time.sleep(6)  # stay under Pollinations' anonymous rate limit
+
+    sources = [s.get("image_source", "") for s in scenes]
+    preferred = sum(1 for s in sources if s == "workers-ai")
+    if scenes and preferred < len(scenes):
+        print(f"🎨 {preferred}/{len(scenes)} frames from Workers AI; the rest: "
+              f"{', '.join(sorted(set(s for s in sources if s != 'workers-ai')))}")
 
     print("✅ Visual pipeline complete.")
     return script_data
