@@ -540,7 +540,8 @@ def generate_video_script(topic: str = None, avoid_titles=(),
 
     # Same writer as the long-form lanes: Gemini's free tier when a key is
     # present, OpenRouter's free models otherwise.
-    from llm_provider import get_pool, describe_provider
+    from llm_provider import (get_pool, describe_provider,
+                              permanent_failure)
     pool = get_pool()
     print(f"🤖 Writer: {describe_provider()}")
 
@@ -619,6 +620,13 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     return data
                 print("⚠️ Script failed validation, retrying...")
             except Exception as e:
+                reason = permanent_failure(e)
+                if reason:
+                    # Asking again in two seconds gets the same refusal. Move
+                    # to the next model instead of spending a second call and
+                    # a sleep on a settled answer.
+                    print(f"⏭️  {model} unavailable: {reason} — skipping.")
+                    break
                 print(f"⚠️ {model} failed: {e}")
                 time.sleep(15 if "429" in str(e) else 2)
 

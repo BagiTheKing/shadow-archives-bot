@@ -2836,5 +2836,58 @@ class TestVisualQualityGate(unittest.TestCase):
         self.assertIn("image_source", src)
 
 
+class TestPermanentFailuresAreNotRetried(unittest.TestCase):
+    """From a live run: three Groq models returned 404 'does not exist or you
+    do not have access', and two Cerebras models returned 402. Every one was
+    asked twice. The second ask could only ever get the same answer."""
+
+    class _Err(Exception):
+        def __init__(self, msg, status=None):
+            super().__init__(msg)
+            if status is not None:
+                self.status_code = status
+
+    def test_a_404_from_the_catalogue_is_permanent(self):
+        exc = self._Err("Error code: 404 - {'error': {'message': 'The model "
+                        "`compound` does not exist or you do not have access "
+                        "to it.', 'code': 'model_not_found'}}")
+        self.assertTrue(llm_provider.permanent_failure(exc))
+
+    def test_a_402_is_permanent(self):
+        exc = self._Err("Error code: 402 - {'message': 'Payment required to "
+                        "access this resource. Visit your billing tab.'}")
+        self.assertTrue(llm_provider.permanent_failure(exc))
+
+    def test_a_429_is_not(self):
+        """The opposite case: it says come back later, and the chain does."""
+        exc = self._Err("Error code: 429 - quota exceeded, please retry in 59s")
+        self.assertFalse(llm_provider.permanent_failure(exc))
+
+    def test_a_server_error_is_not(self):
+        self.assertFalse(llm_provider.permanent_failure(
+            self._Err("Error code: 500 - internal server error")))
+
+    def test_a_parse_failure_is_not(self):
+        """A truncated JSON reply is worth asking again — it is the model
+        having a bad moment, not the provider refusing."""
+        self.assertFalse(llm_provider.permanent_failure(
+            ValueError("Unterminated string starting at: line 8 column 5")))
+
+    def test_the_sdk_status_code_is_used_when_present(self):
+        self.assertTrue(llm_provider.permanent_failure(
+            self._Err("not found", status=404)))
+
+    def test_the_reason_is_stated_not_just_flagged(self):
+        exc = self._Err("Error code: 402 - payment required")
+        self.assertIn("credit", llm_provider.permanent_failure(exc))
+
+    def test_the_writer_breaks_out_rather_than_retrying(self):
+        import inspect
+        src = inspect.getsource(llm_engine.generate_video_script)
+        self.assertIn("permanent_failure", src)
+        # The skip must jump to the next MODEL, not merely skip one sleep.
+        self.assertRegex(src, r"if reason:[\s\S]{0,400}?break")
+
+
 if __name__ == "__main__":
     unittest.main()

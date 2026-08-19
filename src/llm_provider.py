@@ -52,6 +52,7 @@ Get keys — all free, none need a card:
 """
 
 import os
+import re
 
 from openai import OpenAI
 
@@ -283,6 +284,32 @@ def anthropic_client():
         print(f"⚠️ Could not start the Anthropic client "
               f"({type(e).__name__}: {e}) — skipping the paid tier.")
         return None
+
+
+# Statuses that will answer exactly the same way a second later, so a retry buys
+# nothing but a wasted call and a sleep. A 429 is deliberately NOT here: that one
+# means come back later, and coming back later is what the chain is for.
+#
+# 404 is the common case and the surprising one. Model names are discovered from
+# each provider's own GET /models, so a 404 is the provider listing a model in
+# its catalogue and then refusing to serve it to this key — 'compound',
+# 'gpt-oss-20b' and 'qwen3.6-27b' all did exactly that in one live run, and each
+# was asked twice.
+PERMANENT_STATUSES = {
+    401: "key rejected",
+    402: "provider out of credit",
+    403: "key not entitled to this model",
+    404: "listed in the catalogue but not callable with this key",
+}
+
+
+def permanent_failure(exc) -> str:
+    """Why this model cannot work today, or "" when a retry is worth it."""
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        match = re.search(r"Error code:\s*(\d{3})", str(exc))
+        status = int(match.group(1)) if match else None
+    return PERMANENT_STATUSES.get(status, "")
 
 
 class ModelPool:
