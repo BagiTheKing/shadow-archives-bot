@@ -191,13 +191,31 @@ def build_first_comment(script_data: dict) -> str:
     return question
 
 
+# Whether to draw and upload a custom thumbnail for Shorts.
+#
+# OFF, on evidence. The pipeline drew one, thumbnails().set returned success,
+# the log said "Custom thumbnail set for OX4z93EMmAA" — and the Short still
+# shows a frame from the video. A 200 from that endpoint means the bytes were
+# accepted and stored, not that anything renders them: Shorts surfaces take
+# their poster from the video itself, and the Data API has no way to change it.
+#
+# So this spent 50 quota units and a render step per upload to produce a log
+# line that was not true. The drawing code is untouched and still used by the
+# long-form pipeline, where custom thumbnails do work and are most of what
+# earns the click in search. Set SHORTS_THUMBNAIL=1 if YouTube changes this.
+SHORTS_THUMBNAIL = os.getenv("SHORTS_THUMBNAIL", "0") == "1"
+
+
 def build_thumbnail(script_data: dict, build_dir: str):
     """Draws the 16:9 thumbnail for a Short, or returns None.
 
     Never raises: a thumbnail is worth having and not worth losing a finished
-    video over. YouTube falls back to an auto-selected frame, which is what
-    every Short on the channel has now.
+    video over.
     """
+    if not SHORTS_THUMBNAIL:
+        print("🖼️  Shorts thumbnail skipped — YouTube renders a video frame "
+              "for Shorts regardless. Set SHORTS_THUMBNAIL=1 to override.")
+        return None
     try:
         source = pick_source_scene(script_data.get("scenes") or [])
         if not source:

@@ -1589,19 +1589,71 @@ class TestShortsThumbnailText(unittest.TestCase):
     def test_the_writer_is_actually_asked_for_the_field(self):
         self.assertIn("thumbnail_text", llm_engine.SYSTEM_PROMPT)
 
-    def test_the_shorts_pipeline_draws_and_uploads_one(self):
+    def test_the_shorts_pipeline_still_wires_the_thumbnail_path(self):
         import inspect
         src = inspect.getsource(main.main)
         self.assertIn("build_thumbnail", src)
         self.assertIn("thumbnail_path", src)
 
     def test_thumbnail_failure_never_costs_the_video(self):
+        """Exercised with the feature forced on, so this keeps testing the
+        drawing path rather than passing because Shorts thumbnails are off."""
+        import importlib
+        os.environ["SHORTS_THUMBNAIL"] = "1"
+        try:
+            importlib.reload(main)
+            with tempfile.TemporaryDirectory() as tmp:
+                broken = os.path.join(tmp, "not_an_image.jpg")
+                open(broken, "w").write("nope")
+                self.assertIsNone(main.build_thumbnail(
+                    {"scenes": [{"image_path": broken}], "title": "A Title"}, tmp))
+        finally:
+            os.environ.pop("SHORTS_THUMBNAIL", None)
+            importlib.reload(main)
+
+
+class TestShortsThumbnailIsOff(unittest.TestCase):
+    """The pipeline drew one, thumbnails().set returned 200, the log said
+    "Custom thumbnail set" — and the Short still showed a video frame. Shorts
+    take their poster from the video, and the Data API cannot change it."""
+
+    def test_no_thumbnail_is_drawn_for_a_short_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
-            # A scene pointing at a file that is not an image.
-            broken = os.path.join(tmp, "not_an_image.jpg")
-            open(broken, "w").write("nope")
+            src = os.path.join(tmp, "s.jpg")
+            Image.new("RGB", (1080, 1920), (20, 20, 30)).save(src)
             self.assertIsNone(main.build_thumbnail(
-                {"scenes": [{"image_path": broken}], "title": "A Title"}, tmp))
+                {"scenes": [{"image_path": src}], "title": "A Title",
+                 "thumbnail_text": "THREE WORDS", "format": "order"}, tmp))
+
+    def test_it_can_be_switched_back_on(self):
+        import importlib
+        os.environ["SHORTS_THUMBNAIL"] = "1"
+        try:
+            importlib.reload(main)
+            with tempfile.TemporaryDirectory() as tmp:
+                src = os.path.join(tmp, "s.jpg")
+                Image.new("RGB", (1080, 1920), (20, 20, 30)).save(src)
+                path = main.build_thumbnail(
+                    {"scenes": [{"image_path": src}], "title": "A Title",
+                     "thumbnail_text": "THREE WORDS", "format": "order"}, tmp)
+                self.assertTrue(path and os.path.getsize(path) > 0)
+        finally:
+            os.environ.pop("SHORTS_THUMBNAIL", None)
+            importlib.reload(main)
+
+    def test_the_long_form_pipeline_still_draws_one(self):
+        """Long-form videos are regular videos: custom thumbnails work there,
+        and they are most of what earns the click in search."""
+        import inspect
+        src = inspect.getsource(longform_main.main)
+        self.assertIn("make_thumbnail", src)
+        self.assertIn("thumbnail_path=thumb_path", src)
+
+    def test_the_publisher_does_not_claim_more_than_it_knows(self):
+        import inspect
+        src = inspect.getsource(youtube_publisher.set_thumbnail)
+        self.assertIn("accepted", src)
+        self.assertNotIn('print(f"🖼️ Custom thumbnail set', src)
 
 
 class TestLongformEndCard(unittest.TestCase):

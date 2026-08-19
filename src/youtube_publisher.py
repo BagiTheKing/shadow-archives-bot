@@ -51,7 +51,10 @@ def set_thumbnail(youtube, video_id: str, thumbnail_path: str) -> bool:
             videoId=video_id,
             media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
         ).execute()
-        print(f"🖼️ Custom thumbnail set for {video_id}")
+        # "Accepted", not "set": a 200 here means the bytes were stored. For a
+        # regular video that is the same thing as displayed; for a Short it is
+        # not, and this log line claiming otherwise is how that went unnoticed.
+        print(f"🖼️ Thumbnail accepted for {video_id}")
         return True
     except Exception as e:
         print(f"⚠️ Could not set thumbnail ({type(e).__name__}: {e}).")
