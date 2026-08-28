@@ -5,6 +5,7 @@ in-memory Pillow.
 """
 
 import base64
+import contextlib
 import io
 import os
 import re
@@ -3275,3 +3276,68 @@ class TestTitlesMaySell(unittest.TestCase):
     def test_the_prompt_tells_the_writer_to_sell(self):
         self.assertIn("SELL IT", llm_engine.SYSTEM_PROMPT)
         self.assertIn("not heat, it is emptiness", llm_engine.SYSTEM_PROMPT)
+
+
+class TestEveryRejectionSaysWhy(unittest.TestCase):
+    """The run of 2026-08-28 logged "Script failed validation, retrying..."
+    twice with no reason on either, so a truncated reply could not be told
+    apart from one the word window had just rejected."""
+
+    def _scene(self, words=25):
+        return {"narration": " ".join(["word"] * words) + ".",
+                "image_prompt": "x"}
+
+    def _capture(self, data):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ok = llm_engine._validate(data, title_max=80)
+        return ok, buf.getvalue()
+
+    def test_a_truncated_scene_list_says_so(self):
+        ok, out = self._capture({"title": "A Title", "scenes": [self._scene()] * 3})
+        self.assertFalse(ok)
+        self.assertIn("3 scene(s)", out)
+
+    def test_a_scene_missing_its_image_prompt_says_which(self):
+        scenes = [self._scene() for _ in range(5)]
+        del scenes[4]["image_prompt"]
+        ok, out = self._capture({"title": "A Title", "scenes": scenes})
+        self.assertFalse(ok)
+        self.assertIn("scene 4", out)
+        self.assertIn("image_prompt", out)
+
+    def test_a_missing_scenes_key_says_so(self):
+        ok, out = self._capture({"title": "A Title"})
+        self.assertFalse(ok)
+        self.assertIn("no scenes list", out)
+
+    def test_a_missing_title_says_so(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            llm_engine.validate_title("")
+        self.assertIn("no title", buf.getvalue())
+
+    def test_the_word_window_names_the_range_it_wants(self):
+        ok, out = self._capture(
+            {"title": "A Title", "scenes": [self._scene(2) for _ in range(4)]})
+        self.assertFalse(ok)
+        self.assertIn("needs 90-160", out)
+
+    def test_no_validation_path_returns_false_in_silence(self):
+        """Every rejection below is a real shape a free model has produced."""
+        cases = [
+            {},
+            {"title": "A Title"},
+            {"title": "A Title", "scenes": []},
+            {"title": "A Title", "scenes": [self._scene()] * 3},
+            {"title": "A Title", "scenes": [self._scene()] * 7},
+            {"title": "", "scenes": [self._scene() for _ in range(5)]},
+            {"title": "A Title",
+             "scenes": [{"narration": "", "image_prompt": "x"}] * 5},
+            {"title": "A Title", "scenes": [self._scene(60) for _ in range(5)]},
+        ]
+        for data in cases:
+            ok, out = self._capture(data)
+            with self.subTest(data=str(data)[:60]):
+                self.assertFalse(ok)
+                self.assertTrue(out.strip(), "rejected silently")

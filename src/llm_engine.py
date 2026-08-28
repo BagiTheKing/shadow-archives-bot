@@ -383,15 +383,32 @@ def _overlong_sentence(scenes):
 
 def _validate(data: dict, title_max: int = 80, avoid_titles=(),
               series_name: str = "") -> bool:
+    # Every rejection says why. These first two checks used to return False in
+    # silence, and they are the ones a SALVAGED reply fails: _salvage_truncated
+    # recovers whatever finished before the model ran out of tokens, which is
+    # usually three scenes or a last scene with no image_prompt. The run of
+    # 2026-08-28 logged "Script failed validation, retrying..." twice with no
+    # reason on either, so there was no way to tell a truncated reply apart
+    # from a script the word window had just rejected — which matters, because
+    # that window was narrowed from 190 to 160 in the same week.
     scenes = data.get("scenes")
-    if not isinstance(scenes, list) or not (4 <= len(scenes) <= 6):
+    if not isinstance(scenes, list):
+        print(f"⚠️ Script rejected: no scenes list "
+              f"(got {type(scenes).__name__}).")
         return False
-    for s in scenes:
-        if not s.get("narration") or not s.get("image_prompt"):
+    if not (4 <= len(scenes) <= 6):
+        print(f"⚠️ Script rejected: {len(scenes)} scene(s), needs 4-6 — "
+              "usually a reply that was cut off mid-object.")
+        return False
+    for i, s in enumerate(scenes):
+        missing = [f for f in ("narration", "image_prompt") if not s.get(f)]
+        if missing:
+            print(f"⚠️ Script rejected: scene {i} is missing "
+                  f"{' and '.join(missing)}.")
             return False
     total_words = sum(len(s["narration"].split()) for s in scenes)
     if not (90 <= total_words <= 160):  # ~40-60s once the outro tease is added
-        print(f"⚠️ Script rejected: {total_words} words (out of range).")
+        print(f"⚠️ Script rejected: {total_words} words, needs 90-160.")
         return False
     overlong = _overlong_sentence(scenes)
     if overlong:
@@ -525,6 +542,7 @@ def validate_title(title: str, avoid_titles=(), series_name: str = "") -> bool:
     """
     text = (title or "").strip()
     if not text:
+        print("⚠️ Title rejected: the writer returned no title.")
         return False
 
     low = text.lower()
