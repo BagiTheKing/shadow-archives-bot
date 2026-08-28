@@ -58,7 +58,28 @@ STRUCTURE (non-negotiable, this is what drives retention):
 - Scenes 3-4: escalate. Each scene must end on a mini-cliffhanger or a turn.
 - Scene 5: the cost, in numbers, then ONE final line that lingers (dark irony or the \
 detail that makes it worse). Do not end on a moral or a lesson.
-- Total spoken length: 130-150 words (about 55 seconds of narration). 5 scenes.
+- Total spoken length: 110-130 words (about 45 seconds of narration — the pipeline \
+adds a short closing tease after your last line). 5 scenes.
+
+CLARITY (violating this is why viewers watch to the end and still feel nothing):
+- Write for someone who has NEVER heard of this event and knows nothing about \
+the period. Every scene must be understood on ONE listen at speaking speed — \
+there is no rewinding in a Shorts feed.
+- No jargon. Any military, engineering or period term must be explained in plain \
+words in the same sentence it appears, or replaced. "The magazine" is where the \
+shells are stored; "a salvo" is a round of gunfire; if a term needs a definition \
+you cannot afford, cut it.
+- ONE storyline, no digressions. At most two named people; call everyone else by \
+their role ("the captain", "the engineers").
+- The story must turn on ONE concrete MECHANISM — the specific thing that went \
+wrong, stated so plainly a viewer could repeat it to a friend afterwards. "They \
+ran out of fuel because someone converted pounds to kilograms wrong" is a \
+mechanism. "The plan failed" and "winter came" are summaries, not mechanisms.
+- Include at least ONE specific verifiable detail that even someone who already \
+knows this story probably does not know. The famous outline is not the product; \
+that detail is.
+- The test: could a 12-year-old retell the whole story after one viewing? If \
+not, simplify until they could.
 
 WRITING RULES:
 - Short punchy sentences. Max 15 words per sentence.
@@ -126,6 +147,7 @@ OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
   "thumbnail_text": "three or four words, no punctuation",
   "thumbnail_badge": "the year",
   "comment_question": "one specific question naming someone or something from the story",
+  "next_tease": "only when the user message names a NEXT story: at most 12 words teasing it",
   "tags": ["8-12 specific search tags, including the proper nouns from the story"],
   "scenes": [
     {"narration": "...", "image_prompt": "..."}
@@ -337,6 +359,22 @@ def _validate_hook(hook: str) -> bool:
     return True
 
 
+# The prompt asks for 15 words per sentence; this is the backstop, with slack.
+# A sentence a viewer has to rewind is a sentence that loses them, and there is
+# no rewinding in a Shorts feed — an overlong sentence is a comprehension bug,
+# not a style choice.
+MAX_SENTENCE_WORDS = 25
+
+
+def _overlong_sentence(scenes):
+    """The first narration sentence over MAX_SENTENCE_WORDS, or None."""
+    for s in scenes:
+        for sentence in re.split(r"(?<=[.!?])\s+", s.get("narration") or ""):
+            if len(sentence.split()) > MAX_SENTENCE_WORDS:
+                return sentence
+    return None
+
+
 def _validate(data: dict, title_max: int = 80, avoid_titles=(),
               series_name: str = "") -> bool:
     scenes = data.get("scenes")
@@ -346,8 +384,13 @@ def _validate(data: dict, title_max: int = 80, avoid_titles=(),
         if not s.get("narration") or not s.get("image_prompt"):
             return False
     total_words = sum(len(s["narration"].split()) for s in scenes)
-    if not (90 <= total_words <= 190):  # keep the short in the 40-70s zone
+    if not (90 <= total_words <= 160):  # ~40-60s once the outro tease is added
         print(f"⚠️ Script rejected: {total_words} words (out of range).")
+        return False
+    overlong = _overlong_sentence(scenes)
+    if overlong:
+        print(f"⚠️ Script rejected: a sentence runs {len(overlong.split())} "
+              f"words and cannot be followed at speaking speed. ({overlong!r})")
         return False
     if not _validate_hook(scenes[0]["narration"]):
         return False
@@ -522,9 +565,108 @@ def normalize_thumbnail_fields(data: dict) -> dict:
     return data
 
 
+# The spoken frame is "Next file: <tease>." — the tease itself has to stay short
+# enough that the whole outro is one breath.
+MAX_TEASE_WORDS = 14
+MIN_TEASE_WORDS = 5
+
+# Words that begin a trailing subordinate clause. When a pool line has to be cut
+# to length, cutting HERE ends the tease on a complete thought — a plain
+# truncation at the word limit produced "the airliner that ran out of fuel at
+# 41,000 feet after a conversion between", which stops mid-phrase and is worse
+# than saying nothing. Only clause openers: "of", "at" and "that" sit inside
+# noun phrases, so cutting at those would strip the mechanism instead.
+_CLAUSE_BREAKS = {"after", "before", "because", "when", "while", "since",
+                  "although", "though", "despite", "following", "until",
+                  "unless", "whereas", "having"}
+
+# Function words that cannot be the last word spoken.
+_DANGLING = _CLAUSE_BREAKS | {
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "by",
+    "for", "from", "with", "into", "onto", "over", "under", "that", "which",
+    "who", "whose", "its", "their", "his", "her", "it", "as", "than", "then",
+}
+
+
+def _tease_from_topic(topic: str) -> str:
+    """A speakable tease built from a pool entry, for when the writer's own is
+    missing or unusable.
+
+    Pool entries are one descriptive sentence — subject, year, then the clause
+    that makes the story worth telling. The last clause is the tease: for "The
+    Gimli Glider (1983), Air Canada Flight 143, the airliner that ran out of
+    fuel at 41,000 feet after a conversion between pounds and kilograms" it is
+    the airliner clause, which is exactly what should be spoken after "Next
+    file:". Split points require a letter after the comma so "41,000" survives.
+    """
+    text = re.sub(r"\s*\([^)]*\)", "", topic or "").strip()
+    parts = [p.strip() for p in re.split(r",\s+(?=[A-Za-z])", text) if p.strip()]
+    if not parts:
+        return ""
+
+    # The trailing clause first, because that is where the mechanism lives.
+    # The subject is the fallback for entries whose last clause is a short
+    # qualifier ("..., against the myth") and says nothing on its own.
+    for candidate in (parts[-1], parts[0]):
+        clause = _speakable_clause(candidate)
+        if clause:
+            return clause
+    return ""
+
+
+def _speakable_clause(clause: str) -> str:
+    """One pool clause, cut to something a narrator can finish. "" if nothing
+    of speakable length survives."""
+    for lead in ("where ", "when ", "which ", "and ", "in part by ", "by ",
+                 "the story of "):
+        if clause.lower().startswith(lead):
+            clause = clause[len(lead):]
+            break
+
+    words = clause.split()
+    if len(words) > MAX_TEASE_WORDS:
+        words = words[:MAX_TEASE_WORDS]
+        # Cut at the last clause opener rather than mid-phrase — but only when
+        # the line actually had to be cut. A tease that already fits is a
+        # complete thought, and breaking it at "after" would throw away the
+        # mechanism it was chosen for.
+        breaks = [i for i, w in enumerate(words)
+                  if w.strip(",.").lower() in _CLAUSE_BREAKS
+                  and i >= MIN_TEASE_WORDS]
+        if breaks:
+            words = words[:breaks[-1]]
+    while words and words[-1].strip(",.").lower() in _DANGLING:
+        words.pop()
+
+    clause = " ".join(words).rstrip(".,;: ")
+    if len(clause.split()) < MIN_TEASE_WORDS:   # nothing speakable survived
+        return ""
+    # Sentence case is the writer's job; mid-sentence this reads as a name.
+    if clause.split()[0] in ("The", "A", "An"):
+        clause = clause[0].lower() + clause[1:]
+    return clause
+
+
+def normalize_next_tease(data: dict, next_topic: str) -> dict:
+    """Fills next_tease, in place. Every path has to survive a writer that
+    ignored the instruction — the tease is worth having, never worth a retry."""
+    if not next_topic:
+        data["next_tease"] = ""
+        return data
+    supplied = (data.get("next_tease") or "").strip().strip('"“”')
+    supplied = supplied.rstrip(".!?…").strip()
+    low = supplied.lower()
+    if low.startswith("next file"):        # the writer repeated the frame
+        supplied = supplied[len("next file"):].lstrip(" :,-—–")
+    if not supplied or len(supplied.split()) > MAX_TEASE_WORDS:
+        supplied = _tease_from_topic(next_topic)
+    data["next_tease"] = supplied
+    return data
+
+
 def generate_video_script(topic: str = None, avoid_titles=(),
                          title_max: int = 80, max_retries_per_model: int = 2,
-                         series_name: str = ""):
+                         series_name: str = "", next_topic: str = ""):
     """Generates the daily script.
 
     `topic` is chosen by the caller now, because choosing it well needs the
@@ -573,14 +715,33 @@ def generate_video_script(topic: str = None, avoid_titles=(),
     print(f"🏷️  Format: {formats.name_of(episode_format)} — "
           f"{formats.get(episode_format)['promise']}")
 
+    # The outro tease: the next episode's story, compressed to one clause the
+    # narrator speaks after "Next file:". Named next to the story it belongs
+    # to, because "a story for another day" teases nothing and converts nobody.
+    tease_block = ""
+    if next_topic:
+        tease_block = (
+            "\nNEXT EPISODE: the video after this one covers this story:\n"
+            f"{next_topic}\n"
+            'Return a "next_tease" field: ONE clause, at most 12 words, teasing '
+            "that next story. It is spoken after the words \"Next file:\", so do "
+            "not repeat them and do not write a full sentence with its own "
+            "subject-verb framing of this episode. State the next story's single "
+            "most arresting concrete fact in plain words — someone who has never "
+            "heard of the event must understand it and want it. A bare name is "
+            "not a tease; what happened is.\n"
+            'GOOD: "the airliner that ran out of fuel at 41,000 feet"\n'
+            'BAD: "an incredible story you won\'t believe"\n')
+
     user_prompt = (
         f"Write today's YouTube Short script about this specific true story:\n\n{topic}\n\n"
         f"FORMAT — {formats.name_of(episode_format)}: "
         f"{formats.brief_of(episode_format)}\n\n"
         "Stick to established facts about this event.\n"
         f"{avoid_block}"
+        f"{tease_block}"
         "CRITICAL: the total narration across all 5 scenes combined must be "
-        "130-150 words. Scripts under 120 words will be rejected.\n"
+        "110-130 words. Scripts under 100 words will be rejected.\n"
         "CRITICAL: scene 1 must be at most 12 words, must not begin with setup or a "
         "date, and must contain a number, a name, or a superlative. A scene 1 that "
         "reads as an introduction will be rejected.\n"
@@ -616,6 +777,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     data["topic"] = topic
                     data["format"] = episode_format
                     normalize_thumbnail_fields(data)
+                    normalize_next_tease(data, next_topic)
                     print(f"✅ Script generated by {response.model}")
                     return data
                 print("⚠️ Script failed validation, retrying...")

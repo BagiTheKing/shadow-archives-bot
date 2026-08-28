@@ -11,8 +11,9 @@ from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import pick_topic
 from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
                                load_published, next_episode_number,
-                               published_within, recent_titles, series_suffix)
-from topic_reach import vet
+                               promised_topic, published_within, recent_titles,
+                               series_suffix)
+from topic_reach import is_saturated, vet
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
 from video_engine import generate_video_pipeline
@@ -112,6 +113,15 @@ def build_metadata(script_data: dict, episode=None):
         series_line = (f"\n\n{SERIES_NAME}{numbered} · {fmt['name']} — "
                        f"{fmt['promise']}.")
     description += series_line
+
+    # The next episode's full pool line, under the exact "Next file: " prefix
+    # promised_topic() parses. This line IS the pipeline's cross-run memory:
+    # tomorrow's run reads it back and publishes this story, so the tease the
+    # narrator just spoke stays a promise instead of a guess.
+    next_topic = (script_data.get("next_topic") or "").strip()
+    if next_topic:
+        description += f"\n\nNext file: {next_topic}"
+
     # Exactly three: #shorts earns the format placement, and the two most
     # valuable from the episode format fill the rest. A fourth would never
     # render, so it is not written.
@@ -142,12 +152,24 @@ def build_metadata(script_data: dict, episode=None):
     return title, description, trimmed
 
 
-# The question is asked out loud at the end of the video, not only under it.
-# An unpinned channel comment sits below the fold and nobody scrolls to it; the
-# last two seconds of the video are the only place every viewer is guaranteed to
-# be. Set SPEAK_QUESTION=0 if retention drops — the narration is what pays for
-# everything else, so this is the one knob worth watching.
-SPEAK_QUESTION = os.getenv("SPEAK_QUESTION", "1") == "1"
+# Whether the comment question is ALSO spoken at the end of the video.
+#
+# OFF by default now. Six episodes shipped with a spoken closing question and
+# the pattern is settled: the model writes a false binary about a dead man's
+# motives ("Was this a calculated risk or pure arrogance?"), it costs ~7 of the
+# video's ~60 seconds, and across those episodes it produced zero comments. It
+# also displaced the script's designed last line — the prompt asks for "one
+# final line that lingers" and then the pipeline talked over it. The question
+# still gets posted as the first comment, where it costs nothing; the spoken
+# seconds at the end belong to the next-file tease, which at least earns them.
+SPEAK_QUESTION = os.getenv("SPEAK_QUESTION", "0") == "1"
+
+# Whether the outro tease — "Next file: <next story>. The archive stays open."
+# — is spoken and captioned over the video's last seconds. This is the
+# channel's signature and its subscribe reason in one: a named next story is a
+# cliffhanger, "a story for another day" is filler. The story it names is the
+# one tomorrow's run actually publishes (see promised_topic).
+SPEAK_TEASE = os.getenv("SPEAK_TEASE", "1") == "1"
 
 
 def append_question_to_script(script_data: dict) -> str:
@@ -175,6 +197,32 @@ def append_question_to_script(script_data: dict) -> str:
     last["narration"] = f"{narration} {question}".strip()
     print(f"🗣️  Question added to the final scene: {question}")
     return question
+
+
+def append_outro_to_script(script_data: dict) -> None:
+    """Adds the signature outro to the last scene's narration, in place.
+
+    Spoken as "Next file: <tease>. The archive stays open." — the tease names
+    the next episode's story (a real cliffhanger), and the closing line is the
+    channel's recurring sign-off. Appended after validation for the same reason
+    the question was: the word budget is checked against the story, and the
+    outro must not push a good script out of range. Going through the narration
+    puts it in the audio AND the word-synced captions, over the same seconds
+    the subscribe overlay uses.
+    """
+    tease = (script_data.get("next_tease") or "").strip().rstrip(".!?…")
+    if not (SPEAK_TEASE and tease):
+        return
+    scenes = script_data.get("scenes") or []
+    if not scenes:
+        return
+    last = scenes[-1]
+    narration = (last.get("narration") or "").rstrip()
+    if "next file:" in narration.lower():
+        return
+    outro = f"Next file: {tease}. The archive stays open."
+    last["narration"] = f"{narration} {outro}".strip()
+    print(f"🔗 Outro tease added to the final scene: {outro}")
 
 
 def build_first_comment(script_data: dict) -> str:
@@ -289,7 +337,7 @@ def check_visual_quality(script_data: dict) -> None:
 def plan_run():
     """Reads the channel back before writing anything.
 
-    Returns (topic, avoid_titles, episode). Raises SystemExit(0) — a clean stop,
+    Returns (topic, avoid_titles, episode, next_topic). Raises SystemExit(0) — a clean stop,
     not a failure — when another upload already went out inside the guard window,
     because a second video on the same day is the one thing this channel has
     proven it must not do again.
@@ -303,7 +351,9 @@ def plan_run():
         # re-run. Say so loudly rather than pretending the guard ran.
         print("⚠️ Duplicate guard INACTIVE — cannot see what is already "
               "published. Do not trigger this workflow manually today.")
-        return pick_topic(), [], None
+        topic = pick_topic()
+        upcoming = pick_topic(exclude=[topic]) if topic else None
+        return topic, [], None, upcoming
 
     recent = published_within(history)
     if recent and not FORCE:
@@ -321,14 +371,36 @@ def plan_run():
     used = covered_topics(history)
     print(f"📕 {len(used)} pool topic(s) already published — excluded.")
 
-    # The static reach ratings are a prior; this checks the live catalogue.
-    # A topic the feed is already full of is skipped for the next candidate.
-    topic, rejected = vet(lambda excl: pick_topic(exclude=excl), used)
-    for r in rejected:
-        print(f"   ↩︎ skipped as saturated: {r[:70]}")
+    # The last upload's outro promised a specific next story. Keep the promise:
+    # the rotation drifts between runs, and a channel that teases one story and
+    # publishes another has taught viewers the tease means nothing. The one
+    # thing that outranks the promise is measured saturation — publishing into
+    # a feed that already has fifty better-funded versions helps nobody.
+    topic = None
+    promised = promised_topic(history)
+    if promised and promised not in used:
+        if is_saturated(promised):
+            print("⚠️ The promised next file is measurably saturated — "
+                  "falling back to the rotation rather than publishing into "
+                  "a full feed.")
+            used = set(used) | {promised}
+        else:
+            print(f"🔗 Keeping the last upload's promise: {promised[:70]}")
+            topic = promised
+
+    if topic is None:
+        # The static reach ratings are a prior; this checks the live catalogue.
+        # A topic the feed is already full of is skipped for the next candidate.
+        topic, rejected = vet(lambda excl: pick_topic(exclude=excl), used)
+        for r in rejected:
+            print(f"   ↩︎ skipped as saturated: {r[:70]}")
+
+    # Tomorrow's story, teased in this video's outro and written into its
+    # description as the promise tomorrow's run reads back.
+    upcoming = pick_topic(exclude=set(used) | {topic}) if topic else None
 
     episode = next_episode_number(history, SERIES_NAME)
-    return topic, recent_titles(history), episode
+    return topic, recent_titles(history), episode, upcoming
 
 
 def main():
@@ -338,7 +410,7 @@ def main():
 
     # Phase 0: memory. Everything about what to make depends on what already
     # exists, so this runs before a single token is spent.
-    topic, avoid_titles, episode = plan_run()
+    topic, avoid_titles, episode, upcoming = plan_run()
     if not topic:
         print("❌ Pipeline halted: every topic in the pool is already published.")
         print("   Add new entries to CORE_TOPICS in src/topics.py.")
@@ -351,14 +423,19 @@ def main():
         topic=topic,
         avoid_titles=avoid_titles,
         title_max=min(80, title_budget(series_suffix(SERIES_NAME, episode))),
-        series_name=SERIES_NAME)
+        series_name=SERIES_NAME,
+        next_topic=upcoming or "")
     if not script_data:
         print("❌ Pipeline halted: script generation failed.")
         raise SystemExit(1)
+    if upcoming:
+        script_data["next_topic"] = upcoming
 
-    # The question goes into the narration before any audio is rendered, so it
-    # is spoken and captioned rather than only sitting in the comment field.
+    # Outro additions go into the narration before any audio is rendered, so
+    # they are spoken and captioned. Question first (off by default), then the
+    # tease — the signature line closes the video.
     first_comment = append_question_to_script(script_data)
+    append_outro_to_script(script_data)
 
     # Save the script for review/debugging (uploaded as a workflow artifact)
     with open(os.path.join(build_dir, "script.json"), "w", encoding="utf-8") as f:

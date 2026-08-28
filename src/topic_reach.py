@@ -57,6 +57,11 @@ SHORTS_MAX_SECONDS = 180
 # Set MEASURE_SATURATION=0 to run on the static ratings alone.
 ENABLED = os.getenv("MEASURE_SATURATION", "1") == "1"
 
+# The "big" count of every topic measured this run. vet() reads it back when
+# every candidate turned out saturated, so the fallback can be the LEAST
+# saturated of the topics actually measured instead of a fresh unmeasured one.
+_MEASURED = {}
+
 
 def search_query(topic: str) -> str:
     """The words a viewer would actually type, out of a pool entry.
@@ -109,6 +114,7 @@ def measure(topic: str, youtube=None):
         ids = [i["id"]["videoId"] for i in found.get("items", [])
                if i.get("id", {}).get("videoId")]
         if not ids:
+            _MEASURED[topic] = 0
             return {"query": query, "big": 0, "sampled": 0, "top_views": 0}
 
         stats = youtube.videos().list(part="statistics,contentDetails",
@@ -123,6 +129,7 @@ def measure(topic: str, youtube=None):
             top = max(top, views)
             if views >= BIG_VIEW_FLOOR:
                 big += 1
+        _MEASURED[topic] = big
         return {"query": query, "big": big, "sampled": len(ids), "top_views": top}
 
     except Exception as e:
@@ -162,9 +169,19 @@ def vet(pick, exclude, youtube=None):
             return topic, rejected
         rejected.append(topic)
         exclude.add(topic)
-    # Out of checks. Publishing the last candidate beats publishing nothing.
-    topic = pick(exclude)
-    if topic:
-        print(f"ℹ️  {len(rejected)} candidate(s) rejected as saturated; "
-              f"stopping the search here to stay inside the API quota.")
-    return topic, rejected
+
+    # Out of measurement budget with every candidate saturated. This used to
+    # ask pick() for ONE MORE topic and return it UNMEASURED — which is how
+    # Operation Barbarossa, one of the most heavily covered subjects on all of
+    # Shorts, walked straight through the exact gate built to stop it (run of
+    # 2026-08-28: Cannae, Agincourt and Cartagena were measured and rejected,
+    # then Barbarossa was picked fourth and never checked; it published to 167
+    # views). A measured-but-borderline topic is a known quantity; a fresh
+    # unmeasured one can be anything. So the fallback is the least saturated
+    # of the candidates actually measured, and an unmeasured topic can never
+    # leave this function once the budget is spent.
+    topic = min(rejected, key=lambda t: _MEASURED.get(t, float("inf")))
+    print(f"ℹ️  All {len(rejected)} vetted candidate(s) are saturated; "
+          f"publishing the least saturated of them rather than gambling on "
+          f"an unmeasured topic.")
+    return topic, [t for t in rejected if t != topic]

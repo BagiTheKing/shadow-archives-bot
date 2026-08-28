@@ -91,6 +91,33 @@ def covered_topics(videos, longform_only: bool = False):
     return found
 
 
+def promised_topic(videos):
+    """The pool topic the newest upload promised as its next episode, or None.
+
+    Every Short now ends on a spoken tease of the next story, and build_metadata
+    writes that story's full pool line into the description as "Next file: ...".
+    This reads it back, which makes the tease a promise the channel actually
+    keeps: the rotation can drift between runs (saturation vetting, exclusions,
+    failed days), and a channel that teases one story and publishes another has
+    taught its viewers the tease means nothing. The description is the only
+    cross-run state this pipeline has, so the promise lives there.
+
+    Returns the line only when it matches a pool topic exactly — a truncated or
+    hand-edited description must not send an invented topic into the writer.
+    """
+    from topics import ALL_TOPICS
+    dated = [(t, v) for v in (videos or []) for t in [_published_at(v)] if t]
+    if not dated:
+        return None
+    newest = max(dated, key=lambda p: p[0])[1]
+    match = re.search(r"^Next file: (.+)$", newest.get("description") or "",
+                      re.MULTILINE)
+    if not match:
+        return None
+    line = match.group(1).strip()
+    return line if line in ALL_TOPICS else None
+
+
 def recent_titles(videos, limit: int = 30):
     """The last `limit` titles, newest first — handed to the writer so it does
     not reword a subject it has already covered."""

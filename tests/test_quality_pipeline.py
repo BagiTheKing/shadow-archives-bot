@@ -1071,6 +1071,13 @@ class TestQuestionIsInTheVideo(unittest.TestCase):
     def setUp(self):
         import main
         self.main = main
+        # Speaking the question is off by default now (the outro tease took
+        # its seconds); these tests exercise the behaviour when it is on.
+        self._speak = main.SPEAK_QUESTION
+        main.SPEAK_QUESTION = True
+
+    def tearDown(self):
+        self.main.SPEAK_QUESTION = self._speak
 
     def _script(self, **extra):
         data = {"topic": "The sinking of HMS Hood (1941), the battlecruiser lost",
@@ -1113,6 +1120,190 @@ class TestQuestionIsInTheVideo(unittest.TestCase):
             self.assertEqual(returned, "Whose call sank her?")
         finally:
             self.main.SPEAK_QUESTION = original
+
+
+class TestVetNeverReturnsUnmeasured(unittest.TestCase):
+    """How Operation Barbarossa got through: three candidates were measured and
+    rejected, the budget ran out, and a FOURTH topic was picked and returned
+    without ever being checked. The fallback must come from the measured set."""
+
+    def setUp(self):
+        import topic_reach
+        self.tr = topic_reach
+
+    def test_the_fallback_is_a_measured_candidate(self):
+        original = self.tr.is_saturated
+        self.tr.is_saturated = lambda t, y=None: True
+        pool = [f"topic {n}" for n in range(10)]
+        try:
+            picked, rejected = self.tr.vet(
+                lambda excl: next((t for t in pool if t not in excl), None),
+                set())
+        finally:
+            self.tr.is_saturated = original
+        self.assertIn(picked, pool[:self.tr.MAX_CHECKS])
+        self.assertNotIn(picked, rejected)
+
+    def test_the_fallback_prefers_the_least_saturated(self):
+        original = self.tr.is_saturated
+        self.tr.is_saturated = lambda t, y=None: True
+        self.tr._MEASURED.update({"topic 0": 9, "topic 1": 5, "topic 2": 7})
+        pool = [f"topic {n}" for n in range(10)]
+        try:
+            picked, _ = self.tr.vet(
+                lambda excl: next((t for t in pool if t not in excl), None),
+                set())
+        finally:
+            self.tr.is_saturated = original
+            self.tr._MEASURED.clear()
+        self.assertEqual(picked, "topic 1")
+
+
+class TestOutroTease(unittest.TestCase):
+    """Every video ends by naming the next one. A vague 'story for another day'
+    teases nothing; the named story is the cliffhanger and the subscribe reason."""
+
+    def setUp(self):
+        import main
+        self.main = main
+
+    def _script(self, **extra):
+        data = {"next_tease": "the airliner that ran out of fuel at 41,000 feet",
+                "scenes": [{"narration": "The shell found the magazine."},
+                           {"narration": "Three men survived."}]}
+        data.update(extra)
+        return data
+
+    def test_the_tease_closes_the_final_narration(self):
+        script = self._script()
+        self.main.append_outro_to_script(script)
+        self.assertEqual(script["scenes"][-1]["narration"],
+                         "Three men survived. Next file: the airliner that ran "
+                         "out of fuel at 41,000 feet. The archive stays open.")
+
+    def test_running_twice_does_not_duplicate_it(self):
+        script = self._script()
+        self.main.append_outro_to_script(script)
+        self.main.append_outro_to_script(script)
+        self.assertEqual(
+            script["scenes"][-1]["narration"].count("Next file:"), 1)
+
+    def test_no_tease_leaves_the_ending_alone(self):
+        script = self._script(next_tease="")
+        self.main.append_outro_to_script(script)
+        self.assertEqual(script["scenes"][-1]["narration"],
+                         "Three men survived.")
+
+    def test_the_switch_leaves_the_narration_alone(self):
+        original = self.main.SPEAK_TEASE
+        self.main.SPEAK_TEASE = False
+        try:
+            script = self._script()
+            self.main.append_outro_to_script(script)
+            self.assertEqual(script["scenes"][-1]["narration"],
+                             "Three men survived.")
+        finally:
+            self.main.SPEAK_TEASE = original
+
+    def test_a_missing_writer_tease_falls_back_to_the_topic_clause(self):
+        data = llm_engine.normalize_next_tease(
+            {}, "The Gimli Glider (1983), Air Canada Flight 143, the airliner "
+                "that ran out of fuel at 41,000 feet after a conversion "
+                "between pounds and kilograms")
+        self.assertTrue(data["next_tease"])
+        self.assertLessEqual(len(data["next_tease"].split()),
+                             llm_engine.MAX_TEASE_WORDS)
+        self.assertIn("ran out of fuel", data["next_tease"])
+
+    def test_every_pool_topic_yields_a_speakable_tease(self):
+        """The narrator says this out loud. A plain word-count truncation gave
+        "...at 41,000 feet after a conversion between", which stops mid-phrase;
+        anything that ends on a dangling function word is worse than silence."""
+        for topic in (topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS
+                      + topics.PUBLISHED_TOPICS):
+            tease = llm_engine._tease_from_topic(topic)
+            with self.subTest(topic=topic[:50]):
+                self.assertGreaterEqual(len(tease.split()),
+                                        llm_engine.MIN_TEASE_WORDS)
+                self.assertLessEqual(len(tease.split()),
+                                     llm_engine.MAX_TEASE_WORDS)
+                self.assertNotIn(tease.split()[-1].strip(",.").lower(),
+                                 llm_engine._DANGLING)
+
+    def test_a_tease_that_already_fits_keeps_its_mechanism(self):
+        """The clause-break cut applies only to lines that had to be trimmed —
+        breaking a short complete tease at 'after' would delete the mechanism."""
+        self.assertEqual(
+            llm_engine._speakable_clause(
+                "the ferry that sank after one bolt sheared"),
+            "the ferry that sank after one bolt sheared")
+
+    def test_an_overlong_writer_tease_is_replaced_not_trimmed_midword(self):
+        long_tease = " ".join(["word"] * 30)
+        data = llm_engine.normalize_next_tease(
+            {"next_tease": long_tease},
+            "The sinking of HMS Hood (1941), the battlecruiser lost in about "
+            "three minutes with 1,415 men and three survivors")
+        self.assertNotIn("word", data["next_tease"])
+        self.assertLessEqual(len(data["next_tease"].split()),
+                             llm_engine.MAX_TEASE_WORDS)
+
+    def test_the_description_carries_the_promise_line(self):
+        import main
+        script = {"title": "T", "description": "D.", "format": "order",
+                  "topic": "today's topic",
+                  "next_topic": topics.CORE_TOPICS[3],
+                  "scenes": [{"narration": "x"}]}
+        _, description, _ = main.build_metadata(script, episode=None)
+        self.assertIn(f"Next file: {topics.CORE_TOPICS[3]}", description)
+
+    def test_the_promise_is_read_back_from_the_newest_upload(self):
+        import published_history
+        promised = topics.CORE_TOPICS[3]
+        videos = [
+            _video("Older", 60, description="x\n\nNext file: something else\n"),
+            _video("Newest", 25, description=f"x\n\nNext file: {promised}\n"),
+        ]
+        self.assertEqual(published_history.promised_topic(videos), promised)
+
+    def test_a_promise_that_is_not_a_pool_topic_is_ignored(self):
+        import published_history
+        videos = [_video("Newest", 25,
+                         description="x\n\nNext file: an invented story\n")]
+        self.assertIsNone(published_history.promised_topic(videos))
+
+    def test_the_promise_line_does_not_mark_the_topic_as_covered(self):
+        """The description names TOMORROW's topic. Matching it would exclude
+        that topic from the rotation the day before it airs."""
+        import channel_insights
+        promised = topics.CORE_TOPICS[3]
+        self.assertIsNone(channel_insights.match_topic(
+            "Some unrelated title", f"x\n\nNext file: {promised}\n"))
+
+
+class TestScriptsStayFollowable(unittest.TestCase):
+    """92% average-percentage-viewed with one like means viewers watched and
+    felt nothing. The prompt now demands plain language and one concrete
+    mechanism; the validator backstops the part a regex can check."""
+
+    def test_the_prompt_demands_clarity_and_a_mechanism(self):
+        prompt = llm_engine.SYSTEM_PROMPT
+        self.assertIn("CLARITY", prompt)
+        self.assertIn("MECHANISM", prompt)
+        self.assertIn("NEVER heard of this event", prompt)
+
+    def test_an_overlong_sentence_is_rejected(self):
+        run_on = " ".join(["word"] * (llm_engine.MAX_SENTENCE_WORDS + 5)) + "."
+        script = {
+            "title": "A Fine Title About the Somme",
+            "scenes": [{"narration": "Six hundred cavalrymen charged the "
+                                     "wrong valley.", "image_prompt": "x"}] +
+                      [{"narration": "Short lines. " * 8 + run_on,
+                        "image_prompt": "x"}] +
+                      [{"narration": "They never came back. " * 2,
+                        "image_prompt": "x"} for _ in range(3)],
+        }
+        self.assertFalse(llm_engine._validate(script, 80))
 
 
 class TestFirstComment(unittest.TestCase):
@@ -1253,7 +1444,7 @@ class TestPlanRunStandsDown(unittest.TestCase):
 
     def test_no_history_still_produces_a_topic(self):
         self.main.load_published = lambda *a, **k: None
-        topic, avoid, episode = self.main.plan_run()
+        topic, avoid, episode, upcoming = self.main.plan_run()
         self.assertTrue(topic)
         self.assertIsNone(episode)
 
@@ -1261,16 +1452,47 @@ class TestPlanRunStandsDown(unittest.TestCase):
         covered = topics.CORE_TOPICS[0]
         self.main.load_published = lambda *a, **k: [
             _video("An old one", 200, description=f"x\n\n{covered}\n")]
-        topic, avoid, episode = self.main.plan_run()
+        topic, avoid, episode, upcoming = self.main.plan_run()
         self.assertNotEqual(topic, covered)
         self.assertEqual(episode, 1)
         self.assertEqual(avoid, ["An old one"])
+
+    def test_the_next_topic_is_planned_alongside_todays(self):
+        """The outro tease needs tomorrow's story at script time, and it must
+        never be today's story or one already published."""
+        covered = topics.CORE_TOPICS[0]
+        self.main.load_published = lambda *a, **k: [
+            _video("An old one", 200, description=f"x\n\n{covered}\n")]
+        topic, _, _, upcoming = self.main.plan_run()
+        self.assertTrue(upcoming)
+        self.assertNotEqual(upcoming, topic)
+        self.assertNotEqual(upcoming, covered)
+
+    def test_the_promised_next_file_is_published_next(self):
+        """The tease is a promise: whatever yesterday's outro named, today's
+        run publishes — the rotation does not get a vote."""
+        promised = topics.CORE_TOPICS[5]
+        self.main.load_published = lambda *a, **k: [
+            _video("Yesterday's upload", 30,
+                   description=f"x\n\nNext file: {promised}\n")]
+        topic, _, _, _ = self.main.plan_run()
+        self.assertEqual(topic, promised)
+
+    def test_an_already_covered_promise_falls_back_to_the_rotation(self):
+        promised = topics.CORE_TOPICS[0]
+        self.main.load_published = lambda *a, **k: [
+            _video("Yesterday's upload", 30,
+                   description=f"x\n\n{promised}\n\nNext file: {promised}\n")]
+        topic, _, _, _ = self.main.plan_run()
+        self.assertNotEqual(topic, promised)
 
 
 class TestWriterAvoidsPublishedTitles(unittest.TestCase):
 
     def test_title_limit_is_enforced_against_the_caller_s_budget(self):
-        body = ("The written order named no target at all, and the officer who "
+        # Two sentences, not one: a single 28-word sentence now fails the
+        # sentence-length backstop before the title check is ever reached.
+        body = ("The written order named no target at all. The officer who "
                 "carried it across the valley pointed at the wrong guns "
                 "entirely on that cold October morning.")
         data = {"title": "T" * 70,

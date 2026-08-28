@@ -55,8 +55,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 # Why an on-screen CTA: 6,373 views produced 16 subscribers (~0.25%). The only
 # ask was buried in the description, which Shorts viewers effectively never open.
 # Spoken CTAs cost retention, so this is a silent overlay on the last few seconds.
-CTA_TEXT = os.getenv("CTA_TEXT", "SUBSCRIBE FOR MORE DISASTERS")
-CTA_DURATION = 2.5  # seconds of screen time at the end of the video
+# "FOR THE NEXT FILE", because the narrator is naming that next file out loud in
+# the same seconds — the overlay and the spoken tease make one ask together.
+CTA_TEXT = os.getenv("CTA_TEXT", "SUBSCRIBE FOR THE NEXT FILE")
+# Long enough to sit under the spoken "Next file: ..." tease, which runs about
+# four seconds at the end of the narration.
+CTA_DURATION = 4.0  # seconds of screen time at the end of the video
 
 
 def _ass_time(seconds: float) -> str:

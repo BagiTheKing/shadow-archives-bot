@@ -104,8 +104,15 @@ def match_topic(title: str, description: str = ""):
     before descriptions carried the topic.
     """
     if description:
+        # The description also carries a "Next file: <topic>" promise line for
+        # the episode AFTER this one (see main.build_metadata). That story has
+        # not been published yet — matching it here would mark tomorrow's
+        # topic as covered the day before it airs, exclude it from the
+        # rotation, and silently break the promise the outro just spoke.
+        published_text = re.sub(r"^Next file: .*$", "", description,
+                                flags=re.MULTILINE)
         for topic in ALL_TOPICS:
-            if topic.strip() and topic.strip() in description:
+            if topic.strip() and topic.strip() in published_text:
                 return topic
 
     want = _tokens(title)
