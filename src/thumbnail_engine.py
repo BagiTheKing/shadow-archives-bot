@@ -158,8 +158,130 @@ def pick_source_scene(scenes):
     """The most usable frame for a thumbnail, from the middle of the video
     where the drama sits. A real archival photograph is preferred over a
     generated frame: on a history channel, authenticity earns the click."""
-    with_images = [s for s in scenes if s.get("image_path")]
+    # Never the outro: that frame is the NEXT episode's card, so using it would
+    # put another video's title on this one's thumbnail.
+    with_images = [s for s in scenes
+                   if s.get("image_path") and not s.get("is_outro")]
     candidates = [s for s in with_images if s.get("is_real")] or with_images
     if not candidates:
         return None
     return candidates[len(candidates) // 2]["image_path"]
+
+
+# ---------------------------------------------------------------------------
+# The next-file card
+#
+# The outro used to be words only: the narrator said "Next file: ..." over the
+# last frame of the story just told, while the picture carried on doing its slow
+# zoom. Watching it back, there was nothing to tell you the video had stopped
+# being about Cartagena and started advertising the next one — it read as one
+# more sentence of the same story. A trailer needs a cut.
+#
+# So the outro is now its own scene with its own card: new image, a NEXT FILE
+# label, the subject in headline type, and the tease under it. The viewer sees
+# the video change subject at the moment the narrator does.
+
+CARD_W, CARD_H = 1080, 1920
+
+
+def _fit_lines(d, text, max_width, start, floor, max_lines):
+    """Largest font size at which `text` wraps into at most max_lines."""
+    size = start
+    while size > floor:
+        font = _font(size)
+        if len(_wrap(d, text, font, max_width)) <= max_lines:
+            return font, _wrap(d, text, font, max_width)
+        size -= 4
+    font = _font(floor)
+    return font, _wrap(d, text, font, max_width)[:max_lines]
+
+
+def make_next_file_card(source_image: str, subject: str, tease: str,
+                        output_path: str, accent: tuple = None,
+                        badge: str = "", label: str = "NEXT FILE",
+                        cta: str = "") -> str:
+    """Draws the 1080x1920 card shown while the narrator teases the next video.
+
+    subject: the next story's name, in headline type ("The Radcliffe Line").
+    tease:   the spoken clause, set smaller underneath, in sentence case.
+    """
+    accent = accent or ACCENT
+    base = Image.open(source_image).convert("RGB")
+    base = _cover(base, CARD_W, CARD_H)
+
+    # Pushed much further down than a thumbnail: this is a backdrop for a full
+    # screen of type, not an image with a caption on it.
+    base = ImageEnhance.Color(base).enhance(0.45)
+    base = ImageEnhance.Brightness(base).enhance(0.42)
+    base = base.filter(ImageFilter.GaussianBlur(6))
+
+    black = Image.new("RGB", (CARD_W, CARD_H), (5, 5, 8))
+    base = Image.blend(base, black, 0.35)
+
+    d = ImageDraw.Draw(base)
+    margin = int(CARD_W * 0.085)
+    text_w = CARD_W - margin * 2
+
+    # The type block sits above centre, clear of the Shorts UI at the bottom.
+    subject_font, subject_lines = _fit_lines(
+        d, subject.upper(), text_w, int(CARD_H * 0.075), int(CARD_H * 0.035), 3)
+    subject_lh = int(subject_font.size * 1.08)
+
+    tease_font, tease_lines = _fit_lines(
+        d, tease, text_w, int(CARD_H * 0.032), int(CARD_H * 0.020), 3)
+    tease_lh = int(tease_font.size * 1.28)
+
+    label_font = _font(int(CARD_H * 0.030))
+    label_h = int(CARD_H * 0.075)
+
+    block_h = (label_h + subject_lh * len(subject_lines)
+               + int(CARD_H * 0.035) + tease_lh * len(tease_lines))
+    y = int(CARD_H * 0.34) - block_h // 2
+
+    # Label: an accent rule, then the words, letter-spaced by hand because
+    # Pillow has no tracking control.
+    d.rectangle([margin, y, margin + int(CARD_W * 0.16), y + 8], fill=accent)
+    lx, ly = margin, y + int(CARD_H * 0.028)
+    for ch in label.upper():
+        d.text((lx, ly), ch, font=label_font, fill=accent)
+        lx += d.textlength(ch, font=label_font) + int(CARD_W * 0.009)
+    y += label_h
+
+    for line in subject_lines:
+        d.text((margin + 4, y + 4), line, font=subject_font, fill=(0, 0, 0))
+        d.text((margin, y), line, font=subject_font, fill=WHITE)
+        y += subject_lh
+
+    y += int(CARD_H * 0.035)
+    for line in tease_lines:
+        d.text((margin + 3, y + 3), line, font=tease_font, fill=(0, 0, 0))
+        d.text((margin, y), line, font=tease_font, fill=(214, 214, 220))
+        y += tease_lh
+
+    if badge:
+        bf = _font(int(CARD_H * 0.024))
+        by = y + int(CARD_H * 0.030)
+        bw = d.textlength(badge.upper(), font=bf)
+        d.rectangle([margin, by, margin + bw + 34, by + int(CARD_H * 0.042)],
+                    fill=(0, 0, 0))
+        d.rectangle([margin, by, margin + 6, by + int(CARD_H * 0.042)],
+                    fill=accent)
+        d.text((margin + 22, by + int(CARD_H * 0.021)), badge.upper(),
+               font=bf, fill=WHITE, anchor="lm")
+
+    # The subscribe ask is drawn HERE rather than left to the burned-in ASS
+    # overlay, which is positioned from the bottom of the frame and landed on
+    # top of the badge. Drawn into the card it can be placed against the type
+    # above it, and video_engine suppresses the overlay whenever a card exists.
+    if cta:
+        cf = _font(int(CARD_H * 0.028))
+        cy = int(CARD_H * 0.66)
+        d.rectangle([margin, cy - int(CARD_H * 0.004),
+                     margin + int(CARD_W * 0.16), cy + 2], fill=accent)
+        d.text((margin + 3, cy + int(CARD_H * 0.030) + 3), cta.upper(),
+               font=cf, fill=(0, 0, 0))
+        d.text((margin, cy + int(CARD_H * 0.030)), cta.upper(),
+               font=cf, fill=accent)
+
+    base.save(output_path, "JPEG", quality=90, optimize=True)
+    return output_path

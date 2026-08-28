@@ -168,7 +168,106 @@ _DESIGNS = [
     ("The Halifax harbour collision (1917) and the twenty minutes when both crews knew what was coming and the city did not", WIDE),
 ]
 
-_CORE = _ORDERS + _DESIGNS
+# ---------------------------------------------------------------------------
+# THE REGIME — the dictators, their machinery, and the people who defied them.
+# The most-searched subject in history video, and the channel had none of it.
+_REGIME = [
+    ("Georg Elser's bomb at the Burgerbraukeller (1939), which detonated thirteen minutes after Hitler left early", WIDE),
+    ("Operation Valkyrie (1944) and the briefcase bomb that was moved behind a heavy table leg minutes before it detonated", WIDE),
+    ("Witold Pilecki, the Polish officer who deliberately got himself sent to Auschwitz in 1940 to report what was happening inside", WIDE),
+    ("Goering's promise to supply the encircled Sixth Army at Stalingrad by air, against transport arithmetic that never came close", WIDE),
+    ("The Wannsee Conference (1942), where the murder of eleven million people was organised in about ninety minutes over lunch", WIDE),
+    ("Sophie Scholl and the White Rose leaflets, and the four days between her arrest and her execution", WIDE),
+    ("Hitler's Nero Decree (1945), the order to destroy Germany's own infrastructure, and Albert Speer's decision not to carry it out", WIDE),
+    ("Jan Karski, who was smuggled into the Warsaw Ghetto and then told Western leaders what he had seen, and was not believed", WIDE),
+    ("Stalin's refusal to act on the warnings of Barbarossa, including Richard Sorge's report naming the month", WIDE),
+    ("Mussolini's march on Rome (1922), which he joined by train after the government had already surrendered", WIDE),
+    ("The Reichstag Fire (1933) and the emergency decree signed the next morning that suspended civil liberties permanently", WIDE),
+    ("The Night of the Long Knives (1934), when the Nazi leadership murdered its own paramilitary command", WIDE),
+    ("Hans Litten, the lawyer who cross-examined Hitler in a Berlin courtroom in 1931, and what happened to him afterwards", NARROW),
+    ("Rudolf Hess's solo flight to Scotland in 1941 and the peace deal nobody had authorised", WIDE),
+    ("The Enabling Act (1933), the vote that made a chancellor a dictator, and the one party that voted against it", WIDE),
+    ("Chamberlain's piece of paper at Munich (1938) and what the Czechoslovak delegation was told after the deal was done", WIDE),
+    ("The panzer divisions held in reserve on D-Day because nobody was willing to wake Hitler", WIDE),
+    ("Rommel's forced suicide (1944), staged as a heart attack so the regime could give him a state funeral", WIDE),
+    ("Goering's cyanide capsule at Nuremberg (1946), taken hours before his scheduled execution", WIDE),
+    ("Mussolini's invasion of Greece (1940), launched to impress Hitler and reversed by the Greek army within a week", NARROW),
+    ("Irena Sendler, who smuggled around 2,500 children out of the Warsaw Ghetto and buried their real names in jars", WIDE),
+    ("The Kindertransport and the parents who put ten thousand children on trains they knew they would not follow", WIDE),
+]
+
+# ---------------------------------------------------------------------------
+# THE FAULT LINE — the historical decision behind a conflict the viewer has
+# seen in the news. The ROOTS only; see formats.py for why never the live war.
+_FAULTLINE = [
+    ("The Sykes-Picot Agreement (1916), the secret map on which two diplomats divided the Ottoman Middle East between Britain and France", WIDE),
+    ("The Balfour Declaration (1917), the 67-word letter promising a national home in a territory Britain did not yet control", WIDE),
+    ("The Radcliffe Line (1947), drawn in five weeks by a lawyer who had never been to India, dividing it for 400 million people", WIDE),
+    ("Operation Ajax (1953), the coup that removed Iran's elected prime minister Mohammad Mossadegh after he nationalised the oil industry", WIDE),
+    ("The Anglo-Persian oil concession of 1901, under which Iran received sixteen percent of the profits from its own oil", WIDE),
+    ("The Hussein-McMahon correspondence (1915) and the Arab independence Britain promised in the same years it promised elsewhere", WIDE),
+    ("The Durand Line (1893), the border drawn through Pashtun territory that Afghanistan has never recognised", WIDE),
+    ("The Berlin Conference (1884), where European powers partitioned Africa using rivers and rulers and no African representation", WIDE),
+    ("The Treaty of Sevres (1920) and the promised Kurdish state that the Treaty of Lausanne erased three years later", WIDE),
+    ("Churchill's Cairo Conference (1921), where the modern state of Iraq was assembled from three Ottoman provinces in ten days", WIDE),
+    ("The Suez Crisis (1956) and the secret Sevres protocol in which three governments agreed to stage a pretext for invasion", WIDE),
+    ("Lebanon's confessional system, built on a 1932 census that has never been repeated because the result would change everything", NARROW),
+    ("The 1979 Iranian Revolution and the fourteen years the exiled Ayatollah spent recording sermons onto cassette tapes", WIDE),
+    ("The Iranian hostage crisis (1979) and the 444 days that ended American-Iranian relations for a generation", WIDE),
+    ("The withdrawal of UN peacekeepers from Sinai in May 1967, requested by Egypt and granted within days", NARROW),
+    ("The Ottoman Empire's collapse and the 1922 decision to abolish the caliphate, which fifty later movements have tried to restore", WIDE),
+    ("The Kuwait-Iraq border, drawn by a British official in 1922 and the stated grievance behind the 1990 invasion", WIDE),
+    ("The partition of Ireland (1921) and the boundary commission whose report was suppressed and never implemented", WIDE),
+    ("The Congress of Berlin (1878) and the Balkan borders that produced a century of wars", NARROW),
+]
+
+# ---------------------------------------------------------------------------
+# THE LAW — what a tradition actually ruled, and what it cost real people.
+_LAW = [
+    ("The Sanhedrin rule in Jewish law that a unanimous guilty verdict in a capital case results in acquittal, because unanimity suggests the court stopped thinking", WIDE),
+    ("The Cadaver Synod (897), the trial in which Pope Stephen VI had his predecessor's corpse exhumed, dressed and prosecuted in court", WIDE),
+    ("The Fourth Lateran Council (1215) ending trial by ordeal, and how English courts replaced it by inventing the jury", WIDE),
+    ("Abu Bakr's ten rules of war (632), the standing orders forbidding harm to civilians, crops and places of worship", WIDE),
+    ("The prozbul, Hillel's legal instrument allowing loans to survive the sabbatical cancellation of debts", NARROW),
+    ("The trial of Joan of Arc (1431), the seventy charges reduced to one, and the clothing technicality used to convict her", WIDE),
+    ("Galileo's trial (1633) and what he was actually charged with, which was not what most people think", WIDE),
+    ("Pope Innocent III's interdict on England (1208), which closed every church in the country to force one king's hand", NARROW),
+    ("The Salem witch trials (1692) and spectral evidence, the doctrine that let testimony about dreams convict people", WIDE),
+    ("Emperor Frederick II's 1236 investigation into blood libel accusations, and the verdict he published", NARROW),
+    ("Inter caetera (1493), the papal bull that drew a line down the Atlantic and gave the world's halves to two kingdoms", WIDE),
+    ("The closing of the gates of ijtihad, the long argument in Islamic jurisprudence over whether independent legal reasoning ever ended", NARROW),
+    ("The Mecelle (1877), the Ottoman attempt to codify Islamic civil law into a European-style legal code", NARROW),
+    ("The Assize of Clarendon (1166), the ordinance that created the grand jury and the idea of a public prosecution", NARROW),
+    ("The Ottoman millet system, under which religious communities ran their own courts inside one empire", NARROW),
+    ("The Council of Nicaea (325) and what was actually decided there, against what is popularly claimed", WIDE),
+    ("The Mishnah's ruling that whoever saves one life is regarded as having saved an entire world, and the courtroom purpose it was written for", WIDE),
+    ("Maimonides' principle that it is better to acquit a thousand guilty than to put one innocent to death", WIDE),
+]
+
+
+def _interleave(*pools):
+    """Round-robins the lanes so consecutive uploads change subject.
+
+    The rotation walks CORE_TOPICS in order, so concatenating the lanes would
+    publish twenty regime stories and then twenty law ones. A viewer who
+    subscribes on a Hitler video and then gets three weeks of canon law has
+    been mis-sold; alternating means every week samples the whole channel.
+    """
+    out = []
+    for row in zip(*(list(p) for p in pools)):
+        out.extend(row)
+    longest = max(len(p) for p in pools)
+    for i in range(min(len(p) for p in pools), longest):
+        for pool in pools:
+            if i < len(pool):
+                out.append(pool[i])
+    return out
+
+
+# The new lanes lead, because they are why this restructure happened. ORDER and
+# DESIGN keep their places in the rotation — the Cartagena and Ariane scripts
+# prove the writing works; those stories just cannot carry the channel alone.
+_CORE = _interleave(_REGIME, _FAULTLINE, _LAW, _ORDERS, _DESIGNS)
 
 _EXPERIMENT = [
     ("The Antikythera Mechanism, the 2,000-year-old geared computer found in a shipwreck", WIDE),
@@ -244,12 +343,11 @@ ALL_TOPICS = CORE_TOPICS + EXPERIMENT_TOPICS + PUBLISHED_TOPICS
 # Which episode format a topic belongs to. The three pool groups are the source
 # of truth; see src/formats.py for what each promises.
 FORMAT_BY_TOPIC = {}
-for _topic, _ in _ORDERS:
-    FORMAT_BY_TOPIC[_topic] = "order"
-for _topic, _ in _DESIGNS:
-    FORMAT_BY_TOPIC[_topic] = "design"
-for _topic, _ in _EXPERIMENT:
-    FORMAT_BY_TOPIC[_topic] = "unsolved"
+for _group, _key in ((_ORDERS, "order"), (_DESIGNS, "design"),
+                     (_EXPERIMENT, "unsolved"), (_REGIME, "regime"),
+                     (_FAULTLINE, "faultline"), (_LAW, "law")):
+    for _topic, _ in _group:
+        FORMAT_BY_TOPIC[_topic] = _key
 
 # PUBLISHED_TOPICS predates the formats and is not grouped, but the long-form
 # encore lane picks from it, so those need an answer too. Listed by hand rather

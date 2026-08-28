@@ -5,6 +5,7 @@ import shutil
 
 import formats
 
+from topics import format_of as topics_format_of
 from caption_track import SRT_NAME
 from llm_engine import generate_video_script
 from thumbnail_engine import make_thumbnail, pick_source_scene
@@ -199,30 +200,84 @@ def append_question_to_script(script_data: dict) -> str:
     return question
 
 
-def append_outro_to_script(script_data: dict) -> None:
-    """Adds the signature outro to the last scene's narration, in place.
+def next_file_subject(topic: str) -> str:
+    """The next story's name, for the card's headline. The pool line's head —
+    "The Radcliffe Line (1947), drawn in five weeks..." -> "The Radcliffe Line".
+    """
+    head = re.split(r"[(,;:]", topic or "", maxsplit=1)[0].strip()
+    return " ".join(head.split()[:6])
 
-    Spoken as "Next file: <tease>. The archive stays open." — the tease names
-    the next episode's story (a real cliffhanger), and the closing line is the
-    channel's recurring sign-off. Appended after validation for the same reason
-    the question was: the word budget is checked against the story, and the
-    outro must not push a good script out of range. Going through the narration
-    puts it in the audio AND the word-synced captions, over the same seconds
-    the subscribe overlay uses.
+
+def add_outro_scene(script_data: dict) -> None:
+    """Appends the next-file tease as its own SCENE, in place.
+
+    It used to be extra words bolted onto the last scene's narration, which is
+    how it shipped in episode 7 — and watching that back, nothing told you the
+    video had stopped being about Cartagena and started advertising the next
+    one. Same voice, same picture, same slow zoom, one more sentence. A trailer
+    needs a cut, so the outro is now a scene: its own image, its own card, and
+    a hard change of subject at the exact moment the narrator changes subject.
+
+    Being a real scene also means it gets the rest of the pipeline for free —
+    edge-tts word timings, word-synced captions, the crossfade — instead of
+    each of those needing a special case.
     """
     tease = (script_data.get("next_tease") or "").strip().rstrip(".!?…")
-    if not (SPEAK_TEASE and tease):
-        return
+    next_topic = (script_data.get("next_topic") or "").strip()
     scenes = script_data.get("scenes") or []
-    if not scenes:
+    if not (SPEAK_TEASE and tease and next_topic and scenes):
         return
-    last = scenes[-1]
-    narration = (last.get("narration") or "").rstrip()
-    if "next file:" in narration.lower():
+    if any(s.get("is_outro") for s in scenes):
         return
-    outro = f"Next file: {tease}. The archive stays open."
-    last["narration"] = f"{narration} {outro}".strip()
-    print(f"🔗 Outro tease added to the final scene: {outro}")
+
+    subject = next_file_subject(next_topic)
+    # The card is drawn over this image, heavily darkened and blurred, so the
+    # prompt only has to set a mood for the next story rather than illustrate
+    # it precisely — no faces, because a half-legible face under a headline is
+    # the worst thing this generator produces.
+    scenes.append({
+        "narration": f"Next file: {tease}. The archive stays open.",
+        "image_prompt": (
+            f"wide atmospheric establishing shot evoking {subject}, "
+            "no people, no faces, empty landscape or architecture, "
+            "dramatic chiaroscuro lighting, dark moody cinematic oil painting, "
+            "visible expressive brushwork, rich texture, muted color palette "
+            "with one accent color, highly detailed, no text, no watermark"),
+        "is_outro": True,
+        "outro_subject": subject,
+        "outro_tease": tease,
+    })
+    print(f"🔗 Outro scene added — NEXT FILE: {subject} / {tease}")
+
+
+def draw_outro_card(script_data: dict, build_dir: str) -> None:
+    """Replaces the outro scene's plain image with the next-file card.
+
+    Never raises: the card is worth having and not worth losing a finished
+    video over. Without it the scene still plays, just as a picture.
+    """
+    scene = next((s for s in script_data.get("scenes") or []
+                  if s.get("is_outro")), None)
+    if not scene or not scene.get("image_path"):
+        return
+    try:
+        from thumbnail_engine import make_next_file_card
+        next_format = topics_format_of(scene.get("next_format_topic")
+                                       or script_data.get("next_topic") or "")
+        year = re.search(r"\b(1[0-9]{3}|20[0-9]{2})\b",
+                         script_data.get("next_topic") or "")
+        badge = f"{formats.name_of(next_format)}"
+        if year:
+            badge += f" · {year.group(0)}"
+        from video_engine import CTA_TEXT
+        make_next_file_card(
+            scene["image_path"], scene["outro_subject"], scene["outro_tease"],
+            scene["image_path"], accent=formats.accent_of(next_format),
+            badge=badge, cta=CTA_TEXT)
+        print(f"🪪 Next-file card drawn [{badge}]")
+    except Exception as e:
+        print(f"⚠️ Next-file card failed ({type(e).__name__}: {e}) — "
+              "the outro plays as a plain image.")
 
 
 def build_first_comment(script_data: dict) -> str:
@@ -435,7 +490,7 @@ def main():
     # they are spoken and captioned. Question first (off by default), then the
     # tease — the signature line closes the video.
     first_comment = append_question_to_script(script_data)
-    append_outro_to_script(script_data)
+    add_outro_scene(script_data)
 
     # Save the script for review/debugging (uploaded as a workflow artifact)
     with open(os.path.join(build_dir, "script.json"), "w", encoding="utf-8") as f:
@@ -444,6 +499,7 @@ def main():
     # Phase 2: assets
     script_data = generate_audio_pipeline(script_data, build_dir)
     script_data = generate_visual_pipeline(script_data, build_dir)
+    draw_outro_card(script_data, build_dir)
 
     usable = [s for s in script_data["scenes"]
               if s.get("image_path") and s.get("audio_path")]

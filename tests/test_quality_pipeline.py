@@ -1169,37 +1169,81 @@ class TestOutroTease(unittest.TestCase):
 
     def _script(self, **extra):
         data = {"next_tease": "the airliner that ran out of fuel at 41,000 feet",
+                "next_topic": topics.CORE_TOPICS[3],
                 "scenes": [{"narration": "The shell found the magazine."},
                            {"narration": "Three men survived."}]}
         data.update(extra)
         return data
 
-    def test_the_tease_closes_the_final_narration(self):
+    def test_the_tease_becomes_its_own_scene(self):
+        """Not extra words on the last scene: episode 7 shipped it that way and
+        the preview was invisible — same voice, same picture, no cut."""
         script = self._script()
-        self.main.append_outro_to_script(script)
-        self.assertEqual(script["scenes"][-1]["narration"],
-                         "Three men survived. Next file: the airliner that ran "
-                         "out of fuel at 41,000 feet. The archive stays open.")
+        self.main.add_outro_scene(script)
+        self.assertEqual(len(script["scenes"]), 3)
+        self.assertEqual(script["scenes"][1]["narration"], "Three men survived.")
+        outro = script["scenes"][-1]
+        self.assertTrue(outro["is_outro"])
+        self.assertEqual(outro["narration"],
+                         "Next file: the airliner that ran out of fuel at "
+                         "41,000 feet. The archive stays open.")
+
+    def test_the_outro_scene_has_its_own_image_prompt(self):
+        script = self._script()
+        self.main.add_outro_scene(script)
+        prompt = script["scenes"][-1]["image_prompt"]
+        self.assertIn("no faces", prompt)
+        self.assertIn("no text", prompt)
 
     def test_running_twice_does_not_duplicate_it(self):
         script = self._script()
-        self.main.append_outro_to_script(script)
-        self.main.append_outro_to_script(script)
-        self.assertEqual(
-            script["scenes"][-1]["narration"].count("Next file:"), 1)
+        self.main.add_outro_scene(script)
+        self.main.add_outro_scene(script)
+        self.assertEqual(sum(1 for s in script["scenes"]
+                             if s.get("is_outro")), 1)
 
     def test_no_tease_leaves_the_ending_alone(self):
         script = self._script(next_tease="")
-        self.main.append_outro_to_script(script)
+        self.main.add_outro_scene(script)
+        self.assertEqual(len(script["scenes"]), 2)
         self.assertEqual(script["scenes"][-1]["narration"],
                          "Three men survived.")
+
+    def test_no_next_topic_leaves_the_ending_alone(self):
+        script = self._script(next_topic="")
+        self.main.add_outro_scene(script)
+        self.assertEqual(len(script["scenes"]), 2)
+
+    def test_the_card_headline_is_the_next_storys_name(self):
+        self.assertEqual(
+            self.main.next_file_subject(
+                "The Radcliffe Line (1947), drawn in five weeks by a lawyer"),
+            "The Radcliffe Line")
+
+    def test_the_outro_is_never_used_as_the_thumbnail_frame(self):
+        """That frame is the NEXT episode's card — using it would put another
+        video's title on this one's thumbnail."""
+        import thumbnail_engine
+        scenes = [{"image_path": "a.jpg"},
+                  {"image_path": "card.jpg", "is_outro": True}]
+        self.assertEqual(thumbnail_engine.pick_source_scene(scenes), "a.jpg")
+
+    def test_the_outro_is_kept_out_of_the_transcript(self):
+        """The transcript describes THIS video; the outro advertises the next."""
+        import caption_track
+        scenes = [{"narration": "Three men survived.", "duration": 2.0},
+                  {"narration": "Next file: something else.", "duration": 2.0,
+                   "is_outro": True}]
+        text = " ".join(c[2] for c in caption_track.build_cues(scenes, [0.0, 2.0]))
+        self.assertIn("Three men survived", text)
+        self.assertNotIn("Next file", text)
 
     def test_the_switch_leaves_the_narration_alone(self):
         original = self.main.SPEAK_TEASE
         self.main.SPEAK_TEASE = False
         try:
             script = self._script()
-            self.main.append_outro_to_script(script)
+            self.main.add_outro_scene(script)
             self.assertEqual(script["scenes"][-1]["narration"],
                              "Three men survived.")
         finally:
@@ -3113,3 +3157,121 @@ class TestPermanentFailuresAreNotRetried(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNewLanes(unittest.TestCase):
+    """Craft was never the ceiling. The Cartagena Short had a real mechanism
+    and a real kicker and went nowhere, because nobody is looking for
+    Cartagena. These are the lanes people are already looking for."""
+
+    def test_every_pool_topic_maps_to_a_real_format(self):
+        for topic in topics.CORE_TOPICS + topics.EXPERIMENT_TOPICS:
+            with self.subTest(topic=topic[:50]):
+                self.assertIn(topics.format_of(topic), formats.FORMATS)
+
+    def test_every_format_is_fully_specified(self):
+        for key, spec in formats.FORMATS.items():
+            with self.subTest(format=key):
+                for field in ("name", "accent", "promise", "brief", "tags",
+                              "hashtags"):
+                    self.assertTrue(spec.get(field), f"{key}.{field}")
+                self.assertEqual(len(spec["accent"]), 3)
+                self.assertEqual(len(spec["hashtags"]), 3)
+
+    def test_each_format_has_its_own_accent(self):
+        """Three episodes of one format in a row should read as a set, which
+        only works if no two formats share a colour."""
+        accents = [f["accent"] for f in formats.FORMATS.values()]
+        self.assertEqual(len(accents), len(set(accents)))
+
+    def test_the_regime_and_law_lanes_are_actually_populated(self):
+        by_format = {}
+        for topic in topics.CORE_TOPICS:
+            by_format.setdefault(topics.format_of(topic), []).append(topic)
+        for lane in ("regime", "faultline", "law", "order", "design"):
+            self.assertGreaterEqual(len(by_format.get(lane, [])), 15, lane)
+
+    def test_consecutive_slots_change_lane(self):
+        """Concatenating the lanes would publish twenty regime stories and then
+        twenty law ones. A viewer who subscribes on a WW2 video and then gets
+        three weeks of canon law has been mis-sold."""
+        lanes = [topics.format_of(t) for t in topics.CORE_TOPICS[:10]]
+        self.assertGreaterEqual(len(set(lanes)), 4)
+        for a, b in zip(lanes, lanes[1:]):
+            self.assertNotEqual(a, b)
+
+    def test_the_faultline_brief_stops_at_history(self):
+        """This pipeline writes with free models and uploads without a human
+        reading the script. A wrong number about 1741 is embarrassing; a wrong
+        number about a war being fought this week is defamatory."""
+        brief = formats.brief_of("faultline")
+        self.assertIn("HISTORICAL", brief)
+        self.assertIn("Do NOT narrate current events", brief)
+        self.assertIn("ongoing war", brief)
+
+    def test_the_faultline_brief_demands_an_even_hand(self):
+        brief = formats.brief_of("faultline")
+        self.assertIn("same even tone", brief)
+        self.assertIn("either side", brief)
+
+    def test_the_law_brief_forbids_ranking_faiths(self):
+        brief = formats.brief_of("law")
+        self.assertIn("never compare two faiths to rank them", brief)
+        self.assertIn("what to believe", brief)
+
+    def test_the_regime_brief_forbids_glorifying_the_regime(self):
+        brief = formats.brief_of("regime")
+        self.assertIn("never make the regime look impressive", brief.lower())
+        self.assertIn("never invent a quotation", brief.lower())
+
+
+class TestCaptionsAreReadable(unittest.TestCase):
+    """"It is still hard to follow." edge-tts reports bare tokens, so every
+    caption arrived stripped of punctuation and upper-cased into one unbroken
+    shout — and _chunk_words' clause detection was testing for punctuation that
+    was never there."""
+
+    def test_punctuation_is_restored_from_the_narration(self):
+        import video_engine
+        words = [{"word": "started", "start": 0.0, "end": 0.4},
+                 {"word": "In", "start": 0.4, "end": 0.6}]
+        fixed = video_engine._repunctuate(words, "started. In")
+        self.assertEqual(fixed[0]["word"], "started.")
+        self.assertEqual(fixed[0]["start"], 0.0)
+
+    def test_a_token_count_mismatch_falls_back_rather_than_misaligning(self):
+        import video_engine
+        words = [{"word": "eighteen", "start": 0.0, "end": 0.3},
+                 {"word": "thousand", "start": 0.3, "end": 0.6}]
+        self.assertEqual(video_engine._repunctuate(words, "18,000"), words)
+
+    def test_chunks_break_on_the_restored_clause_ends(self):
+        import video_engine
+        narration = "Ladders were short. Gunfire cut them down."
+        words = [{"word": w.strip(".,"), "start": i * 0.3, "end": i * 0.3 + 0.25}
+                 for i, w in enumerate(narration.split())]
+        chunks = video_engine._chunk_words(
+            video_engine._repunctuate(words, narration))
+        first = " ".join(w["word"] for w in chunks[0])
+        self.assertEqual(first, "Ladders were short.")
+
+
+class TestTitlesMaySell(unittest.TestCase):
+    """Clickbait that delivers is not the problem; a promise that names nothing
+    is. The ban used to catch honest hard-selling titles too."""
+
+    def test_a_hard_selling_but_honest_title_passes(self):
+        for good in ("The Order That Killed 600 Men In 20 Minutes",
+                     "Britain's Worst Naval Disaster Lasted 3 Minutes",
+                     "Hitler Left 13 Minutes Before The Bomb Went Off"):
+            self.assertTrue(llm_engine.validate_title(good), good)
+
+    def test_a_promise_that_names_nothing_is_still_rejected(self):
+        for bad in ("The Untold Story of the Vasa",
+                    "The Truth About HMS Hood",
+                    "The Forgotten Disaster of 1904"):
+            self.assertFalse(llm_engine.validate_title(bad), bad)
+
+    def test_the_prompt_tells_the_writer_to_sell(self):
+        self.assertIn("SELL IT", llm_engine.SYSTEM_PROMPT)
+        self.assertIn("not heat, it is emptiness", llm_engine.SYSTEM_PROMPT)

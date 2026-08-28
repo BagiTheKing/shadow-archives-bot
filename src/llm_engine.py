@@ -116,11 +116,17 @@ noun may never be the ONLY content. The name is for search, the stake is for the
 click, and the title needs both.
   GOOD: "The Math Error That Starved Air Canada Flight 143"
   BAD:  "Dogger Bank Incident 1904" — nobody outside the subject knows what that is.
-- BANNED, because they promise significance without specifying anything: "the hidden \
-...", "the untold story", "what really happened", "the forgotten ...", "the secret \
-...", "you won't believe", "the truth about", "shocking", "insane", "this changed \
-everything". If the title would still make sense with the subject swapped out, it is \
-one of these.
+- SELL IT. This is a title competing in a feed, not a museum caption. A hard \
+number, a superlative, a stake, or a curiosity gap the script actually closes are \
+all wanted. Write the most arresting TRUE thing about the story.
+- The line is not heat, it is emptiness. "The Order That Killed 600 Men In 20 \
+Minutes" is hard-selling and completely honest — write that. What is BANNED is a \
+promise that names nothing: "the hidden ...", "the untold story", "what really \
+happened", "the forgotten ...", "the secret ...", "you won't believe", "the truth \
+about". If the title would still make sense with the subject swapped out, it is one \
+of these and it will be rejected.
+- Never promise something the script does not deliver. A viewer who feels tricked \
+does not subscribe, and this channel lives on the second video.
 - VARY THE SHAPE. The user message lists what has already been published. Do not \
 return the grammatical shape those titles use. A channel whose every title reads \
 "The <thing> That <verb>ed <someone>" has taught its audience that the videos are \
@@ -408,11 +414,23 @@ def _validate(data: dict, title_max: int = 80, avoid_titles=(),
 # Phrases that promise significance without specifying anything. The test is
 # whether the title still makes sense with the subject swapped out: "The Hidden
 # WW2 Battle" works equally well for any battle, which is what makes it useless.
+#
+# This list used to be twice as long and it was banning the wrong thing. A
+# title's job is to make someone stop scrolling, and heat is not the problem —
+# emptiness is. "The Order That Killed 600 Men In 20 Minutes" is hard-selling
+# and completely honest, and the old list had no quarrel with it, but the same
+# instinct that wrote it also wrote titles the rules then rejected for using a
+# strong word. So the ban is now only the phrases that name NOTHING: swap the
+# subject out and they still work. Everything else — superlatives, stakes,
+# numbers, a curiosity gap the script actually closes — is allowed and wanted.
 BANNED_TITLE_PHRASES = (
     "the hidden", "the untold", "untold story", "what really happened",
     "the forgotten", "the secret", "you won't believe", "you wont believe",
-    "the truth about", "shocking", "insane", "changed everything",
-    "will blow your mind", "nobody talks about", "no one talks about",
+    # Not "the truth about": dropping "shocking" from this list let "The
+    # SHOCKING Truth About HMS Hood" through, because the adjective broke the
+    # phrase. The empty promise is "truth about", whatever is stacked in front.
+    "truth about", "will blow your mind", "nobody talks about",
+    "no one talks about",
 )
 
 # Coarse grammatical shapes. This is not a taxonomy — it exists to answer one
@@ -580,11 +598,25 @@ _CLAUSE_BREAKS = {"after", "before", "because", "when", "while", "since",
                   "although", "though", "despite", "following", "until",
                   "unless", "whereas", "having"}
 
+# Weaker breaks, used only when a line must be cut and no real clause opener is
+# available. "The Sanhedrin rule in Jewish law that a unanimous guilty verdict
+# in a capital case results in acquittal" has no _CLAUSE_BREAKS at all, so a
+# plain cut at the word limit ended on "in a capital". Cutting at "that" gives
+# "the Sanhedrin rule in Jewish law", which is short but is a whole thought.
+_SOFT_BREAKS = {"that", "which", "who", "whose", "where"}
+SOFT_BREAK_MIN_WORDS = 8
+
 # Function words that cannot be the last word spoken.
 _DANGLING = _CLAUSE_BREAKS | {
     "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "by",
     "for", "from", "with", "into", "onto", "over", "under", "that", "which",
     "who", "whose", "its", "their", "his", "her", "it", "as", "than", "then",
+    "he", "she", "they", "we", "you", "what", "whom", "there", "this", "these",
+    # Auxiliaries and negators: a clause cut after one is always mid-thought
+    # ("...a territory Britain did not yet", "...told Western leaders what he had").
+    "had", "has", "have", "was", "were", "is", "are", "be", "been", "being",
+    "did", "do", "does", "will", "would", "can", "could", "should", "must",
+    "may", "might", "not", "yet", "so", "such", "own", "more", "most",
 }
 
 
@@ -604,10 +636,12 @@ def _tease_from_topic(topic: str) -> str:
     if not parts:
         return ""
 
-    # The trailing clause first, because that is where the mechanism lives.
-    # The subject is the fallback for entries whose last clause is a short
-    # qualifier ("..., against the myth") and says nothing on its own.
-    for candidate in (parts[-1], parts[0]):
+    # The LONGEST clause first: pool lines put the mechanism in whichever
+    # clause they spend the most words on. Taking the trailing clause instead
+    # picked up codas — "and was not believed" on the Jan Karski line, "because
+    # unanimity suggests the court stopped thinking" on the Sanhedrin one —
+    # which are the reaction to the hook, not the hook.
+    for candidate in (max(parts, key=len), parts[-1], parts[0]):
         clause = _speakable_clause(candidate)
         if clause:
             return clause
@@ -618,7 +652,8 @@ def _speakable_clause(clause: str) -> str:
     """One pool clause, cut to something a narrator can finish. "" if nothing
     of speakable length survives."""
     for lead in ("where ", "when ", "which ", "and ", "in part by ", "by ",
-                 "the story of "):
+                 "the story of ", "because ", "although ", "though ",
+                 "against ", "who "):
         if clause.lower().startswith(lead):
             clause = clause[len(lead):]
             break
@@ -633,8 +668,21 @@ def _speakable_clause(clause: str) -> str:
         breaks = [i for i, w in enumerate(words)
                   if w.strip(",.").lower() in _CLAUSE_BREAKS
                   and i >= MIN_TEASE_WORDS]
+        if not breaks:
+            # Last resort, and it must still leave a substantial thought. Cut
+            # at the first "who"/"that" available and the Challenger line
+            # collapses to "the Challenger disaster and the engineers", losing
+            # the half that matters; letting it run to the word limit instead
+            # keeps "...who argued against launching in the cold".
+            breaks = [i for i, w in enumerate(words)
+                      if w.strip(",.").lower() in _SOFT_BREAKS
+                      and i >= SOFT_BREAK_MIN_WORDS]
         if breaks:
             words = words[:breaks[-1]]
+    # No infinitive-trimming pass here on purpose: "to" cannot be told from a
+    # preposition without parsing, and a rule that dropped a trailing "to VERB"
+    # also ate the best line in the pool — "drawn in five weeks by a lawyer who
+    # had never been to India" became "...who had never".
     while words and words[-1].strip(",.").lower() in _DANGLING:
         words.pop()
 

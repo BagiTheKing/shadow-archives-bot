@@ -74,9 +74,39 @@ def _ass_time(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-def _chunk_words(words, max_words=3):
-    """Group word timings into caption chunks of <=3 words, breaking early on
-    punctuation so chunks follow the rhythm of the sentence."""
+def _repunctuate(words, narration: str):
+    """Puts the narration's punctuation back onto the word timings.
+
+    edge-tts reports each WordBoundary as a bare token — "started", not
+    "started." — so every caption chunk arrived stripped of punctuation and
+    then got upper-cased. On screen that reads as one unbroken shout:
+    "ADMIRAL VERNON MINTED VICTORY MEDALS BEFORE HIS INVASION EVEN STARTED IN
+    1741 VERNON SAILED 186 BRITISH WARSHIPS" — no way to tell where one
+    sentence ends and the next begins, which is exactly the "hard to follow"
+    complaint. It also broke _chunk_words, whose clause detection tests for
+    trailing punctuation that was never there, so chunks were cut purely on
+    the three-word ceiling.
+
+    The narration is the source of truth, and the tokens are in the same order,
+    so zip them. Mismatched counts (a number read as several words, an
+    expansion the voice made) fall back to the bare tokens rather than risk
+    pairing the wrong punctuation onto the wrong word.
+    """
+    spoken = (narration or "").split()
+    if len(spoken) != len(words):
+        return words
+    return [{**w, "word": s} for w, s in zip(words, spoken)]
+
+
+def _chunk_words(words, max_words=4):
+    """Group word timings into caption chunks, breaking early on punctuation so
+    chunks follow the rhythm of the sentence.
+
+    Four words rather than three: with punctuation restored the breaks now fall
+    on clause ends, and a ceiling of three was cutting short phrases in half
+    ("SIX HUNDRED CAVALRYMEN" / "CHARGED THE WRONG" / "VALLEY") faster than
+    they could be read.
+    """
     chunks, current = [], []
     for w in words:
         current.append(w)
@@ -101,8 +131,15 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
         offset = timeline_offsets[idx]
         words = scene.get("words") or []
 
+        # The next-file card already carries the tease as set type. Burning the
+        # word-synced captions over it too would stack four things on one frame
+        # — headline, tease, captions, subscribe overlay — which is exactly the
+        # unreadable ending this card exists to fix.
+        if scene.get("is_outro"):
+            continue
+
         if words:
-            chunks = _chunk_words(words)
+            chunks = _chunk_words(_repunctuate(words, scene.get("narration", "")))
             for c, chunk in enumerate(chunks):
                 start = offset + chunk[0]["start"]
                 # hold each caption until the next chunk starts (no dead gaps)
@@ -132,7 +169,14 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
                 )
 
     # End card: fades in over the last few seconds, above the narration captions.
-    if CTA_TEXT and total_duration > CTA_DURATION:
+    #
+    # Skipped when the video ends on a next-file card, which draws the same ask
+    # into the image itself. This overlay is positioned from the bottom of the
+    # frame and landed directly on the card's badge; the card can place it
+    # against the type above it instead.
+    has_card = any(s.get("is_outro")
+                   for s in script_data.get("scenes", []))
+    if CTA_TEXT and total_duration > CTA_DURATION and not has_card:
         cta_start = total_duration - CTA_DURATION
         # \fad(400,0) — fade in, then hold; the video's own 0.6s fade takes it out.
         fx = r"{\fad(400,0)}"
@@ -170,6 +214,13 @@ def _ken_burns_filter(duration: float, style: int) -> str:
     return f"{up},{zp}"
 
 
+def _static_filter(duration: float) -> str:
+    """No motion. The next-file card is typography, and Ken Burns on
+    typography either crops the headline or drifts it off-centre — the whole
+    point of the card is that the frame stops moving when the story ends."""
+    return f"scale={W}:{H}:flags=lanczos,fps={FPS}"
+
+
 def create_scene_clip(image_path, audio_path, duration, output_path, style):
     """One scene, rendered XFADE seconds longer than its narration.
 
@@ -181,7 +232,8 @@ def create_scene_clip(image_path, audio_path, duration, output_path, style):
     died because a harbour had..." still fading while the next line started.
     """
     clip_len = duration + XFADE
-    vf = _ken_burns_filter(clip_len, style)
+    vf = (_static_filter(clip_len) if style is None
+          else _ken_burns_filter(clip_len, style))
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1", "-framerate", str(FPS), "-i", image_path,
@@ -216,9 +268,11 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     clips, durations = [], []
     for idx, scene in enumerate(scenes):
         clip_path = os.path.join(build_dir, f"clip_{idx}.mp4")
-        print(f"🎞️ Rendering scene {idx} ({scene['duration']:.1f}s, motion {idx % 4})...")
+        style = None if scene.get("is_outro") else idx % 4
+        print(f"🎞️ Rendering scene {idx} ({scene['duration']:.1f}s, "
+              f"motion {'static card' if style is None else style})...")
         create_scene_clip(scene["image_path"], scene["audio_path"],
-                          scene["duration"], clip_path, style=idx % 4)
+                          scene["duration"], clip_path, style=style)
         clips.append(clip_path)
         durations.append(scene["duration"])
 

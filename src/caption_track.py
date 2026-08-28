@@ -112,6 +112,11 @@ def build_cues(scenes, offsets):
     for idx, scene in enumerate(scenes):
         if idx >= len(offsets):
             break
+        if scene.get("is_outro"):
+            # The transcript describes THIS video. The outro advertises the
+            # next one, and indexing its subject here would compete with that
+            # episode's own transcript for the same search terms.
+            continue
         offset = offsets[idx]
         duration = float(scene.get("duration") or 0)
         words = scene.get("words") or []

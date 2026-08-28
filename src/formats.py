@@ -11,9 +11,38 @@ thing fifty times and then did not deliver it.
 So the frame is no longer one frame. Each format is a different promise, kept
 inside one channel:
 
-    THE ORDER     someone chose wrong, and other people paid
-    THE DESIGN    the thing was doomed before anyone touched it
-    THE UNSOLVED  no decision, no villain, and still no answer
+    THE ORDER      someone chose wrong, and other people paid
+    THE DESIGN     the thing was doomed before anyone touched it
+    THE UNSOLVED   no decision, no villain, and still no answer
+    THE REGIME     the men who ran the century, and the ones who defied them
+    THE FAULT LINE the decision that drew a line people are still dying on
+    THE LAW        what a religion or a court actually ruled, and what it cost
+
+WHY THREE LANES BECAME SIX (August 2026)
+----------------------------------------
+The first six episodes under the rewritten writing rules produced genuinely
+good scripts — the Cartagena Short lands a real mechanism (ladders measured for
+the wall but not the ditch below) and a real kicker (the king making it illegal
+to wear the victory medals). It went nowhere, because nobody is looking for
+Cartagena. Craft was never the ceiling; the subject was.
+
+The three original lanes are all one thing: an obscure logistical accident.
+Nothing in them is a subject a person already cares about before the video
+starts. The three new lanes are, and they are the three places where the
+audience for "history that explains something" actually lives:
+
+    THE REGIME      the most-searched subject in all of history video
+    THE FAULT LINE  why the news looks the way it does
+    THE LAW         belief and law, which people argue about for free
+
+THE FAULT LINE is deliberately the ROOTS of a live conflict, never the live
+conflict itself. That is an editorial choice AND a safety one. This pipeline
+writes with free models that hallucinate, renders with AI imagery, and uploads
+without a human reading the script first. A wrong number about a 1741 siege is
+embarrassing; a wrong number about a war being fought this week is defamatory,
+and synthetic footage of it is worse. The 1916 map, the 1917 letter and the
+1953 coup are documented, checkable, evergreen, and they are what the audience
+is actually missing — the news supplies the events and never the cause.
 
 A format is worth having only if a viewer can see it, so each one carries an
 accent colour and a name on the thumbnail. Three episodes of THE DESIGN in a
@@ -76,6 +105,64 @@ FORMATS = {
         "tags": ["unsolved mysteries", "historical mysteries", "archaeology",
                  "unexplained"],
         "hashtags": ["#unsolved", "#mystery", "#history"],
+    },
+    "regime": {
+        "name": "THE REGIME",
+        "accent": (168, 85, 247),       # violet — power, not alarm
+        "promise": "the men who ran the century, and the ones who defied them",
+        "brief": (
+            "This is a REGIME story: a dictatorship, its machinery, and the "
+            "people inside it — the ones who served it and the ones who tried "
+            "to stop it. The viewer must finish knowing WHO did the thing, "
+            "WHAT they actually did, and what it cost them or everyone else. "
+            "Two hard rules. First, never make the regime look impressive; "
+            "name what it did to people, plainly, without dwelling on gore. "
+            "Second, never invent a quotation or a motive — say what is "
+            "documented and let it be as bad as it was. Where a person "
+            "resisted, their courage IS the story; give them their name."),
+        "tags": ["world war 2", "ww2 history", "nazi germany",
+                 "history documentary", "wwii"],
+        "hashtags": ["#ww2", "#history", "#worldwar2"],
+    },
+    "faultline": {
+        "name": "THE FAULT LINE",
+        "accent": (16, 224, 137),       # emerald — a map line, not a warning
+        "promise": "the decision that drew a line people are still dying on",
+        "brief": (
+            "This is a FAULT LINE story: one meeting, map, treaty or coup that "
+            "shaped a conflict the viewer has seen in the news. The viewer "
+            "must finish understanding a headline they did not understand "
+            "before. Rules, and they are not negotiable. Stop at the HISTORICAL "
+            "decision — describe what was signed, drawn or overthrown, and its "
+            "documented consequences. Do NOT narrate current events, casualty "
+            "figures from an ongoing war, or who is right today. Name what each "
+            "side was promised and by whom, in the same even tone; a viewer on "
+            "either side must finish feeling the account was fair. No "
+            "present-day call to action, no verdict on a living conflict. End "
+            "on the line that was drawn, not on what should happen now."),
+        "tags": ["middle east history", "history explained", "geopolitics",
+                 "colonial history", "history documentary"],
+        "hashtags": ["#history", "#geopolitics", "#middleeast"],
+    },
+    "law": {
+        "name": "THE LAW",
+        "accent": (226, 200, 154),      # parchment — a document, not a siren
+        "promise": "what a religion or a court actually ruled, and what it cost",
+        "brief": (
+            "This is a LAW story: one real ruling, rule or trial from a "
+            "religious or legal tradition — Islamic, Jewish, canon, or secular "
+            "— and what it meant for actual people. The viewer must finish able "
+            "to state the rule and why it existed. Rules: describe what the "
+            "tradition ITSELF holds and cite the court, council or text by "
+            "name; never characterise a faith by its worst moment or its best "
+            "one alone. Where a ruling protected someone, say so; where it "
+            "destroyed someone, say that too, with the same directness. You are "
+            "explaining a system of thought to someone outside it, not "
+            "prosecuting or defending it. Never tell the viewer what to "
+            "believe, and never compare two faiths to rank them."),
+        "tags": ["religious history", "history of law", "legal history",
+                 "comparative religion", "history documentary"],
+        "hashtags": ["#history", "#religion", "#law"],
     },
 }
 
