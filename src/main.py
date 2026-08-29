@@ -200,6 +200,13 @@ def append_question_to_script(script_data: dict) -> str:
     return question
 
 
+def _era_of(topic: str):
+    """The year a pool topic is set in, for dating the next-file card's frame.
+    Reuses the visual engine's reader so both sides agree on what counts."""
+    from visual_engine import era_from_text
+    return era_from_text(topic)
+
+
 def next_file_subject(topic: str) -> str:
     """The next story's name, for the card's headline. The pool line's head —
     "The Radcliffe Line (1947), drawn in five weeks..." -> "The Radcliffe Line".
@@ -231,18 +238,25 @@ def add_outro_scene(script_data: dict) -> None:
         return
 
     subject = next_file_subject(next_topic)
-    # The card is drawn over this image, heavily darkened and blurred, so the
-    # prompt only has to set a mood for the next story rather than illustrate
-    # it precisely — no faces, because a half-legible face under a headline is
-    # the worst thing this generator produces.
+    # Banning people outright made this the flattest frame in the video — an
+    # empty room next to five frames with a person in them. One DISTANT figure
+    # brings it back without risking the thing the ban was for, which was a
+    # half-melted face sitting under the headline. Same rule the writer already
+    # follows for the story frames: one figure at most, commit to a distance.
+    #
+    # era_year is the NEXT story's period, not this one's. Without it the frame
+    # inherits the era of the story just told and illustrates the wrong decade
+    # — see generate_visual_pipeline.
     scenes.append({
         "narration": f"Next file: {tease}. The archive stays open.",
         "image_prompt": (
             f"wide atmospheric establishing shot evoking {subject}, "
-            "no people, no faces, empty landscape or architecture, "
+            "at most one distant figure seen small in the frame or as a "
+            "silhouette, no close-up faces, "
             "dramatic chiaroscuro lighting, dark moody cinematic oil painting, "
             "visible expressive brushwork, rich texture, muted color palette "
             "with one accent color, highly detailed, no text, no watermark"),
+        "era_year": _era_of(next_topic),
         "is_outro": True,
         "outro_subject": subject,
         "outro_tease": tease,

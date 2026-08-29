@@ -1193,7 +1193,7 @@ class TestOutroTease(unittest.TestCase):
         script = self._script()
         self.main.add_outro_scene(script)
         prompt = script["scenes"][-1]["image_prompt"]
-        self.assertIn("no faces", prompt)
+        self.assertIn("no close-up faces", prompt)
         self.assertIn("no text", prompt)
 
     def test_running_twice_does_not_duplicate_it(self):
@@ -3501,3 +3501,52 @@ class TestGeminiAliasIsNotCalledTwice(unittest.TestCase):
         import llm_provider
         only = ["gemini-flash-latest", "gemini-pro-latest"]
         self.assertEqual(llm_provider._drop_alias_duplicates(only), only)
+
+
+class TestTheCardFrameIsDatedToTheNextStory(unittest.TestCase):
+    """Episode 9 was the Iranian hostage crisis and its card advertised the
+    Enabling Act, but the frame was generated under "set in the year 1979" —
+    1970s Iran drawn for a card about 1933 Germany, which reads as a bad
+    render rather than a wrong one."""
+
+    def setUp(self):
+        import main
+        self.main = main
+
+    def _outro(self, next_topic):
+        data = {"next_tease": "a tease that is long enough",
+                "next_topic": next_topic,
+                "scenes": [{"narration": "A."}, {"narration": "B."}]}
+        self.main.add_outro_scene(data)
+        return data["scenes"][-1]
+
+    def test_the_outro_carries_the_next_storys_year(self):
+        enabling = next(t for t in topics.ALL_TOPICS if "Enabling Act" in t)
+        self.assertEqual(self._outro(enabling)["era_year"], 1933)
+
+    def test_it_is_not_the_year_of_the_story_just_told(self):
+        iran = next(t for t in topics.ALL_TOPICS if "hostage crisis" in t)
+        enabling = next(t for t in topics.ALL_TOPICS if "Enabling Act" in t)
+        import visual_engine
+        self.assertEqual(visual_engine.era_from_text(iran), 1979)
+        self.assertNotEqual(self._outro(enabling)["era_year"], 1979)
+
+    def test_a_scene_era_overrides_the_videos_era(self):
+        import inspect
+        import visual_engine
+        src = inspect.getsource(visual_engine.generate_visual_pipeline)
+        self.assertIn('scene.get("era_year") or era_year', src)
+        self.assertIn("era_year=scene_era", src)
+
+    def test_a_topic_with_no_year_does_not_break_the_outro(self):
+        scene = self._outro("A story with no year in it at all")
+        self.assertIsNone(scene["era_year"])
+        self.assertTrue(scene["is_outro"])
+
+    def test_the_card_allows_one_distant_figure_but_no_close_faces(self):
+        """Banning people outright made this the flattest frame in the video."""
+        enabling = next(t for t in topics.ALL_TOPICS if "Enabling Act" in t)
+        prompt = self._outro(enabling)["image_prompt"]
+        self.assertIn("one distant figure", prompt)
+        self.assertIn("no close-up faces", prompt)
+        self.assertNotIn("no people", prompt)

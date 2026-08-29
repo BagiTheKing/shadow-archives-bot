@@ -384,8 +384,19 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
         image_path = os.path.join(output_dir, f"scene_{idx}.jpg")
         prompt = scene.get("image_prompt", "dark atmospheric historical scene, cinematic")
 
+        # A scene may date itself. The outro card is the one that does, and it
+        # has to: it advertises the NEXT episode, which is a different period
+        # from the story just told. Episode 9 was the Iranian hostage crisis
+        # and its card advertised the Enabling Act, so the card's frame was
+        # generated under "set in the year 1979, 1970s period detail, nothing
+        # modern anywhere in frame" — 1970s Iran drawn for a card about 1933
+        # Germany, which reads as a bad render rather than a wrong one.
+        scene_era = scene.get("era_year") or era_year
+        if scene_era != era_year:
+            print(f"   🕰️  scene {idx} dated separately: ~{scene_era}")
+
         print(f"🖼️ Generating image for scene {idx}...")
-        source = download_image(prompt, image_path, era_year=era_year)
+        source = download_image(prompt, image_path, era_year=scene_era)
         if source:
             print(f"📸 Saved {image_path} [{source}]")
         else:

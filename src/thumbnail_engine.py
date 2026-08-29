@@ -244,8 +244,10 @@ def make_next_file_card(source_image: str, subject: str, tease: str,
     base = ImageEnhance.Color(base).enhance(0.85)
     base = ImageEnhance.Contrast(base).enhance(1.06)
     base = ImageEnhance.Brightness(base).enhance(0.88)
-    # Just enough blur to stop fine detail fighting the headline.
-    base = base.filter(ImageFilter.GaussianBlur(2.5))
+    # Just enough blur to stop fine detail fighting the headline. 1.5, not 2.5:
+    # the type is stroked now and carries itself, and at 2.5 a sharp frame from
+    # the good generator came out looking like the cheap fallback.
+    base = base.filter(ImageFilter.GaussianBlur(1.5))
 
     # Scrim weighted to the top, where the type is, and lifting toward the
     # bottom so the lower third of the picture reads clearly.
