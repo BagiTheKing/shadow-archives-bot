@@ -183,6 +183,32 @@ def pick_source_scene(scenes):
 
 CARD_W, CARD_H = 1080, 1920
 
+# Where the type sits, as a fraction of card height, and how much scrim each
+# band needs. Heavy through the headline and tease, easing off below the
+# subscribe line so the bottom of the picture is properly visible.
+_CARD_SCRIM_STOPS = ((0.00, 0.42), (0.17, 0.60), (0.50, 0.60),
+                     (0.68, 0.38), (1.00, 0.10))
+
+
+def _card_scrim(size):
+    """Vertical gradient mask for the next-file card, from _CARD_SCRIM_STOPS.
+
+    A flat blend cannot do this job: enough darkness to carry a headline turns
+    the whole frame to mud, and enough light to show the picture loses the
+    type. Weighting it by where the words actually are gives both.
+    """
+    w, h = size
+    mask = Image.new("L", (1, h))
+    px = mask.load()
+    for y in range(h):
+        t = y / max(h - 1, 1)
+        for (t0, a0), (t1, a1) in zip(_CARD_SCRIM_STOPS, _CARD_SCRIM_STOPS[1:]):
+            if t <= t1 or t1 == 1.0:
+                span = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+                px[0, y] = int(255 * (a0 + (a1 - a0) * min(max(span, 0.0), 1.0)))
+                break
+    return mask.resize((w, h))
+
 
 def _fit_lines(d, text, max_width, start, floor, max_lines):
     """Largest font size at which `text` wraps into at most max_lines."""
@@ -209,14 +235,31 @@ def make_next_file_card(source_image: str, subject: str, tease: str,
     base = Image.open(source_image).convert("RGB")
     base = _cover(base, CARD_W, CARD_H)
 
-    # Pushed much further down than a thumbnail: this is a backdrop for a full
-    # screen of type, not an image with a caption on it.
-    base = ImageEnhance.Color(base).enhance(0.45)
-    base = ImageEnhance.Brightness(base).enhance(0.42)
-    base = base.filter(ImageFilter.GaussianBlur(6))
+    # The first version of this graded the picture into oblivion — colour 0.45,
+    # brightness 0.42, a 6px blur AND a 35% black blend on top — so the card
+    # played as white type on a black screen and the frame the generator had
+    # actually produced was invisible. The image is the difference between a
+    # title card and a trailer, so it stays legible: a light touch here, and
+    # contrast for the type comes from the gradient below instead.
+    base = ImageEnhance.Color(base).enhance(0.85)
+    base = ImageEnhance.Contrast(base).enhance(1.06)
+    base = ImageEnhance.Brightness(base).enhance(0.88)
+    # Just enough blur to stop fine detail fighting the headline.
+    base = base.filter(ImageFilter.GaussianBlur(2.5))
 
+    # Scrim weighted to the top, where the type is, and lifting toward the
+    # bottom so the lower third of the picture reads clearly.
     black = Image.new("RGB", (CARD_W, CARD_H), (5, 5, 8))
-    base = Image.blend(base, black, 0.35)
+    base = Image.composite(black, base, _card_scrim((CARD_W, CARD_H)))
+
+    # Vignette: pulls the corners down so the frame feels composed rather than
+    # cropped, and keeps the eye on the centre column of type.
+    vig = Image.new("L", (CARD_W, CARD_H), 0)
+    ImageDraw.Draw(vig).ellipse(
+        [-CARD_W * 0.30, -CARD_H * 0.12, CARD_W * 1.30, CARD_H * 1.12], fill=255)
+    vig = vig.filter(ImageFilter.GaussianBlur(CARD_W // 7))
+    base = Image.composite(base, Image.new("RGB", (CARD_W, CARD_H), (0, 0, 0)),
+                           vig)
 
     d = ImageDraw.Draw(base)
     margin = int(CARD_W * 0.085)
@@ -243,19 +286,30 @@ def make_next_file_card(source_image: str, subject: str, tease: str,
     d.rectangle([margin, y, margin + int(CARD_W * 0.16), y + 8], fill=accent)
     lx, ly = margin, y + int(CARD_H * 0.028)
     for ch in label.upper():
-        d.text((lx, ly), ch, font=label_font, fill=accent)
+        d.text((lx, ly), ch, font=label_font, fill=accent,
+               stroke_width=max(2, int(label_font.size * 0.05)),
+               stroke_fill=(0, 0, 0))
+        # textlength ignores the stroke, so the tracking stays even.
         lx += d.textlength(ch, font=label_font) + int(CARD_W * 0.009)
     y += label_h
 
+    # Stroke, not just an offset shadow. The picture behind this is a different
+    # image every episode and an offset shadow only protects one side of a
+    # letter — over a bright patch the other side disappears. An outline holds
+    # the type on anything the generator produces.
     for line in subject_lines:
-        d.text((margin + 4, y + 4), line, font=subject_font, fill=(0, 0, 0))
-        d.text((margin, y), line, font=subject_font, fill=WHITE)
+        d.text((margin + 5, y + 5), line, font=subject_font, fill=(0, 0, 0))
+        d.text((margin, y), line, font=subject_font, fill=WHITE,
+               stroke_width=max(2, int(subject_font.size * 0.045)),
+               stroke_fill=(0, 0, 0))
         y += subject_lh
 
     y += int(CARD_H * 0.035)
     for line in tease_lines:
         d.text((margin + 3, y + 3), line, font=tease_font, fill=(0, 0, 0))
-        d.text((margin, y), line, font=tease_font, fill=(214, 214, 220))
+        d.text((margin, y), line, font=tease_font, fill=(228, 228, 232),
+               stroke_width=max(2, int(tease_font.size * 0.05)),
+               stroke_fill=(0, 0, 0))
         y += tease_lh
 
     if badge:
@@ -281,7 +335,8 @@ def make_next_file_card(source_image: str, subject: str, tease: str,
         d.text((margin + 3, cy + int(CARD_H * 0.030) + 3), cta.upper(),
                font=cf, fill=(0, 0, 0))
         d.text((margin, cy + int(CARD_H * 0.030)), cta.upper(),
-               font=cf, fill=accent)
+               font=cf, fill=accent,
+               stroke_width=max(2, int(cf.size * 0.05)), stroke_fill=(0, 0, 0))
 
     base.save(output_path, "JPEG", quality=90, optimize=True)
     return output_path

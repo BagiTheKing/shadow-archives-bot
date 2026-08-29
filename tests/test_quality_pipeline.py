@@ -3341,3 +3341,68 @@ class TestEveryRejectionSaysWhy(unittest.TestCase):
             with self.subTest(data=str(data)[:60]):
                 self.assertFalse(ok)
                 self.assertTrue(out.strip(), "rejected silently")
+
+
+class TestNextFileCardShowsItsPicture(unittest.TestCase):
+    """The first card graded the frame into oblivion — colour 0.45, brightness
+    0.42, a 6px blur AND a 35% black blend — so it played as white type on a
+    black screen even though workers-ai had produced a real image for it."""
+
+    def setUp(self):
+        from PIL import Image, ImageDraw
+        self.tmp = tempfile.mkdtemp()
+        self.src = os.path.join(self.tmp, "frame.jpg")
+        # A frame with real tonal range: bright sky, mid ground, dark base.
+        img = Image.new("RGB", (1080, 1920))
+        d = ImageDraw.Draw(img)
+        for y in range(1920):
+            t = y / 1920
+            d.line([(0, y), (1080, y)],
+                   fill=(int(200 - 120 * t), int(170 - 105 * t),
+                         int(120 - 75 * t)))
+        img.save(self.src)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _card(self, **kw):
+        from PIL import Image
+        import thumbnail_engine
+        out = os.path.join(self.tmp, "card.jpg")
+        thumbnail_engine.make_next_file_card(
+            self.src, "The Radcliffe Line",
+            "drawn in five weeks by a lawyer", out,
+            accent=(16, 224, 137), badge="THE FAULT LINE · 1947", **kw)
+        return Image.open(out).convert("RGB")
+
+    def test_the_card_is_not_a_black_screen(self):
+        card = self._card()
+        pixels = list(card.getdata())
+        mean = sum(sum(p) / 3 for p in pixels) / len(pixels)
+        self.assertGreater(mean, 30, "the card rendered essentially black")
+
+    def test_the_bottom_of_the_picture_stays_visible(self):
+        """The scrim is weighted to the type at the top; below the subscribe
+        line the frame should read clearly."""
+        card = self._card()
+        bottom = card.crop((0, 1500, 1080, 1900))
+        px = list(bottom.getdata())
+        mean = sum(sum(p) / 3 for p in px) / len(px)
+        self.assertGreater(mean, 40)
+
+    def test_the_image_still_varies_across_the_frame(self):
+        """A flat blend would make every row the same. The picture has to
+        survive as a picture, not as a tint."""
+        card = self._card()
+        rows = [card.crop((300, y, 800, y + 40)) for y in (200, 900, 1700)]
+        means = [sum(sum(p) / 3 for p in list(r.getdata())) / len(list(r.getdata()))
+                 for r in rows]
+        self.assertGreater(max(means) - min(means), 12)
+
+    def test_the_type_is_stroked_so_it_survives_a_bright_frame(self):
+        """Different image every episode: an offset shadow only protects one
+        side of a letter."""
+        import inspect
+        import thumbnail_engine
+        src = inspect.getsource(thumbnail_engine.make_next_file_card)
+        self.assertGreaterEqual(src.count("stroke_fill"), 3)
