@@ -154,16 +154,21 @@ def is_saturated(topic: str, youtube=None) -> bool:
     return verdict
 
 
-def vet(pick, exclude, youtube=None):
+def vet(pick, exclude, youtube=None, max_checks=None):
     """Walks candidates until one is not measurably saturated.
 
     `pick` is called as pick(exclude) and returns a topic or None; rejected
     topics are added to `exclude` so the next call moves on. Returns
     (topic, rejected).
+
+    `max_checks` overrides the per-run ceiling. The next-file promise uses a
+    smaller budget than today's topic: it only has to avoid teasing something
+    obviously saturated, and it is spending the same Data API allowance.
     """
     rejected = []
     exclude = set(exclude)
-    for _ in range(max(1, MAX_CHECKS)):
+    budget = MAX_CHECKS if max_checks is None else max_checks
+    for _ in range(max(1, budget)):
         topic = pick(exclude)
         if not topic or not is_saturated(topic, youtube):
             return topic, rejected

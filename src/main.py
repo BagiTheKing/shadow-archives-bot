@@ -426,19 +426,23 @@ def plan_run():
     used = covered_topics(history)
     print(f"📕 {len(used)} pool topic(s) already published — excluded.")
 
-    # The last upload's outro promised a specific next story. Keep the promise:
-    # the rotation drifts between runs, and a channel that teases one story and
-    # publishes another has taught viewers the tease means nothing. The one
-    # thing that outranks the promise is measured saturation — publishing into
-    # a feed that already has fifty better-funded versions helps nobody.
+    # The last upload's outro promised a specific next story, on screen and out
+    # loud. Keep it. Saturation used to override the promise here, and that was
+    # the wrong place to check: episode 8 teased the Iranian hostage crisis,
+    # the next run measured it at 9 big Shorts, dropped it, and published the
+    # Enabling Act instead — so the card had advertised a video that was never
+    # going to exist. The check belongs BEFORE the promise is made, and it is
+    # done there now, so anything reaching this point was already vetted.
+    #
+    # A topic that has since been published is still refused: that is
+    # correctness, not preference, and republishing it would be worse than
+    # breaking the tease.
     topic = None
     promised = promised_topic(history)
-    if promised and promised not in used:
-        if is_saturated(promised):
-            print("⚠️ The promised next file is measurably saturated — "
-                  "falling back to the rotation rather than publishing into "
-                  "a full feed.")
-            used = set(used) | {promised}
+    if promised:
+        if promised in used:
+            print(f"⚠️ The promised next file has since been published — "
+                  f"falling back to the rotation. ({promised[:60]})")
         else:
             print(f"🔗 Keeping the last upload's promise: {promised[:70]}")
             topic = promised
@@ -451,8 +455,17 @@ def plan_run():
             print(f"   ↩︎ skipped as saturated: {r[:70]}")
 
     # Tomorrow's story, teased in this video's outro and written into its
-    # description as the promise tomorrow's run reads back.
-    upcoming = pick_topic(exclude=set(used) | {topic}) if topic else None
+    # description as the promise tomorrow's run reads back. Vetted HERE, which
+    # is the whole point: the tease is a public commitment, so nothing goes on
+    # the card that the next run would then refuse to make. A smaller budget
+    # than today's topic — it shares the same Data API allowance, and one
+    # obviously-saturated candidate skipped is most of the value.
+    upcoming = None
+    if topic:
+        upcoming, passed_over = vet(lambda excl: pick_topic(exclude=excl),
+                                    set(used) | {topic}, max_checks=2)
+        for r in passed_over:
+            print(f"   ↩︎ not promised, saturated: {r[:70]}")
 
     episode = next_episode_number(history, SERIES_NAME)
     return topic, recent_titles(history), episode, upcoming

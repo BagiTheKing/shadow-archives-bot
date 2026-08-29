@@ -154,6 +154,29 @@ def _gemini_rank(model_id: str):
     return (tier, alias, -version)
 
 
+def _drop_alias_duplicates(ids: list) -> list:
+    """Removes '-latest' aliases when the model they point at is also listed.
+
+    Google's catalogue returns both 'gemini-flash-latest' and the pinned
+    version it currently resolves to, and the pool treats them as two separate
+    models. They are one model sharing one quota bucket, so the chain spent
+    four calls a minute on it against a five-per-minute free-tier limit and
+    locked itself out of its own best writer — the 429 gives the game away by
+    naming 'gemini-3.7-flash' in the reply to a 'gemini-flash-latest' request.
+
+    Only dropped when something pinned survives, so a catalogue of nothing but
+    aliases still yields a usable list.
+    """
+    pinned = [i for i in ids if not i.endswith("-latest")]
+    if not pinned:
+        return ids
+    dropped = [i for i in ids if i.endswith("-latest")]
+    if dropped:
+        print(f"↪️  Skipping alias model(s) {', '.join(dropped)}: same quota "
+              f"bucket as a pinned model already in the chain.")
+    return pinned
+
+
 def discover_gemini_models(client) -> list:
     """Model IDs this key can actually use today, best first.
 
@@ -175,6 +198,7 @@ def discover_gemini_models(client) -> list:
                 continue
             ids.append(mid)
         if ids:
+            ids = _drop_alias_duplicates(ids)
             ids.sort(key=_gemini_rank)
             return ids[:GEMINI_MAX_MODELS]
         print("⚠️ Gemini listed no usable text models — using fallback names.")

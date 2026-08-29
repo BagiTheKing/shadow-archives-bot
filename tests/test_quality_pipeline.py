@@ -3406,3 +3406,98 @@ class TestNextFileCardShowsItsPicture(unittest.TestCase):
         import thumbnail_engine
         src = inspect.getsource(thumbnail_engine.make_next_file_card)
         self.assertGreaterEqual(src.count("stroke_fill"), 3)
+
+
+class TestThePromiseIsVettedBeforeItIsMade(unittest.TestCase):
+    """Episode 8's card promised the Iranian hostage crisis. The next run
+    measured it at 9 big Shorts, dropped it, and published the Enabling Act —
+    so the card had advertised a video that was never going to exist. The
+    saturation check belongs BEFORE the promise, not after it."""
+
+    def setUp(self):
+        import main
+        self.main = main
+        self._loader = main.load_published
+        self._sat = self.main.is_saturated
+
+    def tearDown(self):
+        self.main.load_published = self._loader
+        self.main.is_saturated = self._sat
+        import topic_reach
+        topic_reach.is_saturated = self._sat
+
+    def _saturate(self, *topics):
+        import topic_reach
+        bad = set(topics)
+        topic_reach.is_saturated = lambda t, y=None: t in bad
+        self.main.is_saturated = topic_reach.is_saturated
+
+    def test_a_saturated_topic_is_never_promised(self):
+        saturated = topics.CORE_TOPICS[1]
+        self.main.load_published = lambda *a, **k: [_video("Old", 200)]
+        self._saturate(saturated)
+        _, _, _, upcoming = self.main.plan_run()
+        self.assertNotEqual(upcoming, saturated)
+
+    def test_a_promise_survives_being_saturated_later(self):
+        """Once it is on screen it is a commitment. Only vetting beforehand
+        stops the conflict, so at publish time the promise wins."""
+        promised = topics.CORE_TOPICS[4]
+        self.main.load_published = lambda *a, **k: [
+            _video("Yesterday", 30,
+                   description=f"x\n\nNext file: {promised}\n")]
+        self._saturate(promised)
+        topic, _, _, _ = self.main.plan_run()
+        self.assertEqual(topic, promised)
+
+    def test_a_promise_already_published_is_still_refused(self):
+        """Correctness, not preference: republishing beats breaking a tease."""
+        promised = topics.CORE_TOPICS[0]
+        self.main.load_published = lambda *a, **k: [
+            _video("Yesterday", 30,
+                   description=f"x\n\n{promised}\n\nNext file: {promised}\n")]
+        self._saturate()
+        topic, _, _, _ = self.main.plan_run()
+        self.assertNotEqual(topic, promised)
+
+    def test_the_promise_is_never_the_topic_just_published(self):
+        self.main.load_published = lambda *a, **k: [_video("Old", 200)]
+        self._saturate()
+        topic, _, _, upcoming = self.main.plan_run()
+        self.assertTrue(upcoming)
+        self.assertNotEqual(upcoming, topic)
+
+
+class TestOneWeakModelCannotKillTheRun(unittest.TestCase):
+    """A 2.6B free model that had just failed eight JSON attempts answered
+    {"duplicate": true} to the Enabling Act — a topic never published — and
+    ended the whole run before the remaining models were tried."""
+
+    def test_a_second_opinion_is_required(self):
+        self.assertGreaterEqual(llm_engine.DUPLICATE_VOTES_NEEDED, 2)
+
+    def test_one_vote_moves_to_the_next_model_instead_of_returning(self):
+        import inspect
+        src = inspect.getsource(llm_engine.generate_video_script)
+        # The vote is recorded and the loop continues; only the threshold exits.
+        self.assertIn("duplicate_votes.append", src)
+        self.assertIn("DUPLICATE_VOTES_NEEDED", src)
+        self.assertRegex(
+            src, r"if len\(duplicate_votes\) >= DUPLICATE_VOTES_NEEDED:"
+                 r"[\s\S]{0,200}?return None")
+
+
+class TestGeminiAliasIsNotCalledTwice(unittest.TestCase):
+    """'gemini-flash-latest' and 'gemini-3.7-flash' are one model on one quota
+    bucket. Calling both spent 4 requests a minute against a limit of 5."""
+
+    def test_the_alias_is_dropped_when_a_pinned_model_exists(self):
+        import llm_provider
+        kept = llm_provider._drop_alias_duplicates(
+            ["gemini-flash-latest", "gemini-3.7-flash", "gemini-3.5-flash"])
+        self.assertEqual(kept, ["gemini-3.7-flash", "gemini-3.5-flash"])
+
+    def test_a_catalogue_of_only_aliases_is_left_alone(self):
+        import llm_provider
+        only = ["gemini-flash-latest", "gemini-pro-latest"]
+        self.assertEqual(llm_provider._drop_alias_duplicates(only), only)

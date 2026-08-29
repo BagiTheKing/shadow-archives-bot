@@ -307,6 +307,11 @@ BANNED_HOOK_OPENERS = (
 
 HOOK_MAX_WORDS = 14  # prompt asks for 12; allow slight slack before rejecting
 
+# How many independent writers must call a topic already-published before the
+# run stands down on their say-so. One is not enough: the weakest models in the
+# chain answer {"duplicate": true} as an easy way out of a hard JSON task.
+DUPLICATE_VOTES_NEEDED = int(os.getenv("DUPLICATE_VOTES_NEEDED", "2"))
+
 # Words that are capitalised only because they start the sentence. Anything else
 # capitalised in first position is a real name ("Austria's army attacked itself").
 SENTENCE_OPENERS = {
@@ -816,6 +821,10 @@ def generate_video_script(topic: str = None, avoid_titles=(),
         "Output ONLY the JSON object."
     )
 
+    # Models that answered "this is already published". Collected rather than
+    # obeyed on sight — see the duplicate branch below.
+    duplicate_votes = []
+
     for model in pool.models:
         client = pool.client_for(model)
         for attempt in range(1, max_retries_per_model + 1):
@@ -835,10 +844,29 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     raise ValueError("model returned empty content")
                 data = _extract_json(content)
                 if data.get("duplicate") and not data.get("scenes"):
-                    # The writer recognised the topic as one already published.
-                    # Trust it: the caller's exclusion list missed this one.
-                    print("🚫 Writer reports this story is already published.")
-                    return None
+                    # A duplicate report is a VOTE, not a verdict.
+                    #
+                    # This used to return immediately — "trust it" — and on
+                    # 2026-08-29 a 2.6B free model that had just failed to
+                    # produce valid JSON on eight other attempts answered
+                    # {"duplicate": true} to the Enabling Act, a topic the
+                    # channel has never covered, and killed the whole run
+                    # before the remaining models were even tried.
+                    #
+                    # The real duplicate guard is upstream and reads the
+                    # channel itself: covered_topics() had already excluded 43
+                    # published topics from that very run. This is only a
+                    # backstop for what token matching misses, so it needs
+                    # corroboration before it outranks a live API read.
+                    duplicate_votes.append(model)
+                    print(f"🚫 {model} reports this story is already "
+                          f"published (vote {len(duplicate_votes)} of "
+                          f"{DUPLICATE_VOTES_NEEDED}).")
+                    if len(duplicate_votes) >= DUPLICATE_VOTES_NEEDED:
+                        print("🚫 Enough writers agree — treating the topic as "
+                              "already published.")
+                        return None
+                    break   # this model has nothing else to offer; next one
                 if _validate(data, title_max, avoid_titles, series_name):
                     data["topic"] = topic
                     data["format"] = episode_format
