@@ -136,8 +136,8 @@ cinematic oil painting, visible expressive brushwork, rich texture, muted color 
 palette with one accent color, highly detailed, no text, no watermark"
 
 TITLE RULES (the title is the second filter, after the hook):
-- No ALL CAPS words, no clickbait the script does not deliver. The user message
-states the hard character limit; it is a ceiling, not a target.
+- No ALL CAPS words. The user message states the hard character limit; it is a
+ceiling, not a target.
 - Name the CONSEQUENCE, not the event. "X Happened in 1899" states a flat fact and \
 does not earn a click.
 - UNDERSTANDABLE ON SIGHT. Someone who has never heard of this event must know what \
