@@ -327,6 +327,16 @@ _request_count = 0
 MAX_PARSE_FAILURES = 2
 _parse_failures = {}
 
+# A model returning the identical 400 "invalid argument" on every attempt is
+# not a fluke either — it means this key's request shape is incompatible with
+# that model (a param it does not accept, a deprecated ID that still 200s on
+# /models but 400s on /chat/completions). Found live: gemini-3.6-flash failed
+# this way on every one of six chapters in one run and was never dropped,
+# because only 404 and 429/quota errors were retired — burning a request per
+# attempt for a model that had already proven it could never succeed.
+MAX_BAD_REQUEST_FAILURES = 2
+_bad_request_failures = {}
+
 # Models this key cannot use today: retired (404) or out of quota (429).
 # Cleared only by starting a new run.
 _retired = set()
@@ -391,9 +401,11 @@ def _quota_reset(err: str) -> str:
 
 
 def _usable_models(models):
-    """Drops models that have already proved they cannot return JSON today."""
+    """Drops models that have already proved they cannot return JSON today,
+    or that this key cannot successfully call at all."""
     live = [m for m in models
             if _parse_failures.get(m, 0) < MAX_PARSE_FAILURES
+            and _bad_request_failures.get(m, 0) < MAX_BAD_REQUEST_FAILURES
             and m not in _retired]
     # If every model has been written off, try them all again rather than
     # returning nothing: a degraded reply still beats no reply.
@@ -564,6 +576,15 @@ def _call(pool, system, user, max_tokens):
                 _retired.add(model)
                 print(f"   ⛔ {model} is out of quota — dropped for this run.")
                 time.sleep(5)
+            elif "400" in err or "invalid argument" in err.lower():
+                # Not a fluke: this key's request shape does not work against
+                # this model at all, and every retry pays the same failure.
+                # See MAX_BAD_REQUEST_FAILURES above for the run that found this.
+                _bad_request_failures[model] = _bad_request_failures.get(model, 0) + 1
+                if _bad_request_failures[model] >= MAX_BAD_REQUEST_FAILURES:
+                    _retired.add(model)
+                    print(f"   ⛔ dropping {model} for the rest of this run "
+                          f"({MAX_BAD_REQUEST_FAILURES} bad-request errors).")
     return None
 
 
