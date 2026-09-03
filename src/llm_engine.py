@@ -35,6 +35,41 @@ def get_free_models(limit: int = 6) -> list:
         print(f"⚠️ Could not fetch live model list ({e}), using router only.")
     return models
 
+# Whether hard-sell / sensational language is allowed in narration, hooks, handoffs
+# and titles. Defaults on: 67 videos in 2 months returned 27 subscribers and 10k
+# views, with a measured overall thumbnail CTR of 1.67% — well under the ~4%
+# floor for a small channel — so the restrained voice is the thing on trial here,
+# not the thing defended by default. Set CLICKBAIT_MODE=off to fall back to the
+# original restrained phrasing (the "BANNED phrases" lists below) if the test goes
+# badly and needs reverting without hunting the lists back down.
+#
+# This does NOT touch factual accuracy. "Never invent facts, dates, numbers or
+# quotes" stays enforced regardless of this flag — that rule protects against
+# misinformation strikes and is not what was being tested. What this flag
+# controls is marketing language: title framing, hooks, teases, sensational
+# phrasing. A title can ask a dramatic question the video then answers; the
+# narration itself still can't assert something the record doesn't support.
+CLICKBAIT_MODE = os.getenv("CLICKBAIT_MODE", "on").strip().lower() != "off"
+
+# Reinstates the original restraint when CLICKBAIT_MODE=off. Kept as an addendum
+# rather than deleted so reverting the experiment is a one-line env var flip, not
+# an archaeology project through git history.
+_RESTRAINED_ADDENDUM = """
+
+RESTRAINED MODE IS ACTIVE (CLICKBAIT_MODE=off) — the following are additionally banned:
+- Narration phrases: "little did they know", "but that's not all", "what happened \
+next will shock you", "to this day", "lost to history", "the rest is history".
+- Title phrases: "the hidden", "the untold", "untold story", "what really happened", \
+"the forgotten", "the secret", "you won't believe", "you wont believe", "truth about", \
+"will blow your mind", "nobody talks about", "no one talks about"."""
+
+
+def get_system_prompt() -> str:
+    """SYSTEM_PROMPT, with the restrained-language addendum only when the
+    hard-sell experiment is explicitly switched off."""
+    return SYSTEM_PROMPT if CLICKBAIT_MODE else SYSTEM_PROMPT + _RESTRAINED_ADDENDUM
+
+
 SYSTEM_PROMPT = """You are a script writer for The Archive Paradox, a YouTube Shorts channel about \
 catastrophic decisions: one order, one design flaw, one miscalculation, and the disaster it caused.
 You write about REAL, verifiable historical events. Never invent facts, dates, or numbers.
@@ -84,8 +119,6 @@ not, simplify until they could.
 WRITING RULES:
 - Short punchy sentences. Max 15 words per sentence.
 - Concrete specifics (numbers, names, dates) beat vague drama.
-- BANNED phrases: "little did they know", "but that's not all", "what happened next \
-will shock you", "to this day", "lost to history", "the rest is history".
 - Write for the ear, not the page: no parentheses, no semicolons.
 
 IMAGE PROMPTS:
@@ -117,16 +150,15 @@ click, and the title needs both.
   GOOD: "The Math Error That Starved Air Canada Flight 143"
   BAD:  "Dogger Bank Incident 1904" — nobody outside the subject knows what that is.
 - SELL IT. This is a title competing in a feed, not a museum caption. A hard \
-number, a superlative, a stake, or a curiosity gap the script actually closes are \
-all wanted. Write the most arresting TRUE thing about the story.
-- The line is not heat, it is emptiness. "The Order That Killed 600 Men In 20 \
-Minutes" is hard-selling and completely honest — write that. What is BANNED is a \
-promise that names nothing: "the hidden ...", "the untold story", "what really \
-happened", "the forgotten ...", "the secret ...", "you won't believe", "the truth \
-about". If the title would still make sense with the subject swapped out, it is one \
-of these and it will be rejected.
-- Never promise something the script does not deliver. A viewer who feels tricked \
-does not subscribe, and this channel lives on the second video.
+number, a superlative, a stake, a curiosity gap, or a provocative question are \
+all wanted. Write the most arresting thing about the story you can, and go hard.
+- A question-led title is allowed to prime an assumption the video complicates or \
+answers "no" to, as long as the video actually engages that exact question — \
+"Did NASA Deliberately Sacrifice the Challenger Crew?" is fair when the video \
+seriously examines whether the decision was reckless disregard versus something \
+more damning, and answers it. What is never allowed is a title asserting, as \
+fact, something the script does not support — the film itself still only reports \
+what the record shows.
 - VARY THE SHAPE. The user message lists what has already been published. Do not \
 return the grammatical shape those titles use. A channel whose every title reads \
 "The <thing> That <verb>ed <someone>" has taught its audience that the videos are \
@@ -433,18 +465,20 @@ def _validate(data: dict, title_max: int = 80, avoid_titles=(),
     return True
 
 
-# Phrases that promise significance without specifying anything. The test is
-# whether the title still makes sense with the subject swapped out: "The Hidden
-# WW2 Battle" works equally well for any battle, which is what makes it useless.
+# Phrases that promise significance without specifying anything. The test used
+# to be whether the title still makes sense with the subject swapped out: "The
+# Hidden WW2 Battle" works equally well for any battle, which was supposed to be
+# what made it useless.
 #
-# This list used to be twice as long and it was banning the wrong thing. A
-# title's job is to make someone stop scrolling, and heat is not the problem —
-# emptiness is. "The Order That Killed 600 Men In 20 Minutes" is hard-selling
-# and completely honest, and the old list had no quarrel with it, but the same
-# instinct that wrote it also wrote titles the rules then rejected for using a
-# strong word. So the ban is now only the phrases that name NOTHING: swap the
-# subject out and they still work. Everything else — superlatives, stakes,
-# numbers, a curiosity gap the script actually closes — is allowed and wanted.
+# It wasn't. "Soviet Invasion of Kuril Islands 1945: The Hidden WW2 Battle" —
+# published before this list existed to catch it — measured the BEST
+# click-through rate of any long-form video on the channel (3.67%, against a
+# ~1.8% average for the rest of the long-form catalog). One data point isn't
+# proof, but it directly contradicts the theory this list was built on, and the
+# channel's actual numbers (27 subscribers, 10k views, 67 videos, 1.67% overall
+# CTR) say the restrained approach was not working either. So this list is now
+# retired by default — see CLICKBAIT_MODE above — and kept only as the fallback
+# for CLICKBAIT_MODE=off.
 BANNED_TITLE_PHRASES = (
     "the hidden", "the untold", "untold story", "what really happened",
     "the forgotten", "the secret", "you won't believe", "you wont believe",
@@ -551,11 +585,12 @@ def validate_title(title: str, avoid_titles=(), series_name: str = "") -> bool:
         return False
 
     low = text.lower()
-    for phrase in BANNED_TITLE_PHRASES:
-        if phrase in low:
-            print(f"⚠️ Title rejected: {phrase!r} promises significance without "
-                  f"naming anything. ({text!r})")
-            return False
+    if not CLICKBAIT_MODE:
+        for phrase in BANNED_TITLE_PHRASES:
+            if phrase in low:
+                print(f"⚠️ Title rejected: {phrase!r} promises significance without "
+                      f"naming anything. ({text!r})")
+                return False
 
     shape = title_shape(text)
     if _shape_is_saturated(shape, avoid_titles, series_name):
@@ -833,7 +868,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                 response = client.chat.completions.create(
                     model=model,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": get_system_prompt()},
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.8,

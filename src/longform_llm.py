@@ -23,7 +23,7 @@ from openai import OpenAI
 from audio_engine import is_speakable
 from llm_engine import (get_free_models, normalize_thumbnail_fields,
                         validate_title, _extract_json, _validate_hook,
-                        _has_proper_noun)
+                        _has_proper_noun, CLICKBAIT_MODE)
 from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
@@ -209,6 +209,24 @@ def _era_from_topic(topic: str):
     decide which side of the photography line a story sits on."""
     return era_from_text(topic)
 
+
+# Reinstated in the prompt only when CLICKBAIT_MODE=off (see llm_engine.py for
+# the flag and the reasoning: the restrained voice is what's on trial, not the
+# default). Read once at import — this only needs to react to the env var at
+# process start, not mid-run.
+_RESTRAINED_VOICE_ADDENDUM = "" if CLICKBAIT_MODE else (
+    "RESTRAINED MODE IS ACTIVE (CLICKBAIT_MODE=off) — additionally BANNED: "
+    "\"little did they know\", \"what happened next will shock you\", \"to this "
+    "day\", \"lost to history\", \"the rest is history\", \"buckle up\", \"let "
+    "that sink in\".\n\n"
+)
+
+# Same flag, for the packaging call's title prompt.
+_RESTRAINED_TITLE_ADDENDUM = "" if CLICKBAIT_MODE else (
+    "BANNED, because they would fit any story at all: 'the hidden ...', "
+    "'the untold story', 'what really happened', 'the forgotten ...', "
+    "'the secret ...', 'the truth about', 'shocking', 'insane'.\n")
+
 SYSTEM_PROMPT = f"""You write documentary narration for The Archive Paradox, a YouTube \
 channel about catastrophic decisions: one order, one design flaw, one miscalculation, \
 and the disaster it caused.
@@ -221,10 +239,23 @@ VOICE:
 - Short declarative sentences. Maximum 20 words each.
 - Write for the ear: no parentheses, no semicolons, no bulleted lists.
 - Concrete specifics over adjectives. "Forty tonnes of propellant" beats "an enormous amount".
-- BANNED: "little did they know", "what happened next will shock you", "to this day", \
-"lost to history", "the rest is history", "buckle up", "let that sink in".
 - Do not address the audience. No "you might be wondering". No "we".
 
+PLAIN LANGUAGE (violating this is why a technical chapter loses the viewer even \
+though every sentence is short):
+- Write for someone who has NEVER heard of this event and knows nothing about the \
+period or the field. This is a documentary for a general audience, not a briefing \
+for specialists.
+- Any technical, military, engineering or period-specific term — "tang and clevis \
+joint", "joint rotation", "a salvo", "a flight readiness review" — must be explained \
+in plain words in the same sentence it first appears, or replaced with the plain \
+description outright. A reader should never have to already know the field to \
+follow the mechanism.
+- This applies to the MECHANISM the whole video turns on most of all: if the \
+viewer cannot repeat, in their own words, what actually failed and why, the \
+chapter has not done its job no matter how accurate it is.
+
+{_RESTRAINED_VOICE_ADDENDUM}
 IMAGE PROMPTS:
 - One clear focal subject each: one person, one object, one place. Crowded prompts \
 produce muddy images.
@@ -568,18 +599,21 @@ def _handoff_rule(next_heading) -> str:
         return ("This is the FINAL chapter. Close the video. Do not open a new "
                 "question, do not tease anything, and do not end on a moral. "
                 "End on the concrete detail that stays with the viewer.\n\n")
-    return (
-        f"HAND OFF TO THE NEXT CHAPTER, which is titled \"{next_heading}\".\n"
-        "Your LAST sentence must leave one thing unresolved, so the viewer needs "
-        "the next chapter to settle it. State it as a flat fact, not a tease: "
-        "name a document nobody had read, an order already signed, a person "
-        "already on their way, or a number that does not yet add up. Keep it "
-        "under 14 words.\n"
-        "It must NOT summarise this chapter, and it must NOT be a question. "
+    ban_line = (
         "BANNED in this sentence: \"but\" as the opening word, \"little did "
         "they know\", \"what happened next\", \"that's not even\", \"stay "
         "with me\", \"we'll get to that\", \"more on that\", \"as we will "
-        "see\". Never address the viewer.\n\n")
+        "see\". Never address the viewer.\n\n"
+        if not CLICKBAIT_MODE else "")
+    return (
+        f"HAND OFF TO THE NEXT CHAPTER, which is titled \"{next_heading}\".\n"
+        "Your LAST sentence must leave one thing unresolved, so the viewer needs "
+        "the next chapter to settle it — a document nobody had read, an order "
+        "already signed, a person already on their way, a number that does not "
+        "yet add up, or a direct tease of what's coming, whichever hits hardest. "
+        "Keep it under 14 words.\n"
+        "It must NOT summarise this chapter, and it must NOT be a question.\n"
+        f"{ban_line}")
 
 
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
@@ -936,9 +970,9 @@ def _opening_hook_ok(data) -> bool:
     return _validate_hook(sentence)
 
 
-# Phrases that turn an open loop into a YouTube tease. The channel's whole
-# credibility rests on sounding like it is reporting rather than selling, and a
-# viewer who hears one of these stops believing the numbers too.
+# Phrases that turn an open loop into a YouTube tease. Enforced only when
+# CLICKBAIT_MODE=off — see llm_engine.py. With it on, a direct tease at the
+# chapter seam is exactly the hard-sell language being tested.
 BANNED_HANDOFF_PHRASES = (
     "little did they know", "what happened next", "that's not even",
     "thats not even", "that is not even", "stay with me",
@@ -1007,10 +1041,11 @@ def _handoff_ok(data) -> bool:
               f"{HANDOFF_MAX_WORDS}. ({sentence!r})")
         return False
 
-    for phrase in BANNED_HANDOFF_PHRASES:
-        if phrase in low:
-            print(f"⚠️ Handoff rejected: tease phrase {phrase!r}. ({sentence!r})")
-            return False
+    if not CLICKBAIT_MODE:
+        for phrase in BANNED_HANDOFF_PHRASES:
+            if phrase in low:
+                print(f"⚠️ Handoff rejected: tease phrase {phrase!r}. ({sentence!r})")
+                return False
 
     # The prompt forbids opening this sentence with "but", because that is how
     # a factual handoff turns into a nudge.
@@ -1480,15 +1515,24 @@ def _packaging_call(pool, topic, full_text, retitle=False):
     """
     correction = ""
     if retitle:
-        correction = (
-            "\nYOUR PREVIOUS TITLE WAS REJECTED. It either used a phrase that "
-            "promises significance without naming anything — 'the hidden', 'the "
-            "untold story', 'what really happened', 'the forgotten', 'the "
-            "secret', 'the truth about', 'shocking' — or it leaned entirely on "
-            "a proper noun the audience does not recognise. Write a different "
-            "title, not a rewording: state the specific thing that went wrong "
-            "and what it cost, in words someone outside the subject understands."
-            "\n")
+        if CLICKBAIT_MODE:
+            correction = (
+                "\nYOUR PREVIOUS TITLE WAS REJECTED — most likely it leaned "
+                "entirely on a proper noun the audience does not recognise, or "
+                "it repeated the grammatical shape of recent titles. Write a "
+                "different title, not a rewording: state the specific thing "
+                "that went wrong and what it cost, in words someone outside "
+                "the subject understands, and go hard on the sell.\n")
+        else:
+            correction = (
+                "\nYOUR PREVIOUS TITLE WAS REJECTED. It either used a phrase that "
+                "promises significance without naming anything — 'the hidden', 'the "
+                "untold story', 'what really happened', 'the forgotten', 'the "
+                "secret', 'the truth about', 'shocking' — or it leaned entirely on "
+                "a proper noun the audience does not recognise. Write a different "
+                "title, not a rewording: state the specific thing that went wrong "
+                "and what it cost, in words someone outside the subject understands."
+                "\n")
     return _call(pool,
                  "You write YouTube metadata. Output only JSON, no fences.",
                  f"This is the narration of a documentary about:\n{topic}\n\n"
@@ -1505,9 +1549,14 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  "1904' names something nobody outside the subject recognises; "
                  "'Russia's Fleet Opened Fire on British Fishing Boats' says what "
                  "happened.\n"
-                 "BANNED, because they would fit any story at all: 'the hidden ...', "
-                 "'the untold story', 'what really happened', 'the forgotten ...', "
-                 "'the secret ...', 'the truth about', 'shocking', 'insane'.\n"
+                 "GO HARD ON THE SELL. A provocative question, a superlative, a hard "
+                 "number, dramatic phrasing — all wanted. A question-led title may "
+                 "prime an assumption the video complicates or answers 'no' to, as "
+                 "long as the video actually engages that exact question. The one "
+                 "thing that still matters is that the video backs up what the title "
+                 "claims as fact — a dramatic question is fine even if the answer is "
+                 "no; an assertion the narration does not support is not.\n"
+                 f"{_RESTRAINED_TITLE_ADDENDUM}"
                  "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
                  "arresting fact in the video, readable at thumbnail size. Not a "
                  "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
