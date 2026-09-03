@@ -152,13 +152,9 @@ click, and the title needs both.
 - SELL IT. This is a title competing in a feed, not a museum caption. A hard \
 number, a superlative, a stake, a curiosity gap, or a provocative question are \
 all wanted. Write the most arresting thing about the story you can, and go hard.
-- A question-led title is allowed to prime an assumption the video complicates or \
-answers "no" to, as long as the video actually engages that exact question — \
-"Did NASA Deliberately Sacrifice the Challenger Crew?" is fair when the video \
-seriously examines whether the decision was reckless disregard versus something \
-more damning, and answers it. What is never allowed is a title asserting, as \
-fact, something the script does not support — the film itself still only reports \
-what the record shows.
+- A question-led title can prime an assumption the video complicates or answers \
+"no" to — "Did NASA Deliberately Sacrifice the Challenger Crew?" is exactly the \
+shape to use.
 - VARY THE SHAPE. The user message lists what has already been published. Do not \
 return the grammatical shape those titles use. A channel whose every title reads \
 "The <thing> That <verb>ed <someone>" has taught its audience that the videos are \
