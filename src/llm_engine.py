@@ -167,11 +167,18 @@ COMMENT QUESTION:
 - BAD:  "Let me know your thoughts in the comments!"
 
 THUMBNAIL:
-- thumbnail_text: THREE OR FOUR WORDS ONLY, the most arresting fact in the story, \
-readable at 210 pixels wide. Not a sentence, no punctuation. It must not simply \
-repeat the title — the two are read together, so they should say different things.
-- GOOD: "SUNK IN 20 MINUTES", "THE WRONG VALLEY", "ONE MISSING BOLT".
-- BAD:  "The story of how a ship sank", "AMAZING HISTORY FACT".
+- thumbnail_text: THREE OR FOUR WORDS ONLY, readable at 210 pixels wide. Not a \
+sentence, no punctuation. It must not simply repeat the title — the two are read \
+together, so they should say different things.
+- Extract the strongest emotionally loaded interpretation the story supports, in \
+one of these shapes: [Actor] + [loaded noun] ("NASA'S FATAL DECISION"), [Actor] + \
+[dramatic verb] ("ENGINEERS IGNORED"), or [dramatic event] + [consequence] ("SUNK \
+IN 20 MINUTES"). Pick whichever shape carries this story's actual point of blame \
+or consequence — do not force an actor in if the story has none.
+- GOOD: "NASA'S FATAL DECISION", "ENGINEERS IGNORED", "SUNK IN 20 MINUTES", "THE \
+WRONG VALLEY", "ONE MISSING BOLT".
+- BAD:  "The story of how a ship sank", "AMAZING HISTORY FACT" — too flat, or too \
+generic to be about this story.
 - thumbnail_badge: the year, or a single number, e.g. "1628".
 
 OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:

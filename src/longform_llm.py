@@ -34,39 +34,51 @@ import formats
 # Words per chapter. edge-tts at +8% rate lands around 165 wpm, so ~1,200 words
 # is roughly 7.5 minutes — inside the 6-9 minute target.
 ARC = [
-    # This chapter has been rewritten twice, and the history is worth keeping.
+    # This opening chapter has now been rewritten three times, and the earlier
+    # history (below, kept because the reasoning still holds) solved the wrong
+    # problem. The old fix made the anomaly-first opening SHORTER, which
+    # improved a 23-second cliff — but 67 videos and two months later, the
+    # channel's numbers (27 subscribers, 10k views, 1.67% overall thumbnail
+    # CTR) said the anomaly itself was never the draw. A viewer has no reason
+    # to want a mechanism explained until they know what it cost.
     #
-    # First it said "state the anomaly in two sentences" while asking for 110
-    # words. The model obeyed the brief, produced ~54 words, and failed the
-    # length check twice — a self-inflicted deadlock. So the brief was given
-    # material that actually fills the chapter: "open with the anomaly... then
-    # widen: sketch the scale, name the people, and pose the question this video
-    # answers."
+    # So the video no longer opens on the anomaly — it opens on the human cost,
+    # the material that used to sit in what was chapter 5. What the old opener
+    # did (state the anomaly, name the decision-maker) now happens in chapter
+    # 2, "The Claim", once the viewer already has a reason to care who that
+    # person is.
     #
-    # The widening is what killed it. Measured on the published videos, 69% of
-    # viewers left inside the first 23 seconds — which is to say, inside this
-    # chapter, while it was still setting up the question. Retention relative to
-    # comparable videos sat at 0.12 through the opening: bottom decile. The fix
-    # for a chapter that was too short was to give it more to say, and what it
-    # found to say was preamble.
-    #
-    # So it no longer widens. It states the anomaly, makes it worse, and walks
-    # straight into the story. 70 words is ~25 seconds; the old 90 spent 33
-    # seconds before chapter two could begin.
-    #
-    # Renamed from "Cold Open" at the same time: the heading is typeset in the
-    # description's chapter list, where it is production jargon addressed to
-    # nobody.
-    ("The Anomaly",
-     "Open with the anomaly in one or two sharp sentences, the way a Short would: "
-     "a hard number, a contradiction, or a named consequence, in the first "
-     "sentence. Then make it WORSE with a second concrete fact — not broader, "
-     "worse. Close by naming the person who made the decision and the moment they "
-     "made it, so the next chapter can begin at their shoulder. "
-     "Never announce what the video will cover, never pose the question the video "
-     "answers, and never summarise the ending. No sentence may begin with 'In' "
-     "followed by a year.",
-     70),
+    # [History] First it said "state the anomaly in two sentences" while
+    # asking for 110 words. The model obeyed the brief, produced ~54 words, and
+    # failed the length check twice — a self-inflicted deadlock. So the brief
+    # was given material that actually fills the chapter: "open with the
+    # anomaly... then widen: sketch the scale, name the people, and pose the
+    # question this video answers." The widening is what killed IT: 69% of
+    # viewers left inside the first 23 seconds, while the chapter was still
+    # setting up the question. So it stopped widening — anomaly, worse, walk
+    # into the story. That fixed the 23-second cliff without fixing the
+    # subscriber number, which is the problem this version addresses instead.
+    ("The Cost",
+     "Open cold with the human toll — the number, the names, what was actually "
+     "lost — in the first one or two sentences. No throat-clearing, no context, "
+     "no date-first framing. Hit it, then stop. This chapter is judged the way "
+     "a Short's hook is judged: a hard number or a named consequence by the "
+     "second sentence, because its only job is to make someone stop scrolling.",
+     90),
+    # The chapter the title is written from. It states, as a live possibility
+    # rather than a settled fact, the harshest reasonable reading of what
+    # chapter 1 just described. Packaging later lifts directly from this
+    # chapter to write the title, so what gets written here has to be an
+    # actual claim a viewer could repeat back, not a mood.
+    ("The Claim",
+     "Given what the viewer just learned was lost, state the harshest reasonable "
+     "interpretation of why — framed as what the facts suggest, not as a verdict "
+     "you have already reached. Name the specific, real details that make that "
+     "reading plausible: a warning that existed, a person who objected, a choice "
+     "that looks deliberate rather than accidental. Do not answer it yet — that "
+     "is the rest of the video's job. End this chapter still holding the "
+     "question open.",
+     170),
     ("What Was Supposed To Happen",
      "Establish the plan as its designers understood it. The viewer should finish this "
      "chapter thinking the plan sounds sensible. Give the specifics: who, when, what "
@@ -81,23 +93,35 @@ ARC = [
      "How the decision became a disaster, in order. Use the timeline: what happened "
      "first, what each person did next, the moment it stopped being recoverable.",
      280),
-    ("The Cost",
-     "The consequences in hard numbers — dead, wounded, money, time, what was destroyed. "
-     "Name at least one individual person if the record supports it. No sentimentality.",
-     200),
-    ("What Would Have Stopped It",
-     "The counterfactual. What single change would have broken the chain, and what was "
-     "actually changed afterwards as a result. End on the detail that lingers, not a moral.",
-     180),
+    # The verdict on chapter 2's claim, using only what chapters 3-5 actually
+    # established. This is also the counterfactual's home now — naming the
+    # single change that would have broken the chain is one legitimate shape
+    # for the closing lesson, not a chapter of its own anymore.
+    ("The Verdict",
+     "Answer the question chapter 2 raised, using only what the video has already "
+     "shown — confirm it, complicate it, or overturn it, whatever the evidence "
+     "actually supports. Then close on either a stated lesson or a genuinely open "
+     "question the evidence itself leaves unresolved — not a tease, an ending. If "
+     "you name a counterfactual (the single change that would have broken the "
+     "chain), that can BE the lesson.",
+     210),
 ]
 
-# THE UNSOLVED stories have no decision to sit at the middle of the arc and no
-# counterfactual to close it, and the encore lane can absolutely send one here —
-# the channel's most-liked Short is the Antikythera Mechanism, and it already
-# became a long-form video that had to pretend a shipwreck was somebody's fault.
-# Two chapters are replaced; the rest of the arc carries over unchanged, because
-# "what was supposed to happen" and "what it cost" are true of a mystery too.
+# THE UNSOLVED stories have no decision-maker to accuse and no counterfactual
+# to close on, and the encore lane can absolutely send one here — the
+# channel's most-liked Short is the Antikythera Mechanism, and it already
+# became a long-form video that had to pretend a shipwreck was somebody's
+# fault. Three chapters are replaced; the rest of the arc carries over
+# unchanged, because a human cost, a plan, and a timeline are all true of a
+# mystery too — only "who did this on purpose" is not.
 _UNSOLVED_SUBSTITUTIONS = {
+    "The Claim": (
+        "The Popular Theory",
+        "State the most common or tempting explanation for this mystery — the one "
+        "most people already assume, or the first one anybody proposed — as a live "
+        "possibility, not a verdict. Name the specific detail that makes it "
+        "tempting. Do not rule it out yet — that is the rest of the video's job.",
+        170),
     "The Decision": (
         "What Has Been Ruled Out",
         "The explanations that have been tested and failed, and why each one does not "
@@ -105,11 +129,13 @@ _UNSOLVED_SUBSTITUTIONS = {
         "where the channel earns its credibility, so never present a theory as settled "
         "and never invent a consensus that does not exist.",
         260),
-    "What Would Have Stopped It": (
+    "The Verdict": (
         "What Is Still Open",
-        "The single detail that keeps this unresolved, and what would have to be found "
-        "to settle it. State plainly what is known versus what is speculated. End on "
-        "the open question — do NOT supply an answer the record does not support.",
+        "Say plainly whether chapter 2's popular theory survived what chapter 4 ruled "
+        "out. Then name the single detail that keeps this genuinely unresolved, and "
+        "what would have to be found to settle it. State plainly what is known versus "
+        "what is speculated. End on the open question — do NOT supply an answer the "
+        "record does not support.",
         180),
 }
 
@@ -153,8 +179,9 @@ WORDS_PER_IMAGE = 32
 # So the arc now breathes. Each chapter carries its own cut rate and its own
 # narration speed, chosen against what that chapter is doing:
 #
-#   The Anomaly      fast cuts, fast read      — earn the next thirty seconds
-#   Supposed To Happen  slow cuts, slower read — the calm before, and it must
+#   The Cost         fast cuts, fast read       — hit hard, earn the scroll-stop
+#   The Claim        medium cuts, medium read   — the suspicion forms
+#   Supposed To Happen  slow cuts, slower read  — the calm before, and it must
 #                                                actually feel calm
 #   The Decision     tightest cuts, SLOWEST read — the midpoint reset. Slowing
 #                                                down here is the interrupt:
@@ -162,24 +189,25 @@ WORDS_PER_IMAGE = 32
 #                                                a drop in speed reads as
 #                                                "this is the part that matters"
 #   The Chain        fastest cuts, fastest read — events overtaking people
-#   The Cost         slow cuts, slow read       — the numbers need air
-#   Counterfactual   medium both                — land it
+#   The Verdict      medium both                — land it
 #
-# The index is positional, not keyed by heading: THE UNSOLVED substitutes two
+# The index is positional, not keyed by heading: THE UNSOLVED substitutes three
 # headings but keeps their slots, so a mystery's "What Has Been Ruled Out"
 # inherits the pivot treatment its position earns.
 # ---------------------------------------------------------------------------
 
-# Which slot in the arc is the midpoint reset.
-PIVOT_INDEX = 2
+# Which slot in the arc is the midpoint reset. "The Decision" is now the
+# fourth chapter (index 3), not the third — the Cost/Claim opener pushed
+# everything else back one slot.
+PIVOT_INDEX = 3
 
 # words_per_image: lower = more cuts. tts_rate: edge-tts percentage.
 PACING = [
-    {"role": "open",  "words_per_image": 26, "tts_rate": "+10%"},
+    {"role": "open",  "words_per_image": 22, "tts_rate": "+10%"},
+    {"role": "claim", "words_per_image": 32, "tts_rate": "+7%"},
     {"role": "build", "words_per_image": 36, "tts_rate": "+6%"},
     {"role": "pivot", "words_per_image": 24, "tts_rate": "+2%"},
     {"role": "drive", "words_per_image": 22, "tts_rate": "+12%"},
-    {"role": "cost",  "words_per_image": 34, "tts_rate": "+4%"},
     {"role": "close", "words_per_image": 30, "tts_rate": "+7%"},
 ]
 
@@ -596,9 +624,11 @@ def _archive_query_rule(era_year):
 def _handoff_rule(next_heading) -> str:
     """The instruction that turns a chapter ending into an open loop."""
     if not next_heading:
-        return ("This is the FINAL chapter. Close the video. Do not open a new "
-                "question, do not tease anything, and do not end on a moral. "
-                "End on the concrete detail that stays with the viewer.\n\n")
+        return ("This is the FINAL chapter. Close the video. Land it on either a "
+                "stated lesson or a genuinely open question the evidence itself "
+                "leaves unresolved — not a tease, an actual ending. If you close "
+                "on a question, it must be one this story's own facts leave "
+                "open, never a hook for a video that does not exist.\n\n")
     ban_line = (
         "BANNED in this sentence: \"but\" as the opening word, \"little did "
         "they know\", \"what happened next\", \"that's not even\", \"stay "
@@ -1548,14 +1578,27 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  "1904' names something nobody outside the subject recognises; "
                  "'Russia's Fleet Opened Fire on British Fishing Boats' says what "
                  "happened.\n"
-                 "GO HARD ON THE SELL. A provocative question, a superlative, a hard "
-                 "number, dramatic phrasing — all wanted. A question-led title may "
-                 "prime an assumption the video complicates or answers 'no' to.\n"
+                 "GO HARD ON THE SELL. The narration above opens with 'The Cost' and "
+                 "'The Claim' — the second of those states the harshest reasonable "
+                 "reading of this story as a live question. Build the title FROM "
+                 "THAT CLAIM: turn it into the provocative question the whole video "
+                 "answers. A question-led title may prime an assumption the video "
+                 "complicates or answers 'no' to — that is exactly the shape to use, "
+                 "not a shape to avoid. A superlative, a hard number, dramatic "
+                 "phrasing are all wanted too.\n"
                  f"{_RESTRAINED_TITLE_ADDENDUM}"
-                 "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, the most "
-                 "arresting fact in the video, readable at thumbnail size. Not a "
-                 "sentence, no punctuation. Good: 'SUNK IN 20 MINUTES', 'THE WRONG "
-                 "VALLEY', 'ONE MISSING BOLT'. Bad: 'The story of how a ship sank'.\n"
+                 "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, readable at "
+                 "thumbnail size. Not a sentence, no punctuation. Extract the "
+                 "strongest emotionally loaded interpretation the story supports, "
+                 "in one of these shapes: [Actor] + [loaded noun] ('NASA'S FATAL "
+                 "DECISION'), [Actor] + [dramatic verb] ('ENGINEERS IGNORED'), or "
+                 "[dramatic event] + [consequence] ('SUNK IN 20 MINUTES'). Pick "
+                 "whichever shape carries this story's actual point of blame or "
+                 "consequence — do not force an actor in if the story has none. It "
+                 "must not simply repeat the title; the two are read together, so "
+                 "they should say different things. Bad: 'The story of how a ship "
+                 "sank', 'AMAZING HISTORY FACT' — too flat, or too generic to be "
+                 "about this story.\n"
                  "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
                  "And comment_question: ONE question to post as the first comment, "
                  "answerable by someone who just watched this and has an opinion — "
