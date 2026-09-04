@@ -1261,6 +1261,99 @@ def payoff_ok(script: dict) -> bool:
     return bool(opening & closing)
 
 
+# ---------------------------------------------------------------------------
+# The joke beat
+#
+# One deliberate break in tone, once per video, appended right after "The
+# Decision" — the fatal call has just been made, and the dramatic-irony
+# window ("you know what's coming") is exactly where a dry aside lands
+# without reading as the channel laughing at what is about to happen.
+# Generated as its own small call, separate from the Decision chapter
+# itself, so its content and style tag are both controlled directly rather
+# than trusted to a free model following one instruction buried in a longer
+# brief.
+#
+# Only fires for formats that actually have a "The Decision" chapter — THE
+# UNSOLVED substitutes it for "What Has Been Ruled Out", which has no
+# decision-maker to roast, so it is skipped there by construction: the hook
+# below checks the heading itself, not the format.
+#
+# The one hard rule — roast the decision, never the people it hurt — is
+# enforced twice: in the prompt, and again in _joke_ok(), because a prompt
+# rule a free model ignores once is not a rule.
+# ---------------------------------------------------------------------------
+
+JOKE_BEAT_MODE = os.getenv("JOKE_BEAT_MODE", "on").strip().lower() != "off"
+
+# Casualty-adjacent language the joke must never touch — the one place in
+# this pipeline where "did the model listen" is checked by regex rather
+# than trusted.
+_JOKE_FORBIDDEN = (
+    r"\bdied\b", r"\bdeaths?\b", r"\bdead\b", r"\bkilled\b", r"\bdrowned\b",
+    r"\bcrew\b", r"\bvictims?\b", r"\bcasualt(?:y|ies)\b", r"\bwounded\b",
+    r"\bburn(?:ed|t)\b", r"\bsuffer(?:ed|ing)?\b", r"\bchildren\b",
+    r"\bfamil(?:y|ies)\b", r"\bcrash(?:ed)?\b", r"\bexplo(?:ded|sion)\b",
+)
+
+
+def _joke_ok(text: str) -> bool:
+    """Whether a joke-beat line stays clear of the one hard line: never the
+    people it hurt, only the people who chose wrong."""
+    if not text or len(text.split()) > 24:
+        return False
+    low = text.lower()
+    return not any(re.search(p, low) for p in _JOKE_FORBIDDEN)
+
+
+def _generate_joke_beat(pool, topic, decision_text, era_year=None):
+    """One dry, ironic aside about the decision just made. Returns a segment
+    dict ready to append to a chapter's scenes, or None if it could not be
+    written cleanly within the attempt budget — losing this beat costs one
+    joke, not the video."""
+    if not JOKE_BEAT_MODE:
+        return None
+
+    prompt = (
+        f"Story: {topic}\n\n"
+        f"The video just narrated this decision:\n{decision_text[-700:]}\n\n"
+        "Write ONE short, dry, ironic sentence about the hubris, "
+        "overconfidence or bureaucratic absurdity of the people who chose "
+        "wrong — a single beat of dark humor. This is the ONE moment in the "
+        "whole video allowed to be funny; everywhere else stays factual and "
+        "forensic.\n"
+        "HARD RULES:\n"
+        "- Target ONLY the decision-makers' judgment or process — their "
+        "confidence, their paperwork, their meetings, their assumptions. "
+        "NEVER the people who were hurt by the decision, never death, injury "
+        "or loss in any form.\n"
+        "- It must be a TRUE, specific irony from THIS story — not an "
+        "invented joke, and not a generic one that would fit any disaster.\n"
+        "- One sentence, under 20 words. Dry and deadpan, not a pun, not a "
+        "comedian's voice.\n\n"
+        "Also write image_prompt: one clear focal subject, shot type first, "
+        "in the channel's usual style.\n"
+        'Output ONLY JSON: {"narration": "...", "image_prompt": "..."}'
+    )
+    for attempt in range(2):
+        data = _call(pool, "You write one dry, ironic aside. Output only JSON.",
+                    prompt, max_tokens=800)
+        narration = (data or {}).get("narration", "").strip()
+        image_prompt = (data or {}).get("image_prompt", "").strip()
+        if narration and image_prompt and is_speakable(narration) \
+                and _joke_ok(narration):
+            return {
+                "narration": narration,
+                "image_prompt": build_generation_prompt(image_prompt,
+                                                         era_year=era_year),
+                "archive_query": None,
+                "tts_style": "funny",
+            }
+        print(f"   ⚠️ Joke beat rejected (attempt {attempt + 1}/2)"
+              f"{': ' + narration[:60] if narration else ''}")
+    print("   ↩️  Skipping the joke beat this run.")
+    return None
+
+
 def generate_longform_script(topic: str = None, enforce_history: bool = False,
                              era_year: int = None) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
@@ -1476,6 +1569,17 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         tail = segs[-1]["narration"][-160:]
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
+
+        # The one joke, right after the fatal call — see _generate_joke_beat.
+        # Appended to segs directly (not folded into chapter_text/said_lines
+        # above) so it never counts as narrated fact a later chapter must
+        # avoid repeating, and never becomes the "previous chapter ended
+        # with" continuity anchor for THE CHAIN.
+        if heading == "The Decision":
+            joke = _generate_joke_beat(pool, topic, chapter_text, era_year=era_year)
+            if joke:
+                segs.append(joke)
+                print(f"   🎭 Joke beat: {joke['narration'][:70]!r}")
 
     if len(chapters) < MIN_PUBLISHABLE_CHAPTERS:
         print(f"❌ Only {len(chapters)} of {len(arc)} chapters survived — below "
