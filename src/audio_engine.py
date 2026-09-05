@@ -78,10 +78,12 @@ PITCH = os.getenv("TTS_PITCH", "-4Hz")  # slightly deeper = more gravitas
 
 GEMINI_TTS_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
-# Kore by default — whatever voice actually gets chosen after listening in
-# AI Studio's speech playground, override with GEMINI_TTS_VOICE, no code
-# change needed.
-GEMINI_TTS_VOICE = os.getenv("GEMINI_TTS_VOICE", "Kore")
+# Puck — chosen after listening to the built-in voices live in AI Studio's
+# speech playground. The probe below was run against Kore before this voice
+# was picked; the mechanism itself is voice-agnostic, so switching the name
+# is the only change this needed. Override with GEMINI_TTS_VOICE if that
+# ever changes again, no code change required.
+GEMINI_TTS_VOICE = os.getenv("GEMINI_TTS_VOICE", "Puck")
 GEMINI_TTS_ENABLED = bool(GEMINI_TTS_KEY)
 GEMINI_TTS_URL = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                   f"{GEMINI_TTS_MODEL}:generateContent")
