@@ -113,6 +113,20 @@ _GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voic
 # seconds' wait would likely have survived. Retrying a 429 in place costs at
 # most a few seconds; treating it as fatal costs the whole reason Gemini was
 # worth choosing.
+#
+# The very next live run proved the first fix was scoped too narrowly: it
+# died on scene 1 with a 503 ("This model is currently experiencing high
+# demand... Please try again later") — Google's own wording is a more
+# explicit retry signal than the 429 case ever was, and it got zero retries
+# because only 429 was covered. The Gemini TEXT models hit this exact 503
+# shape too (see llm_provider.py's own comments), so it is evidently a
+# routine, recurring condition on Google's preview/flash tier generally, not
+# a one-off. Every status below is a transient-infrastructure shape, not a
+# rejection of the request itself, and gets the same retry treatment; a 4xx
+# that is NOT 429 (bad request, auth, not-found) still fails fast, because
+# retrying an actually-malformed request just wastes the same three calls
+# for the same guaranteed result.
+GEMINI_TTS_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 GEMINI_TTS_MAX_ATTEMPTS = 3
 GEMINI_TTS_RETRY_DELAYS = (3, 8)  # seconds waited before attempt 2 and attempt 3
 
@@ -142,13 +156,16 @@ def _synthesize_gemini(text: str, output_path: str, style: str = None):
     """Gemini native TTS. Always returns an empty word list — see the module
     docstring on why no timing data exists to return.
 
-    Retries a 429 up to GEMINI_TTS_MAX_ATTEMPTS times with a short pause —
-    see the comment above that constant for why a 429 this early in a run is
-    almost never the free tier's real allowance being spent. Any other
-    error, or a 429 that survives every retry, raises immediately with the
-    actual response body attached: the caller (generate_audio_pipeline)
-    decides what THAT means for the whole video, not this function, and it
-    needs the real reason to log, not a generic HTTP status line.
+    Retries any status in GEMINI_TTS_RETRYABLE_STATUSES (429, and the 5xx
+    shapes that mean transient overload rather than a rejected request) up
+    to GEMINI_TTS_MAX_ATTEMPTS times with a short pause — see the comments
+    above those constants for why both shapes are routine on this preview
+    tier and neither means the free allowance is actually spent. Any other
+    error, or a retryable one that survives every attempt, raises
+    immediately with the actual response body attached: the caller
+    (generate_audio_pipeline) decides what THAT means for the whole video,
+    not this function, and it needs the real reason to log, not a generic
+    HTTP status line.
 
     Output is re-encoded to real mp3 rather than left as WAV-under-a-.mp3-
     extension, so every engine's output is identical in format, not just in
@@ -207,9 +224,11 @@ def _synthesize_gemini(text: str, output_path: str, style: str = None):
         detail = (r.text or "").strip().replace("\n", " ")[:500]
         last_error = f"{r.status_code} {r.reason}: {detail}"
 
-        if r.status_code == 429 and attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
+        retryable = r.status_code in GEMINI_TTS_RETRYABLE_STATUSES
+        if retryable and attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
             wait = GEMINI_TTS_RETRY_DELAYS[attempt]
-            print(f"   ⏳ Gemini TTS rate-limited (429) — waiting {wait}s and "
+            print(f"   ⏳ Gemini TTS returned {r.status_code} (transient — "
+                  f"rate limit or temporary overload) — waiting {wait}s and "
                   f"retrying this scene (attempt {attempt + 2}/"
                   f"{GEMINI_TTS_MAX_ATTEMPTS})...")
             time.sleep(wait)
