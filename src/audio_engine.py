@@ -38,6 +38,7 @@ import base64
 import os
 import re
 import subprocess
+import time
 
 import edge_tts
 import requests
@@ -101,6 +102,20 @@ _GEMINI_STYLE_INSTRUCTIONS = {
 }
 _GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voice:"
 
+# A live run hit a 429 on scene 5 of 47 — five calls into the video, which is
+# almost certainly a per-minute rate limit on this preview model, not the
+# free tier's actual monthly allowance being spent (those two fail very
+# differently: a quota exhaustion response names the exhausted metric, a
+# rate limit does not). That run had no way to tell the two apart, because
+# _synthesize_gemini used to raise_for_status() without ever reading the
+# response body — and it paid for that ambiguity by discarding five good
+# clips and resynthesizing the entire video on edge-tts over what a few
+# seconds' wait would likely have survived. Retrying a 429 in place costs at
+# most a few seconds; treating it as fatal costs the whole reason Gemini was
+# worth choosing.
+GEMINI_TTS_MAX_ATTEMPTS = 3
+GEMINI_TTS_RETRY_DELAYS = (3, 8)  # seconds waited before attempt 2 and attempt 3
+
 
 def _write_wav(path: str, pcm_bytes: bytes, sample_rate: int,
               channels: int = 1, sample_width: int = 2):
@@ -125,10 +140,15 @@ def _write_wav(path: str, pcm_bytes: bytes, sample_rate: int,
 
 def _synthesize_gemini(text: str, output_path: str, style: str = None):
     """Gemini native TTS. Always returns an empty word list — see the module
-    docstring on why no timing data exists to return — and raises on any
-    failure at all. Unlike _synthesize()'s Azure path, nothing here retries
-    or catches: the caller (generate_audio_pipeline) decides what a failure
-    means for the whole video, not this function.
+    docstring on why no timing data exists to return.
+
+    Retries a 429 up to GEMINI_TTS_MAX_ATTEMPTS times with a short pause —
+    see the comment above that constant for why a 429 this early in a run is
+    almost never the free tier's real allowance being spent. Any other
+    error, or a 429 that survives every retry, raises immediately with the
+    actual response body attached: the caller (generate_audio_pipeline)
+    decides what THAT means for the whole video, not this function, and it
+    needs the real reason to log, not a generic HTTP status line.
 
     Output is re-encoded to real mp3 rather than left as WAV-under-a-.mp3-
     extension, so every engine's output is identical in format, not just in
@@ -147,34 +167,57 @@ def _synthesize_gemini(text: str, output_path: str, style: str = None):
             },
         },
     }
-    r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
-                      json=body, timeout=60)
-    r.raise_for_status()
-    data = r.json()
 
-    parts = data["candidates"][0]["content"]["parts"]
-    audio_part = next(p for p in parts if "inlineData" in p)
-    mime = audio_part["inlineData"]["mimeType"]
-    raw = base64.b64decode(audio_part["inlineData"]["data"])
+    last_error = "unknown error"
+    for attempt in range(GEMINI_TTS_MAX_ATTEMPTS):
+        r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
+                          json=body, timeout=60)
 
-    rate_hz = 24000
-    for token in mime.split(";"):
-        token = token.strip()
-        if token.startswith("rate="):
-            rate_hz = int(token.split("=")[1])
+        if r.status_code == 200:
+            data = r.json()
+            parts = data["candidates"][0]["content"]["parts"]
+            audio_part = next(p for p in parts if "inlineData" in p)
+            mime = audio_part["inlineData"]["mimeType"]
+            raw = base64.b64decode(audio_part["inlineData"]["data"])
 
-    tmp_wav = output_path + ".gemini.wav"
-    _write_wav(tmp_wav, raw, rate_hz)
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-i", tmp_wav, "-q:a", "2", output_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
-    finally:
-        if os.path.exists(tmp_wav):
-            os.remove(tmp_wav)
+            rate_hz = 24000
+            for token in mime.split(";"):
+                token = token.strip()
+                if token.startswith("rate="):
+                    rate_hz = int(token.split("=")[1])
 
-    return []  # confirmed absent from the API response — see module docstring
+            tmp_wav = output_path + ".gemini.wav"
+            _write_wav(tmp_wav, raw, rate_hz)
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                     "-i", tmp_wav, "-q:a", "2", output_path],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+            finally:
+                if os.path.exists(tmp_wav):
+                    os.remove(tmp_wav)
+
+            return []  # confirmed absent from the response — see module docstring
+
+        # Not 200: keep the actual body, not requests' generic "429 Client
+        # Error: Too Many Requests" — that alone cannot tell a per-minute
+        # rate limit apart from the free tier's allowance actually being
+        # spent, and the run that found this bug needed that distinction and
+        # did not have it.
+        detail = (r.text or "").strip().replace("\n", " ")[:500]
+        last_error = f"{r.status_code} {r.reason}: {detail}"
+
+        if r.status_code == 429 and attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
+            wait = GEMINI_TTS_RETRY_DELAYS[attempt]
+            print(f"   ⏳ Gemini TTS rate-limited (429) — waiting {wait}s and "
+                  f"retrying this scene (attempt {attempt + 2}/"
+                  f"{GEMINI_TTS_MAX_ATTEMPTS})...")
+            time.sleep(wait)
+            continue
+
+        raise RuntimeError(last_error)
+
+    raise RuntimeError(last_error)
 
 
 class GeminiTTSFailed(Exception):
