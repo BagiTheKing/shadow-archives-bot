@@ -128,7 +128,36 @@ _GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voic
 # for the same guaranteed result.
 GEMINI_TTS_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 GEMINI_TTS_MAX_ATTEMPTS = 3
-GEMINI_TTS_RETRY_DELAYS = (3, 8)  # seconds waited before attempt 2 and attempt 3
+GEMINI_TTS_RETRY_DELAYS = (3, 8)  # fallback wait, used only when Google gives no number
+
+# The THIRD live run finally named the actual wall: Google's error body said
+# "limit: 3, model: gemini-2.5-flash-tts... Please retry in 59.65s" — three
+# calls per roughly a minute. The first five scenes had already gone through
+# with no pause between them at all, so scene 5 walked straight into that
+# wall. No amount of retrying fixes a rate limit you keep re-triggering the
+# instant it clears; the only real fix is to never approach it in the first
+# place. So every successful Gemini call is now followed by a deliberate
+# pause before the next one — 21s clears three calls per minute with a
+# margin, not three calls per minute exactly. This adds real time to a run
+# (roughly 15 more minutes across a 47-scene video) in exchange for the
+# video actually finishing on Gemini instead of falling back every time.
+GEMINI_TTS_PACE_SECONDS = float(os.getenv("GEMINI_TTS_PACE_SECONDS", "21"))
+
+# Google's 429 body names the exact wait when it has one ("Please retry in
+# 59.65s") — that number is authoritative and almost always longer than the
+# fixed fallback above, so use it whenever the response actually gives it
+# rather than guessing.
+_RETRY_AFTER_RE = re.compile(r"retry in ([\d.]+)\s*s", re.IGNORECASE)
+
+
+def _suggested_wait(detail: str, fallback: float) -> float:
+    match = _RETRY_AFTER_RE.search(detail or "")
+    if match:
+        try:
+            return float(match.group(1)) + 1.0  # small buffer past what Google asked for
+        except ValueError:
+            pass
+    return fallback
 
 
 def _write_wav(path: str, pcm_bytes: bytes, sample_rate: int,
@@ -226,7 +255,7 @@ def _synthesize_gemini(text: str, output_path: str, style: str = None):
 
         retryable = r.status_code in GEMINI_TTS_RETRYABLE_STATUSES
         if retryable and attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
-            wait = GEMINI_TTS_RETRY_DELAYS[attempt]
+            wait = _suggested_wait(detail, GEMINI_TTS_RETRY_DELAYS[attempt])
             print(f"   ⏳ Gemini TTS returned {r.status_code} (transient — "
                   f"rate limit or temporary overload) — waiting {wait}s and "
                   f"retrying this scene (attempt {attempt + 2}/"
@@ -559,6 +588,15 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
     aborted first pass left behind, including for scenes that had already
     succeeded on Gemini before a later one failed.
     """
+    # Used only to decide when to skip the post-call pacing pause below —
+    # there is no point waiting 21s after the last real Gemini call this
+    # pass will ever make.
+    last_speakable_idx = None
+    if use_gemini:
+        for idx, scene in enumerate(scenes):
+            if is_speakable(scene.get("narration", "").strip()):
+                last_speakable_idx = idx
+
     skipped, trimmed_total = 0, 0.0
     for idx, scene in enumerate(scenes):
         audio_path = os.path.join(output_dir, f"scene_{idx}.mp3")
@@ -605,6 +643,16 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
                       f"{e2}) — skipping this scene.")
                 skipped += 1
                 continue
+
+        # Gemini's free tier allows only ~3 calls per minute (see the comment
+        # above GEMINI_TTS_PACE_SECONDS) — pause after every successful call
+        # except the last one this pass will make, so the next scene never
+        # walks straight into the wall the way scene 5 of 47 did on a real
+        # run.
+        if use_gemini and idx != last_speakable_idx:
+            print(f"   ⏳ Pacing Gemini TTS — waiting {GEMINI_TTS_PACE_SECONDS:.0f}s "
+                  f"before the next request (free tier allows ~3/min)...")
+            time.sleep(GEMINI_TTS_PACE_SECONDS)
 
         duration = get_audio_duration(audio_path)
 
