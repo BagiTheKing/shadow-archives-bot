@@ -1,24 +1,46 @@
 """
-Audio engine — Azure Speech (Davis Multilingual, per-scene styles) when
-configured, Microsoft Edge neural TTS otherwise. Both stream word-boundary
-events, giving us the exact millisecond each word is spoken — that powers the
-word-synced captions in video_engine.py, which is what makes Shorts captions
-look professional.
+Audio engine. Three tiers, each optional, tried in this order:
 
-Azure is opt-in and free-tier-only by design: it needs AZURE_SPEECH_KEY and
-AZURE_SPEECH_REGION set, and is meant to run on Azure's F0 (free) pricing
-tier, which is hard-capped rather than billed — hitting the monthly quota
-fails the call instead of charging anything. That failure is exactly the
-signal this file's fallback logic is watching for. Without those two env
-vars, this file behaves exactly as it always did: edge-tts only, no styles.
+    1. Gemini native TTS   — GEMINI_API_KEY (the same key already used for
+                             script generation — no new secret needed).
+                             Free-tier eligible, real natural-language style
+                             steering, but its API response carries NO
+                             word-boundary data at all (checked directly
+                             against the raw response, not assumed from
+                             docs) — captions degrade to per-scene sync for
+                             a video narrated this way.
+    2. Azure Speech        — AZURE_SPEECH_KEY + AZURE_SPEECH_REGION. Davis
+                             Multilingual, real SSML express-as styles, full
+                             word-boundary timing. Opt-in, F0-tier-only by
+                             design (hard-capped, never billed).
+    3. Microsoft Edge TTS  — always available, no key, no styles, but DOES
+                             give full word-boundary timing. What this file
+                             does if nothing above is configured, or if the
+                             tiers above fail.
+
+Gemini and edge-tts stream (or, for edge, effectively provide) word-boundary
+events; where they do, that powers the word-synced captions in
+video_engine.py, which is what makes Shorts captions look professional.
+
+GEMINI vs AZURE FAILURE HANDLING ARE DELIBERATELY DIFFERENT. Azure has an
+edge-tts voice that matches its character (Davis-to-Davis), so falling back
+scene-by-scene for the rest of a run is a small jump. Gemini has no such
+matched pairing — its voices and edge-tts's share no lineage — so mixing
+them mid-video would be a much bigger, more audible seam than losing styles
+ever was. Gemini therefore fails ATOMICALLY: the instant any scene fails,
+every Gemini clip already written for this video is discarded and the
+ENTIRE video is resynthesized on edge-tts from scratch. A video is either
+100% Gemini or 100% edge-tts, never both. See generate_audio_pipeline().
 """
 
 import asyncio
+import base64
 import os
 import re
 import subprocess
 
 import edge_tts
+import requests
 
 # Letters or digits in any script the narration might use. Punctuation, em
 # dashes and stray markup are not speech: both TTS engines reject text made
@@ -37,6 +59,129 @@ def is_speakable(text: str) -> bool:
 VOICE = os.getenv("TTS_VOICE", "en-GB-RyanNeural")
 RATE = os.getenv("TTS_RATE", "+8%")    # slightly faster = better Shorts retention
 PITCH = os.getenv("TTS_PITCH", "-4Hz")  # slightly deeper = more gravitas
+
+# ---------------------------------------------------------------------------
+# Gemini native TTS — top priority when configured
+#
+# Reuses GEMINI_API_KEY outright: same key, same account, same free tier
+# already used for script generation. No new signup, no new secret.
+#
+# Verified live (2026-09-05, model gemini-2.5-flash-preview-tts, voice Kore):
+# a plain narration prompt and the same text wrapped in a "say this as a
+# single dry, deadpan, ironic aside" instruction produced measurably
+# different output (197 vs 187 audio tokens, 378766 vs 359566 bytes) — the
+# style instruction does something. The full raw JSON response was searched
+# for every timing-related key (timepoint, wordTiming, alignment, mark,
+# offset, duration, timestamp): none exist. That is not a documentation gap,
+# it is what the API actually returns.
+# ---------------------------------------------------------------------------
+
+GEMINI_TTS_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+# Kore by default — whatever voice actually gets chosen after listening in
+# AI Studio's speech playground, override with GEMINI_TTS_VOICE, no code
+# change needed.
+GEMINI_TTS_VOICE = os.getenv("GEMINI_TTS_VOICE", "Kore")
+GEMINI_TTS_ENABLED = bool(GEMINI_TTS_KEY)
+GEMINI_TTS_URL = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+                  f"{GEMINI_TTS_MODEL}:generateContent")
+
+# There is no numeric rate/pitch control on this engine — Gemini TTS takes a
+# natural-language instruction, not SSML prosody, so style has to be steered
+# in words. Only "funny" is actually assigned anywhere in the pipeline today
+# (the one joke beat); empathetic/relieved are defined for when that changes,
+# mirroring AZURE_STYLES's forward-compatible shape.
+_GEMINI_STYLE_INSTRUCTIONS = {
+    "funny": "Say this as a single dry, deadpan, ironic aside — a beat of "
+             "dark humor, not a cheerful or comedic voice:",
+    "empathetic": "Say this gently and empathetically, with real weight:",
+    "relieved": "Say this with quiet relief:",
+}
+_GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voice:"
+
+
+def _write_wav(path: str, pcm_bytes: bytes, sample_rate: int,
+              channels: int = 1, sample_width: int = 2):
+    """Gemini returns raw PCM with no container. ffmpeg (used two lines
+    below to re-encode to the mp3 every other engine already produces) needs
+    something with a header to read, so this wraps it in the minimal WAV
+    header rather than pulling in a whole audio library for one struct."""
+    import struct
+    n_samples = len(pcm_bytes)
+    with open(path, "wb") as f:
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 36 + n_samples))
+        f.write(b"WAVE")
+        f.write(b"fmt ")
+        f.write(struct.pack("<IHHIIHH", 16, 1, channels, sample_rate,
+                            sample_rate * channels * sample_width,
+                            channels * sample_width, sample_width * 8))
+        f.write(b"data")
+        f.write(struct.pack("<I", n_samples))
+        f.write(pcm_bytes)
+
+
+def _synthesize_gemini(text: str, output_path: str, style: str = None):
+    """Gemini native TTS. Always returns an empty word list — see the module
+    docstring on why no timing data exists to return — and raises on any
+    failure at all. Unlike _synthesize()'s Azure path, nothing here retries
+    or catches: the caller (generate_audio_pipeline) decides what a failure
+    means for the whole video, not this function.
+
+    Output is re-encoded to real mp3 rather than left as WAV-under-a-.mp3-
+    extension, so every engine's output is identical in format, not just in
+    filename.
+    """
+    instruction = _GEMINI_STYLE_INSTRUCTIONS.get((style or "").strip().lower(),
+                                                  _GEMINI_DEFAULT_INSTRUCTION)
+    body = {
+        "contents": [{"parts": [{"text": f"{instruction} {text}"}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": GEMINI_TTS_VOICE}
+                },
+            },
+        },
+    }
+    r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
+                      json=body, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+
+    parts = data["candidates"][0]["content"]["parts"]
+    audio_part = next(p for p in parts if "inlineData" in p)
+    mime = audio_part["inlineData"]["mimeType"]
+    raw = base64.b64decode(audio_part["inlineData"]["data"])
+
+    rate_hz = 24000
+    for token in mime.split(";"):
+        token = token.strip()
+        if token.startswith("rate="):
+            rate_hz = int(token.split("=")[1])
+
+    tmp_wav = output_path + ".gemini.wav"
+    _write_wav(tmp_wav, raw, rate_hz)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-i", tmp_wav, "-q:a", "2", output_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    finally:
+        if os.path.exists(tmp_wav):
+            os.remove(tmp_wav)
+
+    return []  # confirmed absent from the API response — see module docstring
+
+
+class GeminiTTSFailed(Exception):
+    """Raised the instant any scene fails on Gemini TTS. Caught exactly once,
+    in generate_audio_pipeline, which throws away the whole video's Gemini
+    output and restarts it entirely on edge-tts — see the module docstring
+    for why this engine does not fall back scene by scene the way Azure
+    does."""
+
 
 # ---------------------------------------------------------------------------
 # Azure Speech — primary engine when configured
@@ -330,17 +475,28 @@ def shift_word_timings(words, removed: float):
     return shifted
 
 
-def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dict:
-    if AZURE_ENABLED:
-        print(f"🎙️ Initializing Audio Engine (voice: {AZURE_VOICE} via Azure Speech, "
-              f"styles: {', '.join(sorted(AZURE_STYLES))}; "
-              f"edge-tts fallback: {EDGE_FALLBACK_VOICE})...")
-    else:
-        print(f"🎙️ Initializing Audio Engine (voice: {VOICE} via edge-tts)...")
-    os.makedirs(output_dir, exist_ok=True)
+def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
+    """One full pass over every scene, on exactly one engine.
 
+    use_gemini=True calls _synthesize_gemini() directly and raises
+    GeminiTTSFailed the INSTANT any scene fails — no per-scene gTTS
+    fallback, no continuing to the next scene. That is deliberate: this
+    engine's failures are handled one level up, by throwing away the whole
+    video's Gemini output and calling this function again with
+    use_gemini=False, never by mixing engines within one pass.
+
+    use_gemini=False goes through _synthesize() (which already knows how to
+    blend Azure and edge-tts internally, unchanged from before) with its
+    existing per-scene gTTS emergency fallback.
+
+    Re-running this for every scene after a Gemini failure is safe without
+    any manual cleanup: every scene writes to the same scene_{idx}.mp3 path
+    regardless of engine, so a second pass simply overwrites whatever the
+    aborted first pass left behind, including for scenes that had already
+    succeeded on Gemini before a later one failed.
+    """
     skipped, trimmed_total = 0, 0.0
-    for idx, scene in enumerate(script_data.get("scenes", [])):
+    for idx, scene in enumerate(scenes):
         audio_path = os.path.join(output_dir, f"scene_{idx}.mp3")
         text = scene.get("narration", "").strip()
 
@@ -359,13 +515,22 @@ def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dic
         rate = scene.get("tts_rate") or RATE
         style = scene.get("tts_style")
         style_note = f", style={style}" if style else ""
-        print(f"🗣️ Synthesizing scene {idx} at {rate}{style_note}: '{text[:40]}...'")
+        engine_tag = "gemini" if use_gemini else "standard"
+        print(f"🗣️ [{engine_tag}] Synthesizing scene {idx} at {rate}"
+              f"{style_note}: '{text[:40]}...'")
 
         try:
-            words = _synthesize(text, audio_path, rate=rate, style=style)
+            if use_gemini:
+                words = _synthesize_gemini(text, audio_path, style=style)
+            else:
+                words = _synthesize(text, audio_path, rate=rate, style=style)
             if os.path.getsize(audio_path) < 1000:  # suspiciously small = failed
                 raise RuntimeError("TTS produced an empty file")
         except Exception as e:
+            if use_gemini:
+                # No per-scene recovery here on purpose — see this function's
+                # docstring and the module docstring for why.
+                raise GeminiTTSFailed(f"scene {idx}: {e}") from e
             print(f"⚠️ TTS failed ({e}) — falling back to gTTS for this scene.")
             try:
                 words = _synthesize_fallback(text, audio_path)
@@ -391,6 +556,36 @@ def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dic
         scene["words"] = words
         cut = f", -{removed:.2f}s dead air" if removed > 0.01 else ""
         print(f"⏱️ Scene {idx}: {duration:.2f}s, {len(words)} word timings{cut}")
+
+    return skipped, trimmed_total
+
+
+def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dict:
+    scenes = script_data.get("scenes", [])
+    os.makedirs(output_dir, exist_ok=True)
+
+    if GEMINI_TTS_ENABLED:
+        print(f"🎙️ Initializing Audio Engine (voice: {GEMINI_TTS_VOICE} via "
+              f"Gemini TTS; if it fails anywhere mid-video, the ENTIRE video "
+              f"is redone on edge-tts ({VOICE}) rather than mixing voices)...")
+        try:
+            skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
+                                                     use_gemini=True)
+        except GeminiTTSFailed as e:
+            print(f"⚠️ Gemini TTS failed ({e}) — discarding every Gemini clip "
+                  f"from this video and resynthesizing the ENTIRE thing on "
+                  f"edge-tts instead, so it never mixes two different voices.")
+            skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
+                                                     use_gemini=False)
+    else:
+        if AZURE_ENABLED:
+            print(f"🎙️ Initializing Audio Engine (voice: {AZURE_VOICE} via "
+                  f"Azure Speech, styles: {', '.join(sorted(AZURE_STYLES))}; "
+                  f"edge-tts fallback: {EDGE_FALLBACK_VOICE})...")
+        else:
+            print(f"🎙️ Initializing Audio Engine (voice: {VOICE} via edge-tts)...")
+        skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
+                                                 use_gemini=False)
 
     note = f" ({skipped} scene(s) skipped)" if skipped else ""
     if trimmed_total > 0.5:
