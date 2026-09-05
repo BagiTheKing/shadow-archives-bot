@@ -113,10 +113,22 @@ def _discover_openai_models(client, provider: str, limit: int = 3) -> list:
     """
     override = os.getenv(f"{provider.upper()}_MODELS")
     if override:
-        return [m.strip() for m in override.split(",") if m.strip()]
+        models = [m.strip() for m in override.split(",") if m.strip()]
+        print(f"   🔧 {provider}: {provider.upper()}_MODELS override in effect "
+              f"-> {models or '(empty after stripping — check that secret!)'}")
+        return models
     try:
+        # A live run had cerebras_available() report the key present, then
+        # contribute silently zero models to the chain — no exception, no
+        # "no usable models" line, nothing to tell us why. Both prints below
+        # existed before that run; whichever one should have fired plainly
+        # didn't, or fired against zero raw models the API itself returned.
+        # Materializing the raw list (instead of iterating client.models.list()
+        # directly) costs nothing on catalogues this small and means the two
+        # counts below can never both go unprinted again.
+        raw = list(client.models.list())
         ids = []
-        for model in client.models.list():
+        for model in raw:
             mid = (getattr(model, "id", "") or "").split("/")[-1]
             if not mid or any(s in mid.lower() for s in _CHAT_SKIP):
                 continue
@@ -125,8 +137,13 @@ def _discover_openai_models(client, provider: str, limit: int = 3) -> list:
             # Longest name last: providers tend to suffix the specialised
             # variants, and the plain name is the general-purpose one.
             ids.sort(key=lambda m: (len(m), m))
-            return ids[:limit]
-        print(f"⚠️ {provider} listed no usable chat models.")
+            chosen = ids[:limit]
+            print(f"   🔍 {provider}: {len(raw)} model(s) in the catalogue, "
+                  f"{len(ids)} usable, using {chosen}")
+            return chosen
+        print(f"⚠️ {provider} listed no usable chat models "
+              f"({len(raw)} raw model(s) returned, {len(ids)} survived the "
+              f"chat-model filter).")
     except Exception as e:
         print(f"⚠️ Could not list {provider} models "
               f"({type(e).__name__}: {e}) — skipping this provider.")
