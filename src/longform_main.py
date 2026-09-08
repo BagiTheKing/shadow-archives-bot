@@ -162,14 +162,7 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
             if isinstance(t, str) and t.strip()][:15]
     tags += formats.tags_of(script.get("format"))
     tags += BASE_TAGS
-    tags = list(dict.fromkeys(tags))
-
-    trimmed, budget = [], 500          # YouTube rejects tag lists over 500 chars
-    for t in tags:
-        if len(t) + 1 > budget:
-            break
-        trimmed.append(t)
-        budget -= len(t) + 1
+    trimmed = formats.sanitize_tags(tags)
 
     return title, description, trimmed
 
@@ -336,6 +329,7 @@ def main():
     title, description, tags = build_metadata(script, chapter_marks, total,
                                               scenes=scenes)
     print(f"📋 Title: {title}")
+    print(f"🏷️  Tags ({len(tags)}): {tags}")
     print(f"⏱️  Duration: {minutes:.1f} min | {len(chapter_marks)} chapters")
 
     caption_path = os.path.join(BUILD_DIR, SRT_NAME)

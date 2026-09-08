@@ -139,16 +139,7 @@ def build_metadata(script_data: dict, episode=None):
     tags = [t.strip() for t in tags if isinstance(t, str) and t.strip()][:15]
     tags += formats.tags_of(script_data.get("format"))
     tags += BASE_TAGS
-    tags = list(dict.fromkeys(tags))  # dedupe, keep order
-
-    # YouTube rejects the request if the tag list exceeds 500 characters.
-    trimmed, budget = [], 500
-    for t in tags:
-        cost = len(t) + 1
-        if cost > budget:
-            break
-        trimmed.append(t)
-        budget -= cost
+    trimmed = formats.sanitize_tags(tags)
 
     return title, description, trimmed
 
@@ -551,6 +542,7 @@ def main():
     # Phase 5: metadata + upload
     title, description, tags = build_metadata(script_data, episode)
     print(f"📋 Title: {title}")
+    print(f"🏷️  Tags ({len(tags)}): {tags}")
 
     caption_path = os.path.join(build_dir, SRT_NAME)
     if not os.path.exists(caption_path):

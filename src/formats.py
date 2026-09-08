@@ -196,3 +196,39 @@ def hashtags_of(key: str) -> list:
     hashtags found anywhere in the description, so they are worth choosing
     rather than letting the writer scatter its own through the text."""
     return list(get(key)["hashtags"])
+
+
+# A live run reached the very last step of the pipeline — script, narration,
+# images, video, thumbnail, description all already built — and had YouTube's
+# upload API reject the whole thing with "invalidTags" and no indication of
+# which tag was the problem. The list-wide 500-character budget below already
+# existed; what was missing is YouTube's OTHER two tag rules: no single tag
+# over 100 characters, and neither '<' nor '>' anywhere in one. Both are easy
+# for a free-form LLM tag (script.get("tags")) to violate by accident — the
+# channel's own fixed tags above are hand-written and already clean.
+_TAG_MAX_LEN = 100
+_TAG_LIST_BUDGET = 500
+
+
+def sanitize_tags(tags: list) -> list:
+    """The final YouTube-safe tag list: stripped, deduped in order, and
+    validated against YouTube's actual tag rules before anything is spent
+    building a video around them."""
+    seen, cleaned = set(), []
+    for t in tags:
+        if not isinstance(t, str):
+            continue
+        t = t.strip()
+        if not t or t in seen or len(t) > _TAG_MAX_LEN or "<" in t or ">" in t:
+            continue
+        seen.add(t)
+        cleaned.append(t)
+
+    trimmed, budget = [], _TAG_LIST_BUDGET
+    for t in cleaned:
+        cost = len(t) + 1
+        if cost > budget:
+            break
+        trimmed.append(t)
+        budget -= cost
+    return trimmed
