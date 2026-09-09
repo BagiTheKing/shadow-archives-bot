@@ -27,6 +27,15 @@ from published_history import (covered_topics, describe, load_published,
 from topics import pick_topic
 from youtube_publisher import upload_video_to_youtube
 
+# main.py (Shorts) has carried this exact protection since 19 August, after a
+# manual run stacked on the day's scheduled one found Cloudflare's 10,000-
+# neuron free allocation already spent, quietly rendered every frame on the
+# weaker fallback, and published with nothing in the log saying so. This
+# pipeline had no equivalent: a real run got 0/47 generated frames from
+# Workers AI for the same reason and published anyway. Same env var as
+# Shorts on purpose — one knob controls both.
+MIN_PREFERRED_FRAMES = float(os.getenv("MIN_PREFERRED_FRAMES", "0.6"))
+
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 
 # Same series as the Shorts, so the two formats read as one channel. It stays
@@ -114,6 +123,37 @@ def build_credit_block(scenes):
     if any(s.get("video_path") for s in scenes):
         parts.append("Stock footage courtesy of Pexels.")
     return "\n\n".join(parts)
+
+
+def check_visual_quality(workers_ai_generated: int, total_generated: int) -> None:
+    """Halts before the render when the generated frames did not come from
+    the good generator. Ported from main.py's check_visual_quality — see the
+    comment on MIN_PREFERRED_FRAMES above for why.
+
+    Only applies when Workers AI is actually configured, and only over the
+    AI-GENERATED frames — archival photos and b-roll are real content, not a
+    Cloudflare-quota fallback, and scoring them against this floor would
+    punish a video for using MORE real imagery, not less.
+    """
+    from visual_engine import cloudflare_available
+    if not cloudflare_available() or MIN_PREFERRED_FRAMES <= 0:
+        return
+    if not total_generated:
+        return  # every frame was archival or b-roll — nothing to gate on
+
+    share = workers_ai_generated / total_generated
+    if share >= MIN_PREFERRED_FRAMES:
+        return
+
+    print(f"\n❌ Halted: only {workers_ai_generated}/{total_generated} generated "
+          f"frames came from Workers AI (floor is {MIN_PREFERRED_FRAMES:.0%}).")
+    print("   Cloudflare's free allocation is 10,000 neurons a day and resets at "
+          "00:00 UTC, shared across every lane — Shorts, Timely and Encore all "
+          "draw on the same allowance.")
+    print("   Publishing this would put a visibly worse video on the channel "
+          "under the same title and thumbnail as a good one.")
+    print("   Wait for the reset, or set MIN_PREFERRED_FRAMES=0 to publish anyway.")
+    raise SystemExit(1)
 
 
 def build_metadata(script, chapter_marks, total_duration, scenes=None):
@@ -290,12 +330,17 @@ def main():
 
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
-    scenes = generate_longform_visuals(scenes, BUILD_DIR)
+    scenes, workers_ai_generated, total_generated = generate_longform_visuals(
+        scenes, BUILD_DIR)
 
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
     if len(usable) < 8:
         print(f"❌ Halted: only {len(usable)} usable scenes.")
         raise SystemExit(1)
+
+    # Before spending the render, not after: a video nobody should publish is
+    # not worth an hour of Actions time either.
+    check_visual_quality(workers_ai_generated, total_generated)
 
     # Phase 3: render
     video_path, total, chapter_marks = generate_longform_video(scenes, BUILD_DIR)

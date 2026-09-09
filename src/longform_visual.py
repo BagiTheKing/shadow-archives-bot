@@ -146,13 +146,22 @@ def _vary_prompt(prompt: str, shot: int) -> str:
     return angles[shot % len(angles)] + prompt
 
 
-def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
+def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     """Fills each scene with image_paths (1-3 frames), possibly a video_path
-    (muted b-roll), and a credit string when a real archival photo was used."""
+    (muted b-roll), and a credit string when a real archival photo was used.
+
+    Returns (scenes, workers_ai_generated, total_generated) — the last two
+    count only the AI-GENERATED frames (archival photos and b-roll are real
+    content, not a Cloudflare-quota fallback, so they don't belong in this
+    ratio). The caller uses it the same way main.py's check_visual_quality
+    already does for Shorts: refuse to publish a video that came out almost
+    entirely on the weaker fallback generator instead of shipping it silently.
+    """
     print(f"🎨 Long-form visual engine ({LF_W}x{LF_H}, working at {KB_W}x{KB_H})...")
     os.makedirs(output_dir, exist_ok=True)
 
     api_calls, archival_used, broll_used = 0, 0, 0
+    generated_sources = []
     last_broll_idx = -BROLL_MIN_GAP - 1
     # Nothing real may appear twice: one live run used the same C-130
     # photograph for two scenes and the same stock clip four times, which is
@@ -230,8 +239,18 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
                 "wide establishing shot, dark historical scene"
             print(f"🖼️  Scene {idx}: generating shot {shot + 1}/{wanted} "
                   f"(call {api_calls + 1})...")
-            if download_image(_vary_prompt(prompt, shot), path,
-                              width=LF_W, height=LF_H, era_year=era):
+            # download_image returns the generator's name ("workers-ai",
+            # "pollinations/flux", ...) on success, not a bare bool — the
+            # Shorts pipeline (main.py's check_visual_quality) already reads
+            # this to refuse publishing a video that came out almost entirely
+            # on the weaker fallback. This pipeline was discarding the exact
+            # same string as a plain truthy check, so it had no equivalent
+            # protection: a real run got 0/47 frames from Workers AI (the
+            # free daily allocation was already spent by other runs) and
+            # published anyway with nothing in the log calling that out.
+            source = download_image(_vary_prompt(prompt, shot), path,
+                                    width=LF_W, height=LF_H, era_year=era)
+            if source:
                 _to_kb_size(path)
             elif _reuse_real_frame(real_pool, path, len(images) + idx):
                 # The generator being down must not turn the video into black
@@ -241,12 +260,15 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
                 # something honest and watchable on screen.
                 print(f"♻️  Scene {idx}: generation failed — re-framed an "
                       f"archival photo instead of a black frame.")
+                source = "reused-archival"
             else:
                 print(f"⚠️  Scene {idx}: generation failed — designed fallback.")
                 make_fallback_image(path, seed=idx * 10 + shot,
                                     width=LF_W, height=LF_H)
                 _to_kb_size(path)
+                source = "designed-fallback"
             images.append(path)
+            generated_sources.append(source)
             api_calls += 1
 
         scene["image_paths"] = images
@@ -255,10 +277,15 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build") -> list:
             scene["credit"] = credits
 
     total_frames = sum(len(s.get("image_paths") or []) for s in scenes)
+    workers_ai_generated = sum(1 for s in generated_sources if s == "workers-ai")
     print(f"✅ Visuals complete: {total_frames} frames for {len(scenes)} scenes "
           f"({archival_used} archival, {api_calls} generated, "
           f"{broll_used} b-roll clips).")
-    return scenes
+    if api_calls and workers_ai_generated < api_calls:
+        others = sorted(set(s for s in generated_sources if s != "workers-ai"))
+        print(f"🎨 {workers_ai_generated}/{api_calls} generated frames from "
+              f"Workers AI; the rest: {', '.join(others)}")
+    return scenes, workers_ai_generated, api_calls
 
 
 # Stock footage only exists in the present tense, so the only clips that can
