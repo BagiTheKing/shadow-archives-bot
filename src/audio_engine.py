@@ -216,8 +216,28 @@ def _synthesize_gemini(text: str, output_path: str, style: str = None):
 
     last_error = "unknown error"
     for attempt in range(GEMINI_TTS_MAX_ATTEMPTS):
-        r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
-                          json=body, timeout=60)
+        try:
+            r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
+                              json=body, timeout=60)
+        except requests.exceptions.RequestException as e:
+            # A live run lost Puck for an entire 47-scene video over exactly
+            # this: scene 0 hit a plain read timeout ("Google never answered
+            # in 60s") and the whole thing fell back to edge-tts with ZERO
+            # retries — because everything below here only ever runs once a
+            # response object exists. A dropped connection or a timeout is
+            # not Google rejecting the request; it is the network not
+            # answering in time, which is exactly as transient as a 503 and
+            # deserves the same retry treatment, not instant surrender.
+            last_error = f"{type(e).__name__}: {e}"
+            if attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
+                wait = GEMINI_TTS_RETRY_DELAYS[attempt]
+                print(f"   ⏳ Gemini TTS request failed ({type(e).__name__} — "
+                      f"no response, not an error response) — waiting "
+                      f"{wait}s and retrying this scene (attempt "
+                      f"{attempt + 2}/{GEMINI_TTS_MAX_ATTEMPTS})...")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(last_error)
 
         if r.status_code == 200:
             data = r.json()
