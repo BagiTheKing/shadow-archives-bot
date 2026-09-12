@@ -127,20 +127,37 @@ _GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voic
 # retrying an actually-malformed request just wastes the same three calls
 # for the same guaranteed result.
 GEMINI_TTS_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
-GEMINI_TTS_MAX_ATTEMPTS = 3
-GEMINI_TTS_RETRY_DELAYS = (3, 8)  # fallback wait, used only when Google gives no number
+# Two real runs hit the wall despite the 21s pace below and despite the
+# retry loop honoring Google's own "Please retry in Xs" number exactly: the
+# Falklands video's scene 12 waited the full 59.86s Google itself asked for
+# on its last attempt and was STILL throttled immediately after. One more
+# attempt is cheap (it only ever fires when the previous three all failed)
+# and gives that already-executed wait one more chance to have been enough.
+GEMINI_TTS_MAX_ATTEMPTS = 4
+# One entry per retry this schedule might be asked for (indices 0..MAX_ATTEMPTS-2)
+# — used only when Google's response gives no "retry in Xs" of its own.
+GEMINI_TTS_RETRY_DELAYS = (3, 8, 15)
 
-# The THIRD live run finally named the actual wall: Google's error body said
-# "limit: 3, model: gemini-2.5-flash-tts... Please retry in 59.65s" — three
-# calls per roughly a minute. The first five scenes had already gone through
-# with no pause between them at all, so scene 5 walked straight into that
-# wall. No amount of retrying fixes a rate limit you keep re-triggering the
+# The THIRD live run finally named A wall: Google's error body said "limit:
+# 3, model: gemini-2.5-flash-tts... Please retry in 59.65s" — three calls
+# per roughly a minute. The first five scenes had already gone through with
+# no pause between them at all, so scene 5 walked straight into that wall.
+# No amount of retrying fixes a rate limit you keep re-triggering the
 # instant it clears; the only real fix is to never approach it in the first
 # place. So every successful Gemini call is now followed by a deliberate
-# pause before the next one — 21s clears three calls per minute with a
-# margin, not three calls per minute exactly. This adds real time to a run
-# (roughly 15 more minutes across a 47-scene video) in exchange for the
-# video actually finishing on Gemini instead of falling back every time.
+# pause before the next one.
+#
+# "A wall" rather than "the wall": two later runs, both paced at 21s, still
+# failed partway through a long video — one at scene 5, one at scene 12,
+# each after Google's own error body named a DIFFERENT stated limit (3, then
+# 10) for the identical model. Whatever the true shape of this quota is, it
+# is not simply "3 per 60 seconds, reliably" — 21s is enough margin for a
+# SHORT video's 5-6 calls (never once failed there) but not consistently
+# enough across the 40+ calls a long-form video makes. See
+# GEMINI_TTS_PACE_SECONDS_LONGFORM in longform_main.py for the wider,
+# lane-specific pace that trades more render time for a better chance of
+# finishing the whole video on this voice — Shorts keeps this narrower
+# default since it has never needed the margin.
 GEMINI_TTS_PACE_SECONDS = float(os.getenv("GEMINI_TTS_PACE_SECONDS", "21"))
 
 # Google's 429 body names the exact wait when it has one ("Please retry in
@@ -588,7 +605,8 @@ def shift_word_timings(words, removed: float):
     return shifted
 
 
-def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
+def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool,
+                    pace_seconds: float = None):
     """One full pass over every scene, on exactly one engine.
 
     use_gemini=True calls _synthesize_gemini() directly and raises
@@ -607,10 +625,16 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
     regardless of engine, so a second pass simply overwrites whatever the
     aborted first pass left behind, including for scenes that had already
     succeeded on Gemini before a later one failed.
+
+    pace_seconds overrides GEMINI_TTS_PACE_SECONDS for this call only —
+    longform_main.py passes its own wider value; leaving it unset (Shorts)
+    keeps the narrower module default.
     """
+    pace = GEMINI_TTS_PACE_SECONDS if pace_seconds is None else pace_seconds
+
     # Used only to decide when to skip the post-call pacing pause below —
-    # there is no point waiting 21s after the last real Gemini call this
-    # pass will ever make.
+    # there is no point waiting after the last real Gemini call this pass
+    # will ever make.
     last_speakable_idx = None
     if use_gemini:
         for idx, scene in enumerate(scenes):
@@ -664,15 +688,14 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
                 skipped += 1
                 continue
 
-        # Gemini's free tier allows only ~3 calls per minute (see the comment
-        # above GEMINI_TTS_PACE_SECONDS) — pause after every successful call
-        # except the last one this pass will make, so the next scene never
-        # walks straight into the wall the way scene 5 of 47 did on a real
-        # run.
+        # Gemini's free tier is tightly rate-limited (see the comment above
+        # GEMINI_TTS_PACE_SECONDS) — pause after every successful call except
+        # the last one this pass will make, so the next scene never walks
+        # straight into the wall the way scene 5 of 47 did on a real run.
         if use_gemini and idx != last_speakable_idx:
-            print(f"   ⏳ Pacing Gemini TTS — waiting {GEMINI_TTS_PACE_SECONDS:.0f}s "
-                  f"before the next request (free tier allows ~3/min)...")
-            time.sleep(GEMINI_TTS_PACE_SECONDS)
+            print(f"   ⏳ Pacing Gemini TTS — waiting {pace:.0f}s before the "
+                  f"next request...")
+            time.sleep(pace)
 
         duration = get_audio_duration(audio_path)
 
@@ -692,17 +715,21 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool):
     return skipped, trimmed_total
 
 
-def generate_audio_pipeline(script_data: dict, output_dir: str = "build") -> dict:
+def generate_audio_pipeline(script_data: dict, output_dir: str = "build",
+                            pace_seconds: float = None) -> dict:
     scenes = script_data.get("scenes", [])
     os.makedirs(output_dir, exist_ok=True)
 
     if GEMINI_TTS_ENABLED:
+        pace = GEMINI_TTS_PACE_SECONDS if pace_seconds is None else pace_seconds
         print(f"🎙️ Initializing Audio Engine (voice: {GEMINI_TTS_VOICE} via "
-              f"Gemini TTS; if it fails anywhere mid-video, the ENTIRE video "
-              f"is redone on edge-tts ({VOICE}) rather than mixing voices)...")
+              f"Gemini TTS, paced {pace:.0f}s/call; if it fails anywhere "
+              f"mid-video, the ENTIRE video is redone on edge-tts ({VOICE}) "
+              f"rather than mixing voices)...")
         try:
             skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
-                                                     use_gemini=True)
+                                                     use_gemini=True,
+                                                     pace_seconds=pace_seconds)
         except GeminiTTSFailed as e:
             print(f"⚠️ Gemini TTS failed ({e}) — discarding every Gemini clip "
                   f"from this video and resynthesizing the ENTIRE thing on "
