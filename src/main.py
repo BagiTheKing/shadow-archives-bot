@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import re
@@ -10,7 +11,8 @@ from caption_track import SRT_NAME
 from llm_engine import generate_video_script
 from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import pick_topic
-from published_history import (FORCE, GUARD_HOURS, covered_topics, describe,
+from published_history import (FORCE, GUARD_HOURS, _published_at,
+                               covered_topics, describe,
                                load_published, next_episode_number,
                                promised_topic, published_within, recent_titles,
                                series_suffix)
@@ -418,8 +420,22 @@ def plan_run():
     recent = published_within(history)
     if recent and not FORCE:
         newest = recent[0]
+        # A run on 2026-09-12 named a video from 2026-09-10 as inside this
+        # 20h window — 51+ hours old, which should never match. The window
+        # size in the message above is fixed (GUARD_HOURS, not the matched
+        # video's real age), so it could not have said so either way. Print
+        # the raw publishedAt YouTube actually returned and the elapsed
+        # hours computed against it, so the next match either confirms this
+        # was a real bug (bad data, a timezone slip, a stale cache) or shows
+        # the guard was right and something else explains the confusion.
+        published_at = newest.get("publishedAt", "unknown")
+        age = _published_at(newest)
+        age_h = ((datetime.datetime.now(datetime.timezone.utc) - age)
+                 .total_seconds() / 3600) if age else None
+        age_note = f", {age_h:.1f}h ago" if age_h is not None else " (unparseable timestamp)"
         print(f"🛑 {len(recent)} upload(s) in the last {GUARD_HOURS:g}h — "
-              f"most recently {newest.get('title', '')[:70]!r}.")
+              f"most recently {newest.get('title', '')[:70]!r} "
+              f"(publishedAt={published_at}{age_note}).")
         print("   Stopping before generation. Two videos hours apart is what "
               "produced the duplicate clusters, so this run stands down.")
         print("   Set FORCE_PUBLISH=1 to override deliberately.")
