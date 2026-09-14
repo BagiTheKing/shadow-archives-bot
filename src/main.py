@@ -11,6 +11,7 @@ from caption_track import SRT_NAME
 from llm_engine import generate_video_script
 from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import pick_topic
+from channel_insights import _is_short
 from published_history import (FORCE, GUARD_HOURS, _published_at,
                                covered_topics, describe,
                                load_published, next_episode_number,
@@ -400,9 +401,9 @@ def plan_run():
     """Reads the channel back before writing anything.
 
     Returns (topic, avoid_titles, episode, next_topic). Raises SystemExit(0) — a clean stop,
-    not a failure — when another upload already went out inside the guard window,
-    because a second video on the same day is the one thing this channel has
-    proven it must not do again.
+    not a failure — when another SHORT already went out inside the guard window,
+    because two Shorts hours apart is the one thing this channel has proven it
+    must not do again.
     """
     history = load_published()
     print(f"🧾 History: {describe(history)}")
@@ -417,31 +418,37 @@ def plan_run():
         upcoming = pick_topic(exclude=[topic]) if topic else None
         return topic, [], None, upcoming
 
-    recent = published_within(history)
+    # Every incident in the docstring above (Light Brigade, Ariane 5, the
+    # Great Fire) was two SHORTS hours apart — this pipeline generating a
+    # reworded copy of what it, specifically, had just published. A run on
+    # 2026-09-12 stood down over a video published TWO DAYS earlier that
+    # turned out to be the long-form Falklands video, not a Short — an
+    # unrelated video, on an unrelated topic, in a format that has never
+    # once produced a duplicate. Scoping to Shorts only fixes exactly that:
+    # a long-form upload (or a future third lane) no longer blocks today's
+    # Short, while the actual proven failure — this pipeline repeating
+    # itself — stays covered.
+    recent_all = published_within(history)
+    recent = [v for v in recent_all if _is_short(v.get("duration", ""))]
     if recent and not FORCE:
         newest = recent[0]
-        # A run on 2026-09-12 named a video from 2026-09-10 as inside this
-        # 20h window — 51+ hours old, which should never match. The window
-        # size in the message above is fixed (GUARD_HOURS, not the matched
-        # video's real age), so it could not have said so either way. Print
-        # the raw publishedAt YouTube actually returned and the elapsed
-        # hours computed against it, so the next match either confirms this
-        # was a real bug (bad data, a timezone slip, a stale cache) or shows
-        # the guard was right and something else explains the confusion.
+        # Kept from the earlier diagnostic pass: the real publishedAt and
+        # computed age, not just the fixed window size, in case a same-
+        # format match ever looks wrong the way the cross-format one did.
         published_at = newest.get("publishedAt", "unknown")
         age = _published_at(newest)
         age_h = ((datetime.datetime.now(datetime.timezone.utc) - age)
                  .total_seconds() / 3600) if age else None
         age_note = f", {age_h:.1f}h ago" if age_h is not None else " (unparseable timestamp)"
-        print(f"🛑 {len(recent)} upload(s) in the last {GUARD_HOURS:g}h — "
+        print(f"🛑 {len(recent)} Short(s) in the last {GUARD_HOURS:g}h — "
               f"most recently {newest.get('title', '')[:70]!r} "
               f"(publishedAt={published_at}{age_note}).")
-        print("   Stopping before generation. Two videos hours apart is what "
+        print("   Stopping before generation. Two Shorts hours apart is what "
               "produced the duplicate clusters, so this run stands down.")
         print("   Set FORCE_PUBLISH=1 to override deliberately.")
         raise SystemExit(0)
     if recent and FORCE:
-        print(f"⚠️ FORCE_PUBLISH=1 — publishing despite {len(recent)} upload(s) "
+        print(f"⚠️ FORCE_PUBLISH=1 — publishing despite {len(recent)} Short(s) "
               f"in the last {GUARD_HOURS:g}h.")
 
     used = covered_topics(history)
