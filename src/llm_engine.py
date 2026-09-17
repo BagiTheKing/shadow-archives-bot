@@ -859,9 +859,10 @@ def generate_video_script(topic: str = None, avoid_titles=(),
         "Output ONLY the JSON object."
     )
 
-    # Models that answered "this is already published". Collected rather than
-    # obeyed on sight — see the duplicate branch below.
-    duplicate_votes = []
+    # Vendors whose model(s) answered "this is already published". Tracked by
+    # vendor, not by model, and collected rather than obeyed on sight — see
+    # the duplicate branch below.
+    duplicate_vote_vendors = set()
 
     for model in pool.models:
         client = pool.client_for(model)
@@ -896,13 +897,25 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     # published topics from that very run. This is only a
                     # backstop for what token matching misses, so it needs
                     # corroboration before it outranks a live API read.
-                    duplicate_votes.append(model)
+                    #
+                    # "Corroboration" means independent sources, not just a
+                    # second model ID. On 2026-09-16 inclusionai/ling-3.0-
+                    # flash-vl and inclusionai/ling-3.0-flash-sante — the same
+                    # base model wearing two fine-tune names — both voted
+                    # "duplicate" on a topic the channel's own history had
+                    # just confirmed was NOT published (it was that video's
+                    # own promised next episode), and two votes from one
+                    # vendor was enough to kill a legitimate run. Tallying by
+                    # vendor instead of by model means the same shared
+                    # hallucination can no longer out-vote a real API read.
+                    vendor = model.split("/", 1)[0] if "/" in model else model
+                    duplicate_vote_vendors.add(vendor)
                     print(f"🚫 {model} reports this story is already "
-                          f"published (vote {len(duplicate_votes)} of "
-                          f"{DUPLICATE_VOTES_NEEDED}).")
-                    if len(duplicate_votes) >= DUPLICATE_VOTES_NEEDED:
-                        print("🚫 Enough writers agree — treating the topic as "
-                              "already published.")
+                          f"published ({len(duplicate_vote_vendors)} of "
+                          f"{DUPLICATE_VOTES_NEEDED} independent vendor(s)).")
+                    if len(duplicate_vote_vendors) >= DUPLICATE_VOTES_NEEDED:
+                        print("🚫 Enough independent writers agree — "
+                              "treating the topic as already published.")
                         return None
                     break   # this model has nothing else to offer; next one
                 if _validate(data, title_max, avoid_titles, series_name):
