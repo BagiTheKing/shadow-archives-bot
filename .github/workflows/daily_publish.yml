@@ -82,12 +82,14 @@ jobs:
           #   https://cloud.cerebras.ai
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
-          # Independent of every provider above — a separate company, on its
-          # own infrastructure, not sitting behind OpenRouter the way most of
-          # the free chain ultimately does. glm-4-flash specifically is
-          # documented as free for individual developers.
-          # https://open.bigmodel.cn/usercenter/apikeys (sign-up may ask for
-          # phone verification — not confirmed from here).
+          # Independent of every provider above — a separate company, on
+          # its own infrastructure, not sitting behind OpenRouter the way
+          # most of the free chain ultimately does. GLM-4.7-Flash and
+          # GLM-4.5-Flash are genuinely free (not trial credit), confirmed
+          # across several independent sources. Sign up at https://z.ai/
+          # model-api (email only) — NOT open.bigmodel.cn, which is a
+          # separate mainland-China portal requiring a verified Chinese
+          # phone number and real-name ID.
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           # Last in the chain and the only tier that bills, so nothing reaches
           # it until every free allowance above is spent. Leave the secret

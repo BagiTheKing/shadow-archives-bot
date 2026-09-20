@@ -45,10 +45,9 @@ that day, not just "one more model."
     gemini      free, no card. The best writer of the free tiers.
     groq        free, no card. Very fast, generous daily allowance.
     cerebras    free, no card. Another independent allowance.
-    zhipu       free, no card (glm-4-flash is explicitly a free-forever model
-                for individual developers). A Chinese provider on its own
-                infrastructure — independent of every other layer here,
-                OpenRouter included.
+    zhipu       free, no card, email sign-up only — see the base URL warning
+                below. A Chinese provider on its own infrastructure,
+                independent of every other layer here, OpenRouter included.
     openrouter  free, ~50 requests a day across whatever is free that morning.
     anthropic   PAID, and last on purpose — it is the only tier that can cost
                 money, so it is only ever reached when every free tier has
@@ -64,12 +63,18 @@ Get keys — all free, none need a card:
     Gemini    https://aistudio.google.com/apikey
     Groq      https://console.groq.com/keys
     Cerebras  https://cloud.cerebras.ai
-    Zhipu     https://open.bigmodel.cn/usercenter/apikeys (sign-up may ask
-              for phone verification — not confirmed from here, since this
-              file was written without a live account to test against; if
-              the shape of Zhipu's API turns out to differ from what is
-              assumed below, this tier degrades to contributing nothing,
-              same as any other provider whose discovery call fails)
+    Zhipu     https://z.ai/model-api — sign up here, NOT
+              open.bigmodel.cn. Zhipu runs two separate portals: the
+              mainland-China one (open.bigmodel.cn) demands a verified
+              Chinese phone number and real-name ID tied to a Chinese
+              resident ID card; the international one (z.ai) takes just an
+              email. Confirmed by cross-checking several independent
+              sources in September 2026, not just one page — GLM-4.5-Flash
+              and GLM-4.7-Flash are priced at $0 (input, output, and cached
+              input) on z.ai specifically, genuinely free rather than a
+              trial credit. Pricing on sites like this changes without
+              notice, so if this tier ever stops working, that is the
+              first thing worth re-checking at the live z.ai pricing page.
 """
 
 import os
@@ -85,7 +90,12 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # hand-written model list — see the "model names are not stable" lesson above.
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
-ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+# The INTERNATIONAL portal. api.z.ai, not open.bigmodel.cn — that second one
+# is Zhipu's mainland-China endpoint and requires a verified Chinese phone
+# number plus real-name ID tied to a Chinese resident ID card. z.ai takes
+# just an email. Getting this domain wrong doesn't fail loudly: it is a
+# real, differently-authenticated service, not a typo that 404s.
+ZHIPU_BASE_URL = "https://api.z.ai/api/paas/v4"
 
 # Only used if live discovery fails. Deliberately generic aliases, which Google
 # keeps pointed at a current model, rather than pinned versions that retire.
@@ -446,13 +456,17 @@ def get_pool() -> ModelPool:
         # PAID models under the same key and the same catalogue; a discovery
         # pass here could just as easily hand back a paid model as the free
         # one, silently spending money the whole reason for this tier is to
-        # avoid. glm-4-flash specifically is documented as free for
-        # individual developers, so it is pinned rather than guessed at.
-        # ZHIPU_MODELS overrides this the same way *_MODELS does elsewhere,
-        # for whoever wants a different (and still confirmed-free) model.
+        # avoid. GLM-4.7-Flash and GLM-4.5-Flash are the two confirmed
+        # genuinely-free (not trial-credit) models on the z.ai international
+        # portal as of September 2026 — cross-checked across several
+        # independent sources, not taken from one page — so both are pinned,
+        # newest first. ZHIPU_MODELS overrides this the same way *_MODELS
+        # does elsewhere, for whoever wants a different (and still
+        # confirmed-free) model, or when Zhipu's own free lineup moves on
+        # again.
         override = os.getenv("ZHIPU_MODELS")
         models = ([m.strip() for m in override.split(",") if m.strip()]
-                  if override else ["glm-4-flash"])
+                  if override else ["glm-4.7-flash", "glm-4.5-flash"])
         client = OpenAI(base_url=ZHIPU_BASE_URL,
                         api_key=os.getenv("ZHIPU_API_KEY"))
         for model in models:
