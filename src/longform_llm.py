@@ -59,11 +59,18 @@ ARC = [
     # into the story. That fixed the 23-second cliff without fixing the
     # subscriber number, which is the problem this version addresses instead.
     ("The Cost",
-     "Open cold with the human toll — the number, the names, what was actually "
-     "lost — in the first one or two sentences. No throat-clearing, no context, "
-     "no date-first framing. Hit it, then stop. This chapter is judged the way "
-     "a Short's hook is judged: a hard number or a named consequence by the "
-     "second sentence, because its only job is to make someone stop scrolling.",
+     "Open cold with the single darkest, most catastrophic or most mysterious "
+     "true fact of this whole story — not just any fact, the one detail that "
+     "makes a total stranger's stomach drop. Lead with it in the first "
+     "sentence, framed for maximum intrigue. If a number sharpens that fact, "
+     "use exactly one — the sharpest one available — paired with one concrete "
+     "human or physical detail in the same breath. Do not stack a second "
+     "number on top of it: a pile of statistics reads as a data dump, not a "
+     "gut-punch, and this chapter only gets one punch to throw. No "
+     "throat-clearing, no context, no date-first framing. Hit it, then stop. "
+     "This chapter is judged the way a Short's hook is judged: a hard number, "
+     "name or named consequence by the second sentence, because its only job "
+     "is to make someone stop scrolling.",
      90),
     # The chapter the title is written from. It states, as a live possibility
     # rather than a settled fact, the harshest reasonable reading of what
@@ -71,27 +78,46 @@ ARC = [
     # chapter to write the title, so what gets written here has to be an
     # actual claim a viewer could repeat back, not a mood.
     ("The Claim",
-     "Given what the viewer just learned was lost, state the harshest reasonable "
-     "interpretation of why — framed as what the facts suggest, not as a verdict "
-     "you have already reached. Name the specific, real details that make that "
-     "reading plausible: a warning that existed, a person who objected, a choice "
-     "that looks deliberate rather than accidental. Do not answer it yet — that "
-     "is the rest of the video's job. End this chapter still holding the "
-     "question open.",
+     "This is the chapter the title gets written from — it has to shine "
+     "harder than any other chapter in the video. Given what the viewer just "
+     "learned was lost, state the harshest reasonable interpretation of why "
+     "— framed as what the facts suggest, not a verdict you have already "
+     "reached. Build it like a case forming in real time, not a conclusion "
+     "announced flatly: name the specific, real details that make that "
+     "reading plausible one at a time — a warning that existed, a person who "
+     "objected, a choice that looks deliberate rather than accidental — so "
+     "the suspicion visibly hardens sentence by sentence. Do not answer it "
+     "yet — that is the rest of the video's job. End this chapter still "
+     "holding the question open, on the single most damning detail you "
+     "have.",
      170),
     ("What Was Supposed To Happen",
-     "Establish the plan as its designers understood it. The viewer should finish this "
-     "chapter thinking the plan sounds sensible. Give the specifics: who, when, what "
-     "resources, what the expected outcome was.",
+     "Ground the viewer in the real scene before explaining the plan "
+     "mechanically — the place, the time of day, what it looked and sounded "
+     "like, who was actually there — then establish the plan as its "
+     "designers understood it. The viewer should finish this chapter "
+     "thinking the plan sounds sensible. Give the specifics: who, when, what "
+     "resources, what the expected outcome was. This is a reflective "
+     "chapter, not a fast one: sentences here may run longer than the "
+     "voice's usual cap when the extra length is doing real work — painting "
+     "the scene, not padding it — up to about 30 words instead of 20.",
      210),
     ("The Decision",
      "The turning point. Name who decided what, what information they had, what they "
      "lacked, and the pressure they were under. This is the heart of the video — be "
-     "concrete and fair, not mocking.",
+     "concrete and fair, not mocking. This is the pivot the whole arc slows down "
+     "for: sentences here may run longer than the voice's usual cap when the extra "
+     "length lets the viewer sit inside the pressure of the moment — up to about "
+     "30 words instead of 20.",
      260),
     ("The Chain",
      "How the decision became a disaster, in order. Use the timeline: what happened "
-     "first, what each person did next, the moment it stopped being recoverable.",
+     "first, what each person did next, the moment it stopped being recoverable. "
+     "Narrate it with an actual running clock wherever the record supports one — "
+     "name specific times or elapsed minutes (\"At 3:14, the first alarm sounds. "
+     "Six minutes later...\") so the viewer can feel it ticking, not just read a "
+     "sequence. Only use real times the record actually supports; never invent a "
+     "timestamp for pacing.",
      280),
     # The verdict on chapter 2's claim, using only what chapters 3-5 actually
     # established. This is also the counterfactual's home now — naming the
@@ -117,17 +143,25 @@ ARC = [
 _UNSOLVED_SUBSTITUTIONS = {
     "The Claim": (
         "The Popular Theory",
-        "State the most common or tempting explanation for this mystery — the one "
-        "most people already assume, or the first one anybody proposed — as a live "
-        "possibility, not a verdict. Name the specific detail that makes it "
-        "tempting. Do not rule it out yet — that is the rest of the video's job.",
+        "This is the chapter the title gets written from — it has to shine "
+        "harder than any other chapter in the video. State the most common "
+        "or tempting explanation for this mystery — the one most people "
+        "already assume, or the first one anybody proposed — as a live "
+        "possibility, not a verdict. Build it like a case forming in real "
+        "time, not a conclusion announced flatly: name the specific details "
+        "that make it tempting one at a time, so the appeal of the theory "
+        "visibly builds sentence by sentence. Do not rule it out yet — that "
+        "is the rest of the video's job.",
         170),
     "The Decision": (
         "What Has Been Ruled Out",
         "The explanations that have been tested and failed, and why each one does not "
         "fit the evidence. Be specific about what the evidence actually is. This is "
         "where the channel earns its credibility, so never present a theory as settled "
-        "and never invent a consensus that does not exist.",
+        "and never invent a consensus that does not exist. This is the pivot the whole "
+        "arc slows down for: sentences here may run longer than the voice's usual cap "
+        "when the extra length lets the evidence actually breathe — up to about 30 "
+        "words instead of 20.",
         260),
     "The Verdict": (
         "What Is Still Open",
@@ -264,7 +298,9 @@ If you are unsure of a specific figure, describe it qualitatively instead of gue
 
 VOICE:
 - Calm, factual, forensic. The events supply the drama; the narration does not add any.
-- Short declarative sentences. Maximum 20 words each.
+- Short declarative sentences. Maximum 20 words each, UNLESS this chapter's own \
+brief below explicitly grants more room — a chapter-specific limit always overrides \
+this default one.
 - Write for the ear: no parentheses, no semicolons, no bulleted lists.
 - Concrete specifics over adjectives. "Forty tonnes of propellant" beats "an enormous amount".
 - Do not address the audience. No "you might be wondering". No "we".
