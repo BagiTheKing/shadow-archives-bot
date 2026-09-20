@@ -161,6 +161,13 @@ def build_metadata(script_data: dict, episode=None):
         f" historical events.\n{tags_line}"
     )
 
+    # Required, not optional, whenever it's non-empty: a Creative Commons
+    # track (e.g. Kevin MacLeod) only stays license-compliant if this exact
+    # credit text is in the description. See music_attribution.py.
+    music_credit = (script_data.get("music_attribution") or "").strip()
+    if music_credit:
+        description += f"\n\n{music_credit}"
+
     tags = script_data.get("tags") or []
     tags = [t.strip() for t in tags if isinstance(t, str) and t.strip()][:15]
     tags += formats.tags_of(script_data.get("format"))

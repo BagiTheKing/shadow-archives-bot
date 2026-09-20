@@ -156,7 +156,8 @@ def check_visual_quality(workers_ai_generated: int, total_generated: int) -> Non
     raise SystemExit(1)
 
 
-def build_metadata(script, chapter_marks, total_duration, scenes=None):
+def build_metadata(script, chapter_marks, total_duration, scenes=None,
+                   music_attribution=""):
     title = sanitize_title(script.get("title") or script.get("topic", "")[:90])
 
     parts = []
@@ -193,6 +194,12 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None):
     credit_block = build_credit_block(scenes)
     if credit_block:
         parts.append(credit_block)
+
+    # Required, not optional, whenever it's non-empty: a Creative Commons
+    # track (e.g. Kevin MacLeod) only stays license-compliant if this exact
+    # credit text is in the description. See music_attribution.py.
+    if (music_attribution or "").strip():
+        parts.append(music_attribution.strip())
 
     description = "\n\n".join(parts)
     if len(description) > 4950:          # YouTube rejects past 5,000
@@ -343,7 +350,8 @@ def main():
     check_visual_quality(workers_ai_generated, total_generated)
 
     # Phase 3: render
-    video_path, total, chapter_marks = generate_longform_video(scenes, BUILD_DIR)
+    video_path, total, chapter_marks, music_attribution = generate_longform_video(
+        scenes, BUILD_DIR)
 
     minutes = total / 60
     if minutes < 4:
@@ -372,7 +380,8 @@ def main():
 
     # Phase 5: metadata + upload
     title, description, tags = build_metadata(script, chapter_marks, total,
-                                              scenes=scenes)
+                                              scenes=scenes,
+                                              music_attribution=music_attribution)
     print(f"📋 Title: {title}")
     print(f"🏷️  Tags ({len(tags)}): {tags}")
     print(f"⏱️  Duration: {minutes:.1f} min | {len(chapter_marks)} chapters")

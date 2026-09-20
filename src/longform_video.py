@@ -38,6 +38,7 @@ import re
 import subprocess
 
 from caption_track import write_srt
+from music_attribution import attribution_for
 
 W, H = 1920, 1080
 FPS = 30
@@ -713,8 +714,10 @@ def build_sfx_bed(cues, total: float, out: str):
 
 
 def generate_longform_video(scenes, build_dir="build"):
-    """Renders the finished video. Returns (path, total_seconds, chapter_marks)
-    where chapter_marks is [(heading, start_seconds), ...] for the description."""
+    """Renders the finished video. Returns (path, total_seconds, chapter_marks,
+    music_attribution) where chapter_marks is [(heading, start_seconds), ...]
+    for the description, and music_attribution is the required credit text
+    for any Creative Commons track used in the score, or "" if none."""
     print("🎬 Long-form video engine starting...")
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
@@ -842,10 +845,20 @@ def generate_longform_video(scenes, build_dir="build"):
                       total_duration, len(tracks))
     score = build_score(acts, tracks, total_duration,
                         os.path.join(build_dir, "lf_score.wav")) if acts else None
+    used_tracks = [tracks[i] for i in sorted({a[0] for a in acts})] if score else []
     if score is None:
         score = _pick_music()
         if score:
+            used_tracks = [score]
             print(f"🎵 Bed: {os.path.basename(score)}")
+
+    # Most tracks need nothing here (YouTube Audio Library, "Attribution not
+    # required"), but a Creative Commons track only stays license-compliant
+    # if its exact credit text is in the description — see music_attribution.py.
+    # An act's score can draw on more than one track, so this can be more
+    # than one credit block.
+    music_attribution = "\n\n".join(
+        filter(None, (attribution_for(t) for t in used_tracks)))
 
     if score:
         idx = len(inputs) // 2
@@ -881,4 +894,4 @@ def generate_longform_video(scenes, build_dir="build"):
 
     print(f"✅ Long-form render complete: {final_output} "
           f"({total_duration / 60:.1f} min, {len(chapter_marks)} chapters)")
-    return final_output, total_duration, chapter_marks
+    return final_output, total_duration, chapter_marks, music_attribution

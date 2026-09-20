@@ -19,6 +19,7 @@ import random
 import subprocess
 
 from caption_track import write_srt
+from music_attribution import attribution_for
 
 W, H = 1080, 1920
 FPS = 30
@@ -349,6 +350,10 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     )
 
     music = _pick_music()
+    # Most tracks need nothing here (YouTube Audio Library, "Attribution not
+    # required"), but a Creative Commons track only stays license-compliant
+    # if its exact credit text is in the description — see music_attribution.py.
+    script_data["music_attribution"] = attribution_for(music) if music else ""
     if music:
         print(f"🎵 Mixing background music: {os.path.basename(music)}")
         af = (
