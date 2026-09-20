@@ -1,9 +1,24 @@
 # Background music
 
-Drop tracks here (.mp3/.wav) and the pipeline will pick from them per video —
-Shorts picks one at random; long-form scores in up to three acts, drawing a
-different track per act. Every track gets ducked under the narration and
-faded out.
+Drop tracks here (.mp3/.wav) and the pipeline will pick from them per video.
+Every track gets ducked under the narration and faded out.
+
+- **Shorts**: one track picked at random per video, looped for its length.
+- **Long-form**: one track per CHAPTER, not a random pick — see
+  src/longform_video.py's MUSIC_OPENING_TRACKS / MUSIC_FINALE_TRACK. The
+  first four chapters play these four Kevin MacLeod tracks, in this exact
+  order, with a smooth crossfade at each chapter change:
+    1. `Crossing the Threshold - Kevin MacLeod.mp3`
+    2. `A Singular Perversion - Kevin MacLeod.mp3`
+    3. `Epilog - Kevin MacLeod.mp3`
+    4. `Measured Paces - Kevin MacLeod.mp3`
+  The LAST chapter always plays `March of the Mind - Kevin MacLeod.mp3`
+  (this wins over the "first four" rule on a video with 4 chapters or
+  fewer). Any chapter in between draws a random pick from whatever else is
+  in this folder — that is the pool for new tracks going forward; drop a
+  file in and it is automatically eligible for the middle chapters, no code
+  change needed. A named track that is not actually present renders as
+  silence for its chapter rather than breaking the video.
 
 Where to get free, monetization-safe tracks:
 - YouTube Audio Library (youtube.com/audiolibrary) — filter by "Attribution

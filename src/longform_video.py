@@ -483,74 +483,111 @@ def _pick_music():
 # transition rather than a skip, short enough not to muddy both.
 SCORE_CROSSFADE = 2.5
 
-# An act needs to be long enough that changing the music is an event rather
-# than a fidget. Below this the acts are merged into their neighbour.
-MIN_ACT_SECONDS = 45.0
+
+# A fixed, chapter-numbered score rather than the old free-floating 3-act
+# system: the owner picked these five Kevin MacLeod (CC BY 4.0) tracks
+# specifically for the shape of the arc — one per chapter across the
+# opening, one for the close — and everything else dropped into music/
+# that is not one of these five is the pool for whatever chapters sit
+# between them. See plan_chapter_score.
+MUSIC_OPENING_TRACKS = [
+    "Crossing the Threshold - Kevin MacLeod.mp3",
+    "A Singular Perversion - Kevin MacLeod.mp3",
+    "Epilog - Kevin MacLeod.mp3",
+    "Measured Paces - Kevin MacLeod.mp3",
+]
+MUSIC_FINALE_TRACK = "March of the Mind - Kevin MacLeod.mp3"
 
 
-def plan_score(chapter_starts, pivot_start, total: float, track_count: int):
-    """Which track plays when, as [(track_index, start, end), ...].
+def _other_tracks():
+    """Every track in music/ that is not one of the fixed chapter tracks —
+    the pool the middle chapters draw from."""
+    reserved = set(MUSIC_OPENING_TRACKS) | {MUSIC_FINALE_TRACK}
+    return [t for t in _music_tracks() if os.path.basename(t) not in reserved]
 
-    Three acts, not six: a change every chapter is restless, and the two
-    boundaries worth scoring are the ones the arc already has — the midpoint,
-    where the story turns, and the cost, where it stops being about a decision
-    and starts being about the people who paid for it. A viewer does not need
-    to be told these are different; they need to hear it.
+
+def plan_chapter_score(chapter_marks, total: float):
+    """One track per chapter, as [(track_path_or_None, start, end), ...].
+
+    MUSIC_OPENING_TRACKS in order for chapters 1-4, MUSIC_FINALE_TRACK for
+    the LAST chapter — which wins over the "first four" rule on a video
+    short enough that the two would otherwise collide — and a random pick
+    from _other_tracks() for anything in between. A named track that is
+    not actually sitting in music/ yet, or an empty pool for a middle
+    chapter, resolves to None for that chapter rather than raising; see
+    build_score for what None renders as.
+
+    Consecutive chapters that land on the identical track are merged into
+    one act — crossfading a track into itself is wasted work and an
+    audible restart for no reason.
     """
-    if track_count < 1 or total <= 0:
+    if not chapter_marks or total <= 0:
         return []
-    if track_count == 1:
-        return [(0, 0.0, total)]
 
-    # Act boundaries: the midpoint, then the chapter two along from it.
-    marks = []
-    if pivot_start and 0 < pivot_start < total:
-        marks.append(pivot_start)
-        later = [c for c in (chapter_starts or []) if c > pivot_start + 1.0]
-        if len(later) >= 2:
-            marks.append(later[1])
-        elif later:
-            marks.append(later[0])
+    other = _other_tracks()
+    last_idx = len(chapter_marks) - 1
 
-    bounds = [0.0] + sorted(marks) + [total]
-    # Drop any act too short to be worth a track of its own.
-    merged = [bounds[0]]
-    for edge in bounds[1:]:
-        if edge - merged[-1] < MIN_ACT_SECONDS and edge != bounds[-1]:
-            continue
-        merged.append(edge)
-    if len(merged) > 2 and merged[-1] - merged[-2] < MIN_ACT_SECONDS:
-        del merged[-2]
+    def resolve(i):
+        if i == last_idx:
+            name = MUSIC_FINALE_TRACK
+        elif i < len(MUSIC_OPENING_TRACKS):
+            name = MUSIC_OPENING_TRACKS[i]
+        else:
+            return random.choice(other) if other else None
+        path = os.path.join(MUSIC_DIR, name)
+        return path if os.path.isfile(path) else None
 
-    return [(i % track_count, merged[i], merged[i + 1])
-            for i in range(len(merged) - 1)]
+    raw = []
+    for i, (_, start) in enumerate(chapter_marks):
+        end = chapter_marks[i + 1][1] if i < last_idx else total
+        raw.append((resolve(i), start, end))
+
+    acts = [raw[0]]
+    for track, start, end in raw[1:]:
+        if track == acts[-1][0]:
+            acts[-1] = (acts[-1][0], acts[-1][1], end)
+        else:
+            acts.append((track, start, end))
+    return acts
 
 
-def build_score(acts, tracks, total: float, out: str):
-    """Renders the acts into one continuous bed, crossfading at each change.
+def build_score(acts, total: float, out: str):
+    """Renders the acts into one continuous bed, crossfading at each track
+    change. acts is [(track_path_or_None, start, end), ...] — see
+    plan_chapter_score. A None track (a named chapter track that turned out
+    not to be in music/, or an empty middle pool) renders as silence for
+    that stretch rather than failing the whole bed.
 
     Returns the path, or None — a failure here costs the video its music, not
     the run, and a silent bed beats no video.
     """
-    if not acts or not tracks:
+    if not acts:
         return None
     try:
         n = len(acts)
+
+        def _input_args(track, length):
+            if track:
+                return ["-stream_loop", "-1", "-t", f"{length:.3f}", "-i", track]
+            # No track for this stretch (see plan_chapter_score) — silence,
+            # not a missing input, so the act count and crossfade math stay
+            # identical whether every named track was present or not.
+            return ["-f", "lavfi", "-t", f"{length:.3f}",
+                    "-i", "anullsrc=r=44100:cl=stereo"]
+
         if n == 1:
-            index, start, end = acts[0]
+            track, start, end = acts[0]
             _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                  "-stream_loop", "-1", "-i", tracks[index],
-                  "-t", f"{total:.3f}", "-c:a", "pcm_s16le",
-                  "-ar", "44100", "-ac", "2", out])
+                  *_input_args(track, total),
+                  "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", out])
             return out
 
         # acrossfade eats SCORE_CROSSFADE seconds per join, so each segment is
         # rendered that much longer and the sum still lands on `total`.
         inputs, names = [], []
-        for i, (index, start, end) in enumerate(acts):
+        for i, (track, start, end) in enumerate(acts):
             length = (end - start) + (SCORE_CROSSFADE if i < n - 1 else 0.0)
-            inputs += ["-stream_loop", "-1", "-t", f"{length:.3f}",
-                       "-i", tracks[index]]
+            inputs += _input_args(track, length)
             names.append(f"[{i}:a]")
 
         fc, prev = [], names[0]
@@ -563,8 +600,9 @@ def build_score(acts, tracks, total: float, out: str):
               "-filter_complex", ";".join(fc), "-map", "[out]",
               "-t", f"{total:.3f}", "-c:a", "pcm_s16le",
               "-ar", "44100", "-ac", "2", out])
-        listing = ", ".join(os.path.basename(tracks[i]).rsplit(" - ", 1)[0]
-                            for i, _, _ in acts)
+        listing = ", ".join(
+            os.path.basename(t).rsplit(" - ", 1)[0] if t else "(silence)"
+            for t, _, _ in acts)
         print(f"🎼 Score in {n} act(s): {listing}")
         return out
     except Exception as e:
@@ -837,15 +875,11 @@ def generate_longform_video(scenes, build_dir="build"):
 
     inputs, mix_parts, mix_labels = ["-i", merged], [], ["[0:a]"]
 
-    # The score. Three acts with a different track each, changing at the
-    # midpoint and again at the cost chapter, so the reset a viewer hears is a
-    # new piece of music rather than the same loop at a different volume.
-    tracks = _music_tracks()
-    acts = plan_score([m[1] for m in chapter_marks], pivot_start,
-                      total_duration, len(tracks))
-    score = build_score(acts, tracks, total_duration,
+    # The score: one fixed track per chapter — see plan_chapter_score.
+    acts = plan_chapter_score(chapter_marks, total_duration)
+    score = build_score(acts, total_duration,
                         os.path.join(build_dir, "lf_score.wav")) if acts else None
-    used_tracks = [tracks[i] for i in sorted({a[0] for a in acts})] if score else []
+    used_tracks = (sorted({t for t, _, _ in acts if t}) if score else [])
     if score is None:
         score = _pick_music()
         if score:
