@@ -8,9 +8,9 @@ Every track gets ducked under the narration and faded out.
   src/longform_video.py's MUSIC_OPENING_TRACKS / MUSIC_FINALE_TRACK. The
   first four chapters play these four Kevin MacLeod tracks, in this exact
   order, with a smooth crossfade at each chapter change:
-    1. `Crossing the Threshold - Kevin MacLeod.mp3`
-    2. `A Singular Perversion - Kevin MacLeod.mp3`
-    3. `Epilog - Kevin MacLeod.mp3`
+    1. `Crossing the Threshold - Ghostpocalypse - Kevin MacLeod.mp3`
+    2. `A Singular Perversion - Darkness - Kevin MacLeod.mp3`
+    3. `Epilog - Ghostpocalypse - Kevin MacLeod.mp3`
     4. `Measured Paces - Kevin MacLeod.mp3`
   The LAST chapter always plays `March of the Mind - Kevin MacLeod.mp3`
   (this wins over the "first four" rule on a video with 4 chapters or

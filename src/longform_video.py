@@ -491,9 +491,9 @@ SCORE_CROSSFADE = 2.5
 # that is not one of these five is the pool for whatever chapters sit
 # between them. See plan_chapter_score.
 MUSIC_OPENING_TRACKS = [
-    "Crossing the Threshold - Kevin MacLeod.mp3",
-    "A Singular Perversion - Kevin MacLeod.mp3",
-    "Epilog - Kevin MacLeod.mp3",
+    "Crossing the Threshold - Ghostpocalypse - Kevin MacLeod.mp3",
+    "A Singular Perversion - Darkness - Kevin MacLeod.mp3",
+    "Epilog - Ghostpocalypse - Kevin MacLeod.mp3",
     "Measured Paces - Kevin MacLeod.mp3",
 ]
 MUSIC_FINALE_TRACK = "March of the Mind - Kevin MacLeod.mp3"
