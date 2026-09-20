@@ -602,12 +602,14 @@ def build_score(acts, tracks, total: float, out: str):
 IMPACT_GAIN = 0.28
 RISER_GAIN = 0.16
 
-# The bed, and how far it moves.
-MUSIC_BASE = 0.085
-MUSIC_CARD_LIFT = 0.035        # under a chapter card
-MUSIC_PIVOT_DUCK = 0.055       # into the midpoint — nearly out
-MUSIC_PIVOT_SWELL = 0.055      # and back up, over the top, as it opens
-MUSIC_OUTRO_LIFT = 0.045       # under the closing lines and the end card
+# The bed, and how far it moves. All five lowered ~30% (same ratio as the
+# Shorts music cut) after the owner tested a real render and called it too
+# loud — proportions between the terms are unchanged, only the baseline.
+MUSIC_BASE = 0.06
+MUSIC_CARD_LIFT = 0.025        # under a chapter card
+MUSIC_PIVOT_DUCK = 0.038       # into the midpoint — nearly out
+MUSIC_PIVOT_SWELL = 0.038      # and back up, over the top, as it opens
+MUSIC_OUTRO_LIFT = 0.032       # under the closing lines and the end card
 
 # Seconds either side of a move, so levels ramp instead of stepping. A hard
 # jump in a music bed is audible as a click, which is worse than no move.

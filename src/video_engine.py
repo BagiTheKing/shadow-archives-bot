@@ -8,8 +8,9 @@ What changed vs the old version:
    pan left / pan right), with the source upscaled first to kill zoompan jitter.
 3. TRANSITIONS: 0.4s crossfades between scenes instead of hard cuts.
 4. GRADE: subtle vignette + film grain for a cohesive cinematic look.
-5. MUSIC: if a track exists in music/, it's looped, ducked -18dB under the
-   narration, and faded out at the end.
+5. MUSIC: if a track exists in music/, it's looped, ducked -20dB under the
+   narration, and faded out at the end. Lowered from -17dB (0.14) after the
+   owner tested a real render and called it too loud.
 6. Output is true 1080x1920 30fps.
 """
 
@@ -352,7 +353,7 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
         print(f"🎵 Mixing background music: {os.path.basename(music)}")
         af = (
             f"[1:a]aloop=loop=-1:size=2e9,atrim=0:{total:.3f},"
-            f"volume=0.14,afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bg];"
+            f"volume=0.10,afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bg];"
             f"[0:a][bg]amix=inputs=2:duration=first:normalize=0,"
             f"afade=t=out:st={max(total - 0.8, 0):.2f}:d=0.8[aout]"
         )
