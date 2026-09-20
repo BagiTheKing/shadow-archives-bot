@@ -7,11 +7,17 @@ openers were flat locally-drawn title cards, and every single visual was an AI
 painting. Three changes fix that:
 
 1. REAL IMAGERY FIRST. Each scene carries an archive_query naming its real,
-   photographable subject. Wikimedia Commons is searched before anything is
+   photographable subject. Wikimedia Commons (and a couple of other archives,
+   see archive_engine.py's search_archives) is searched before anything is
    generated; a genuine photograph of the ship, the treaty or the man beats an
-   AI guess every time one exists. Optional muted Pexels b-roll fills
-   atmospheric scenes when a PEXELS_API_KEY is configured. Pollinations remains
-   the fallback, not the default.
+   AI guess every time one exists. When no still exists, real archival VIDEO
+   footage is tried next — but only from collections whose public-domain
+   status is a documented fact, not a per-upload claim (see
+   TRUSTED_VIDEO_COLLECTIONS), capped at a few clips a video and always
+   trimmed to a short, fixed length regardless of the source item's own
+   length. Optional muted Pexels b-roll fills whatever is still missing when
+   a PEXELS_API_KEY is configured. Pollinations remains the fallback, not the
+   default.
 
 2. NO SHOT OUTLIVES ITS WELCOME. A scene longer than MAX_SHOT_SECONDS gets
    extra images (a second Commons result, or a re-seeded generation), and the
@@ -37,7 +43,8 @@ from PIL import Image
 from archive_engine import (search_archives, search_commons,
                             download_archival_image, format_credit,
                             pexels_available, fetch_broll_video,
-                            extract_poster_frame)
+                            extract_poster_frame, search_archival_video,
+                            fetch_archival_video, format_archival_video_credit)
 from visual_engine import download_image, make_fallback_image
 
 # Delivery resolution for the long-form video.
@@ -63,6 +70,15 @@ MIN_BROLL_SCENE_SECONDS = 6.0
 # first-come-first-served, so every clip landed in the opening minutes and the
 # back half was wall-to-wall stills. Spacing them out is what "mixed" means.
 BROLL_MIN_GAP = 4
+
+# Real archival footage (see archive_engine.py's TRUSTED_VIDEO_COLLECTIONS) is
+# a garnish on top of archival stills, not a replacement for them — the owner
+# was explicit that photos with Ken Burns motion already carry the video, and
+# two or three real clips are enough. Spaced wider than b-roll on purpose, so
+# the few clips that do appear land in different chapters instead of
+# clustering, which is what "diversity" actually asks for here.
+MAX_ARCHIVAL_VIDEO_CLIPS = 3
+ARCHIVAL_VIDEO_MIN_GAP = 8
 
 # Photography exists from roughly here; before it, a Commons "photo" of the
 # subject is by definition a modern anachronism.
@@ -160,9 +176,10 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     print(f"🎨 Long-form visual engine ({LF_W}x{LF_H}, working at {KB_W}x{KB_H})...")
     os.makedirs(output_dir, exist_ok=True)
 
-    api_calls, archival_used, broll_used = 0, 0, 0
+    api_calls, archival_used, broll_used, archival_video_used = 0, 0, 0, 0
     generated_sources = []
     last_broll_idx = -BROLL_MIN_GAP - 1
+    last_archival_video_idx = -ARCHIVAL_VIDEO_MIN_GAP - 1
     # Nothing real may appear twice: one live run used the same C-130
     # photograph for two scenes and the same stock clip four times, which is
     # what "repetitive" looked like on screen.
@@ -206,6 +223,38 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
                 real_pool.extend(images)
                 print(f"📜 Scene {idx}: {len(images)} archival image(s) "
                       f"for {query!r}")
+
+        # ---- 1.5) Real archival VIDEO footage, trusted collections only ----
+        # Only tried when no still photo was found, and capped low — this is
+        # a deliberate garnish on top of the archival stills, not a
+        # replacement for them. See archive_engine.py's
+        # TRUSTED_VIDEO_COLLECTIONS for why this only searches inside
+        # collections whose public-domain status is a documented fact about
+        # the whole collection, not a per-upload claim.
+        if (not images and query
+                and archival_video_used < MAX_ARCHIVAL_VIDEO_CLIPS
+                and idx - last_archival_video_idx > ARCHIVAL_VIDEO_MIN_GAP
+                and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
+            for cand in search_archival_video(query):
+                video_path = os.path.join(output_dir,
+                                          f"lf_archival_video_{idx:03d}.mp4")
+                if not fetch_archival_video(cand["identifier"], video_path):
+                    continue
+                poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
+                if extract_poster_frame(video_path, poster, KB_W, KB_H):
+                    scene["video_path"] = video_path
+                    scene["image_path"] = poster
+                    scene["image_paths"] = [poster]
+                    scene["credit"] = [format_archival_video_credit(
+                        cand["identifier"], cand["title"])]
+                    archival_video_used += 1
+                    last_archival_video_idx = idx
+                    print(f"🎞️  Scene {idx}: real archival footage for "
+                          f"{query!r} ({cand['identifier']})")
+                    break
+                os.remove(video_path)
+            if scene.get("video_path"):
+                continue
 
         # ---- 2) Muted stock b-roll, timeless subjects only (optional) ----
         # Spaced through the video rather than granted first-come, so clips
@@ -280,6 +329,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     workers_ai_generated = sum(1 for s in generated_sources if s == "workers-ai")
     print(f"✅ Visuals complete: {total_frames} frames for {len(scenes)} scenes "
           f"({archival_used} archival, {api_calls} generated, "
+          f"{archival_video_used} real archival video, "
           f"{broll_used} b-roll clips).")
     if api_calls and workers_ai_generated < api_calls:
         others = sorted(set(s for s in generated_sources if s != "workers-ai"))

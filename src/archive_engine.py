@@ -360,3 +360,180 @@ def extract_poster_frame(video_path: str, output_path: str,
     except Exception as e:
         print(f"⚠️ Poster frame extraction failed: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Real archival video — Internet Archive, trusted collections only
+#
+# archive.org hosts a huge amount of genuine historical footage, but it is a
+# general-purpose upload site: plenty of what is hosted there is user-
+# uploaded with murky or simply wrong rights claims, "public domain" in the
+# item description notwithstanding. That is not a hypothetical risk for this
+# channel specifically — the exact same failure mode is already documented
+# for the CC-BY music tracks in music/README.md, and a Content ID claim on a
+# restoration of otherwise-PD footage does not care that the underlying
+# 80-year-old footage itself is free.
+#
+# So this does not search archive.org generally. It only searches inside
+# TRUSTED_VIDEO_COLLECTIONS — collections whose public-domain status is a
+# deliberate, documented fact about the collection as a whole, not a
+# per-uploader claim:
+#
+#   universal_newsreels   Universal City Studios produced newsreels from
+#                         1929-1967 and explicitly dedicated the entire
+#                         library to the public domain, donating the
+#                         physical materials to the National Archives in
+#                         1976. Confirmed across multiple independent
+#                         sources describing the same donation, not one
+#                         page's say-so.
+#
+# Add to this list only with the same bar: a specific, citable reason the
+# WHOLE collection is free, not "it's old" or "it's on archive.org".
+TRUSTED_VIDEO_COLLECTIONS = ["universal_newsreels"]
+
+ARCHIVE_ORG_SEARCH_API = "https://archive.org/advancedsearch.php"
+ARCHIVE_ORG_METADATA_API = "https://archive.org/metadata"
+
+# A newsreel item is very often a compiled reel of six or seven unrelated
+# stories, not one continuous piece about one subject — there is no reliable
+# way to know which few seconds of a long item actually match the search
+# query without per-segment timestamps, which this metadata does not carry.
+# Rather than guess and risk showing the wrong story under the right
+# narration, long items are skipped entirely; short, single-subject items are
+# the only ones actually used.
+MAX_SOURCE_RUNTIME_SECONDS = 150
+
+# Regardless of the source item's own length, only ever use this many seconds
+# of it — a firm cap, not a hint, enforced by ffmpeg at extraction time. Keeps
+# every clip roughly the length of the scene it illustrates and guarantees
+# real footage never dominates a video the way a single long take would.
+ARCHIVAL_CLIP_SECONDS = 18
+
+# A few seconds in, past the title card most newsreel items open on.
+ARCHIVAL_CLIP_START_OFFSET = 2.0
+
+
+def _parse_runtime(value) -> float | None:
+    """Internet Archive's 'runtime' metadata field is inconsistent — usually
+    "H:MM:SS" or "MM:SS", occasionally a bare number of seconds, sometimes
+    missing. Returns None for anything that cannot be read as either shape,
+    which callers treat as "unknown", not "short"."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if re.match(r"^\d+(\.\d+)?$", text):
+        return float(text)
+    parts = text.split(":")
+    if 2 <= len(parts) <= 3 and all(re.match(r"^\d+(\.\d+)?$", p) for p in parts):
+        seconds = 0.0
+        for p in parts:
+            seconds = seconds * 60 + float(p)
+        return seconds
+    return None
+
+
+def search_archival_video(query: str, limit: int = 5) -> list:
+    """Real historical footage from TRUSTED_VIDEO_COLLECTIONS only — see the
+    section comment above for why this is not a general archive.org search.
+
+    Returns [{identifier, title}, ...], long or duration-unknown items
+    already excluded.
+    """
+    collections = " OR ".join(f"collection:{c}" for c in TRUSTED_VIDEO_COLLECTIONS)
+    q = f"({collections}) AND mediatype:(movies) AND ({query})"
+    try:
+        r = _polite_get(ARCHIVE_ORG_SEARCH_API, params={
+            "q": q,
+            "fl[]": ["identifier", "title", "runtime"],
+            "rows": limit, "output": "json"})
+        r.raise_for_status()
+        docs = (r.json() or {}).get("response", {}).get("docs", []) or []
+    except Exception as e:
+        print(f"⚠️ Internet Archive search failed for {query!r}: {e}")
+        return []
+
+    out = []
+    for d in docs:
+        identifier = d.get("identifier")
+        if not identifier:
+            continue
+        runtime = _parse_runtime(d.get("runtime"))
+        # Unknown runtime is excluded too, not just long runtime: a
+        # compilation reel with missing metadata is exactly as risky as one
+        # that openly states it is 45 minutes long.
+        if runtime is None or runtime > MAX_SOURCE_RUNTIME_SECONDS:
+            continue
+        out.append({"identifier": identifier,
+                    "title": str(d.get("title") or identifier)[:120]})
+    return out
+
+
+def _pick_archive_org_file(identifier: str):
+    """The item's own metadata lists every file it contains; picks the first
+    usable MP4 rendition (archive.org typically offers more than one:
+    original upload plus a re-encoded 512kb/h.264 derivative)."""
+    try:
+        r = _polite_get(f"{ARCHIVE_ORG_METADATA_API}/{identifier}")
+        r.raise_for_status()
+        files = (r.json() or {}).get("files", []) or []
+    except Exception as e:
+        print(f"⚠️ Could not read Internet Archive metadata for "
+              f"{identifier!r}: {e}")
+        return None
+    mp4s = [f for f in files
+           if str(f.get("name", "")).lower().endswith(".mp4")]
+    if not mp4s:
+        return None
+    # Prefer a named "512kb" derivative when present — small enough to not
+    # waste the run's bandwidth on footage only 18 seconds of it gets used.
+    preferred = [f for f in mp4s if "512kb" in f.get("name", "").lower()]
+    chosen = (preferred or mp4s)[0]
+    return chosen.get("name")
+
+
+def fetch_archival_video(identifier: str, output_path: str) -> bool:
+    """Downloads a short, fixed-length clip from a trusted-collection item —
+    never the whole file. Returns False on any failure; real archival footage
+    is a bonus over a still image, never worth failing a run over."""
+    filename = _pick_archive_org_file(identifier)
+    if not filename:
+        return False
+
+    url = f"https://archive.org/download/{identifier}/{filename}"
+    tmp_path = output_path + ".full.mp4"
+    try:
+        with _polite_get(url, stream=True, timeout=120) as resp:
+            resp.raise_for_status()
+            size = 0
+            with open(tmp_path, "wb") as f:
+                for chunk in resp.iter_content(1 << 20):
+                    size += len(chunk)
+                    if size > 150 * 1024 * 1024:
+                        raise ValueError("source file too large")
+                    f.write(chunk)
+    except Exception as e:
+        print(f"⚠️ Internet Archive download failed ({identifier}): {e}")
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return False
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-ss", f"{ARCHIVAL_CLIP_START_OFFSET}", "-i", tmp_path,
+             "-t", f"{ARCHIVAL_CLIP_SECONDS}", "-an",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+             output_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+    except Exception as e:
+        print(f"⚠️ Could not trim Internet Archive clip ({identifier}): {e}")
+        return False
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def format_archival_video_credit(identifier: str, title: str) -> str:
+    return (f"{title} (Internet Archive — {identifier}, public domain, "
+           f"via archive.org)")

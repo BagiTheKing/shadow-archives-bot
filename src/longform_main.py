@@ -112,15 +112,18 @@ def build_credit_block(scenes):
                 lines.append(credit)
     parts = []
     if lines:
-        block, budget = ["Archival imagery:"], 1800
+        block, budget = ["Archival imagery and footage:"], 1800
         for line in lines:
             if len(line) + 1 > budget:
-                block.append("…and others via Wikimedia Commons.")
+                block.append("…and others.")
                 break
             block.append(f"• {line}")
             budget -= len(line) + 1
         parts.append("\n".join(block))
-    if any(s.get("video_path") for s in scenes):
+    # Only the scenes still missing a specific credit came from Pexels —
+    # real archival video (see longform_visual.py) already has its own
+    # per-clip credit line in `credit`, same as archival photos.
+    if any(s.get("video_path") and not s.get("credit") for s in scenes):
         parts.append("Stock footage courtesy of Pexels.")
     return "\n\n".join(parts)
 
