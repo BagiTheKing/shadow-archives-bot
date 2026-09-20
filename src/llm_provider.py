@@ -75,6 +75,24 @@ Get keys — all free, none need a card:
               trial credit. Pricing on sites like this changes without
               notice, so if this tier ever stops working, that is the
               first thing worth re-checking at the live z.ai pricing page.
+
+              Two things on the z.ai site look like they contradict this
+              and don't. The model showcase (Language/Vision/Voice Models
+              tabs) and the "Usage Bundles" prepaid packs both advertise
+              the current flagship generation only — GLM-5.x, all paid, no
+              free bundle offered. That page is selling the flagship, not
+              listing everything the API serves. The free GLM-4.x-Flash
+              models are the PREVIOUS generation, priced separately on the
+              per-model API pricing table, and no bundle purchase is
+              needed to call them — $0 means $0, nothing to prepay. Real
+              risk, not a hypothetical one: GLM-4.7-Flash was dropped by at
+              least one third-party host (DeepInfra) in September 2026
+              citing low usage, which is exactly the shape of thing that
+              could happen on z.ai's own API next with no announcement.
+              That is what ZHIPU_MODELS and this tier's position behind
+              four other free layers are both for — a 404 here is treated
+              as a permanent failure per-model (see PERMANENT_STATUSES) and
+              the chain moves on, it does not end the run.
 """
 
 import os
