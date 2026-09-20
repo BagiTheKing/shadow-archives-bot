@@ -29,12 +29,33 @@ def main():
         try:
             reply = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": "Reply with just: OK"}],
-                max_tokens=8,
+                messages=[{"role": "user",
+                           "content": "Reply with just the word: OK"}],
+                max_tokens=300,
             )
-            text = reply.choices[0].message.content
-            print(f"✅ {provider:12s} ({model}) — replied: {text!r}")
-            results.append((provider, True))
+            message = reply.choices[0].message
+            content = message.content
+            # llm_engine.py (the Shorts writer) reads ONLY .content — it has
+            # no fallback to a reasoning field. So that is the bar for "does
+            # this provider actually work", not just "did the call succeed
+            # without raising".
+            if content and content.strip():
+                print(f"✅ {provider:12s} ({model}) — replied: {content!r}")
+                results.append((provider, True))
+            else:
+                # Some reasoning models put the real answer in a sibling
+                # field instead of .content when the token budget runs out
+                # mid-thought — this is the same failure shape the Sept 2026
+                # OpenRouter outage had. Surface it instead of hiding it.
+                alt = {f: getattr(message, f, None)
+                       for f in ("reasoning", "reasoning_content")
+                       if getattr(message, f, None)}
+                finish = getattr(reply.choices[0], "finish_reason", None)
+                print(f"⚠️  {provider:12s} ({model}) — call succeeded but "
+                      f".content was empty (finish_reason={finish!r}); "
+                      f"llm_engine.py would treat this as a failed attempt. "
+                      f"Other fields present: {alt or '(none)'}")
+                results.append((provider, False))
         except Exception as e:
             print(f"❌ {provider:12s} ({model}) — "
                   f"{type(e).__name__}: {e}")
