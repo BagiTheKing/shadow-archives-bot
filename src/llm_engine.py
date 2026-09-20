@@ -143,6 +143,20 @@ does not earn a click.
 - UNDERSTANDABLE ON SIGHT. Someone who has never heard of this event must know what \
 is at stake from the title alone. A name they do not recognise is not a reason to \
 click; what it cost them is.
+- IF THE ACTOR IS A PERSON, DO NOT NAME THEM UNLESS THE NAME ITSELF IS FAMOUS. Test: \
+would someone with zero history knowledge recognise this name on sight? "Hitler" or \
+"Einstein" pass; almost every other historical figure fails, including famous-to-\
+history-buffs names like generals, ministers or scientists. When it fails, replace \
+the name with the plainest role that IS instantly recognisable on its own — "A Nazi \
+War Criminal", "A U.S. President's Doctor", "A Soviet Engineer" — and let the video \
+reveal who they actually were. This role swap IS the curiosity gap; do not also \
+spend it on a name nobody recognises. The consequence clause must be plain outcome \
+language, not historical shorthand that requires already knowing the story ("the \
+Nuremberg gallows", "the Munich Agreement") — say literally what happened.
+  GOOD: "A Nazi War Criminal Died Just 2 Hours Before His Execution"
+  BAD:  "Hermann Göring Cheated the Nuremberg Gallows by Two Hours" — the name is \
+recognised only by history buffs, and "the Nuremberg gallows" requires already \
+knowing what Nuremberg was.
 - Include one searchable proper noun (the ship, the battle, the country, the bridge) \
 so the video can also be found by people looking for that subject — but the proper \
 noun may never be the ONLY content. The name is for search, the stake is for the \
@@ -174,7 +188,9 @@ together, so they should say different things.
 one of these shapes: [Actor] + [loaded noun] ("NASA'S FATAL DECISION"), [Actor] + \
 [dramatic verb] ("ENGINEERS IGNORED"), or [dramatic event] + [consequence] ("SUNK \
 IN 20 MINUTES"). Pick whichever shape carries this story's actual point of blame \
-or consequence — do not force an actor in if the story has none.
+or consequence — do not force an actor in if the story has none. [Actor] follows \
+the same recognisability test as the title: an unrecognised person's name never \
+goes here — use their role instead ("A NAZI WAR CRIMINAL", not "GÖRING'S ESCAPE").
 - GOOD: "NASA'S FATAL DECISION", "ENGINEERS IGNORED", "SUNK IN 20 MINUTES", "THE \
 WRONG VALLEY", "ONE MISSING BOLT".
 - BAD:  "The story of how a ship sank", "AMAZING HISTORY FACT" — too flat, or too \
