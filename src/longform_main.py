@@ -36,19 +36,6 @@ from youtube_publisher import upload_video_to_youtube
 # Shorts on purpose — one knob controls both.
 MIN_PREFERRED_FRAMES = float(os.getenv("MIN_PREFERRED_FRAMES", "0.6"))
 
-# audio_engine.py's default 21s pace between Gemini TTS calls holds up fine
-# for Shorts (5-6 calls, never once failed) but not reliably across a
-# long-form video's 40+ calls: two separate real runs, both paced at 21s,
-# still hit the wall partway through (scene 5 of 47, then scene 12 of 47) —
-# see the comment on GEMINI_TTS_PACE_SECONDS in audio_engine.py for why 21s
-# isn't a precise-enough number to trust at that many consecutive calls. A
-# wider gap here trades more render time (roughly 7 more minutes across 47
-# scenes vs. the 21s pace) for a real shot at finishing the whole video on
-# this voice instead of falling back to it — worth it, this is what the
-# channel's videos are supposed to sound like.
-GEMINI_TTS_PACE_SECONDS_LONGFORM = float(
-    os.getenv("GEMINI_TTS_PACE_SECONDS_LONGFORM", "30"))
-
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 
 # Same series as the Shorts, so the two formats read as one channel. It stays
@@ -342,9 +329,7 @@ def main():
         print(f"🗣️  Question added to the closing narration: {first_comment}")
 
     # Phase 2: assets
-    scenes = generate_audio_pipeline(
-        {"scenes": scenes}, BUILD_DIR,
-        pace_seconds=GEMINI_TTS_PACE_SECONDS_LONGFORM)["scenes"]
+    scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
         scenes, BUILD_DIR)
 

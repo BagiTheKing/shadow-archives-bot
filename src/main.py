@@ -61,6 +61,29 @@ CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 # Stated in the description so the promise matches what the schedule delivers.
 UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "five days a week")
 
+# A deliberate 1-2 week A/B test between Kokoro voices (see audio_engine.py's
+# module docstring for why Kokoro replaced Gemini TTS): the long-form lanes
+# each pin one voice for their whole run, but Shorts alternates so the two
+# can be compared directly before settling on one for good. Empty by default
+# so a run with nothing set just uses audio_engine's own KOKORO_VOICE.
+# github.run_number increments every run regardless of which days the
+# schedule skips, so this alternates on every actual publish, not on
+# calendar-day parity (which would repeat the same voice across a
+# Mon-then-Wed gap two days apart).
+KOKORO_VOICE_ROTATION = [v.strip() for v in
+                         os.getenv("KOKORO_VOICE_ROTATION", "").split(",")
+                         if v.strip()]
+RUN_NUMBER = int(os.getenv("RUN_NUMBER") or 0)
+
+
+def _pick_kokoro_voice():
+    if not KOKORO_VOICE_ROTATION:
+        return None
+    voice = KOKORO_VOICE_ROTATION[RUN_NUMBER % len(KOKORO_VOICE_ROTATION)]
+    print(f"🎙️ Shorts voice A/B test: run #{RUN_NUMBER} -> {voice} "
+          f"(rotating through {KOKORO_VOICE_ROTATION})")
+    return voice
+
 # The series name and number are the channel's only recurring format. Nothing
 # published so far tells a viewer there is a next one, which is most of why
 # 9,000 views converted 25 subscribers. Set SERIES_NAME="" to publish untitled.
@@ -538,7 +561,8 @@ def main():
         json.dump(script_data, f, indent=2, ensure_ascii=False)
 
     # Phase 2: assets
-    script_data = generate_audio_pipeline(script_data, build_dir)
+    script_data = generate_audio_pipeline(script_data, build_dir,
+                                          voice=_pick_kokoro_voice())
     script_data = generate_visual_pipeline(script_data, build_dir)
     draw_outro_card(script_data, build_dir)
 

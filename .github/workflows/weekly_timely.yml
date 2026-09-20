@@ -51,10 +51,29 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install FFmpeg
+      - name: Install FFmpeg and espeak-ng
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg espeak-ng
+
+      # ~355MB combined, so cached rather than pulled on every run. The key
+      # never changes unless the model version does, so after the first run
+      # this step is a cache hit and the fetch below is skipped entirely.
+      - name: Cache Kokoro model files
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+
+      - name: Fetch Kokoro model files (cache miss only)
+        run: |
+          mkdir -p models
+          if [ ! -f models/kokoro-v1.0.onnx ]; then
+            curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          fi
+          if [ ! -f models/voices-v1.0.bin ]; then
+            curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          fi
 
       - name: Install Python dependencies
         run: |
@@ -103,6 +122,10 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Pinned for a 1-2 week A/B test against the Encore lane's
+          # am_onyx (see audio_engine.py's module docstring) — Shorts
+          # alternates between both instead; see daily_publish.yml.
+          KOKORO_VOICE: am_santa
           # Optional. A free key from https://www.pexels.com/api/ unlocks muted
           # real b-roll clips between the stills. Absent, the pipeline simply
           # uses no stock video — nothing fails.

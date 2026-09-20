@@ -1,14 +1,14 @@
 """
-Audio engine. Three tiers, each optional, tried in this order:
+Audio engine. Three tiers, tried in this order:
 
-    1. Gemini native TTS   — GEMINI_API_KEY (the same key already used for
-                             script generation — no new secret needed).
-                             Free-tier eligible, real natural-language style
-                             steering, but its API response carries NO
-                             word-boundary data at all (checked directly
-                             against the raw response, not assumed from
-                             docs) — captions degrade to per-scene sync for
-                             a video narrated this way.
+    1. Kokoro TTS         — local, offline, always tried first once the
+                             'kokoro' package is installed. No API key, no
+                             signup, no card, no rate limit, no daily quota —
+                             it runs inside this same job. Apache-2.0
+                             licensed (hexgrad/Kokoro-82M), so it is safe for
+                             a channel that plans to monetize; several of the
+                             free CLOUD alternatives looked at before this
+                             are not (see below).
     2. Azure Speech        — AZURE_SPEECH_KEY + AZURE_SPEECH_REGION. Davis
                              Multilingual, real SSML express-as styles, full
                              word-boundary timing. Opt-in, F0-tier-only by
@@ -18,30 +18,68 @@ Audio engine. Three tiers, each optional, tried in this order:
                              does if nothing above is configured, or if the
                              tiers above fail.
 
-Gemini and edge-tts stream (or, for edge, effectively provide) word-boundary
-events; where they do, that powers the word-synced captions in
-video_engine.py, which is what makes Shorts captions look professional.
+GEMINI TTS WAS REMOVED (2026-09-20). Two real, load-bearing problems with it,
+not a preference:
 
-GEMINI vs AZURE FAILURE HANDLING ARE DELIBERATELY DIFFERENT. Azure has an
-edge-tts voice that matches its character (Davis-to-Davis), so falling back
-scene-by-scene for the rest of a run is a small jump. Gemini has no such
-matched pairing — its voices and edge-tts's share no lineage — so mixing
-them mid-video would be a much bigger, more audible seam than losing styles
-ever was. Gemini therefore fails ATOMICALLY: the instant any scene fails,
-every Gemini clip already written for this video is discarded and the
-ENTIRE video is resynthesized on edge-tts from scratch. A video is either
-100% Gemini or 100% edge-tts, never both. See generate_audio_pipeline().
+  - QUOTA WALL ON LONG-FORM. Google's own error on a real run named the exact
+    limit: "generate_content_free_tier_requests, limit: 10" per minute for
+    gemini-2.5-flash-tts. A long-form video makes 40+ calls; every retry on a
+    429 ALSO burns one of those 10, so retrying digs the hole deeper instead
+    of recovering from it. No pacing number fixed this — 21s and 30s both
+    failed on real runs, at different scene numbers, because the wall is a
+    request-count ceiling, not a timing problem. Every long-form video that
+    hit it discarded its Gemini audio entirely and rebuilt on edge-tts, which
+    means Gemini was never actually the voice long-form videos published
+    with; it was 15-20 minutes of wasted retries before every one of them.
+  - TONE DRIFT ON SHORTS. Shorts fit under the quota and finished on Gemini
+    every time, but each scene is a fully independent call with no numeric
+    pitch/rate control — only a natural-language instruction like "say this
+    calmly" — and no continuity between calls. The model's own delivery
+    audibly drifted scene to scene within a single video.
+
+Before landing on Kokoro, the free/no-card cloud alternatives were checked
+directly, not assumed: Z.ai/Zhipu has no productized TTS (their "Voice
+Models" tab is speech-TO-text, not synthesis); MiniMax has no free tier at
+all; Fish Audio's free tier is real and good but its terms restrict output to
+"personal, non-commercial projects" — a real problem for a channel that
+intends to monetize, not just a technicality; Groq's PlayAI-TTS is free and
+already uses a key this pipeline already has, but returns no word-level
+timing and no documented style control (the same caption/style regression
+Gemini already had), and its free-tier commercial-use terms are ambiguous in
+Groq's own docs. Kokoro is the only option that is simultaneously free
+forever, requires no signup of any kind, carries no commercial-use
+restriction (Apache 2.0), and removes the quota wall entirely by not making
+a network call at all.
+
+KOKORO_VOICE picks the voice (default "am_onyx"). The three workflows pin it
+differently on purpose, as a deliberate 1-2 week comparison before settling
+on one voice for good:
+    weekly_longform.yml (Encore lane)   -> am_onyx
+    weekly_timely.yml   (Trending lane) -> am_santa
+    daily_publish.yml   (Shorts)        -> alternates am_onyx/am_santa by
+                                            run, via KOKORO_VOICE_ROTATION —
+                                            see main.py.
+
+Kokoro has no word-boundary API (it yields graphemes/phonemes/audio per
+chunk, not timestamps) — same gap Gemini TTS had, same accepted trade-off:
+captions degrade to per-scene sync for a video narrated this way.
+
+GEMINI vs AZURE FAILURE HANDLING WERE DELIBERATELY DIFFERENT (Azure has an
+edge-tts voice that matches its character, so falling back scene-by-scene
+was a small jump; Gemini's voices shared no lineage with edge-tts's, so it
+failed atomically instead). Kokoro follows the AZURE shape, not the old
+Gemini one: it has no rate-limit wall to protect against and no reason a
+mid-video failure is more likely than a first-scene one, so a failure simply
+falls back to Azure-or-edge-tts for the rest of the run, the same as Azure's
+own failure handling already does.
 """
 
 import asyncio
-import base64
 import os
 import re
 import subprocess
-import time
 
 import edge_tts
-import requests
 
 # Letters or digits in any script the narration might use. Punctuation, em
 # dashes and stray markup are not speech: both TTS engines reject text made
@@ -62,259 +100,106 @@ RATE = os.getenv("TTS_RATE", "+8%")    # slightly faster = better Shorts retenti
 PITCH = os.getenv("TTS_PITCH", "-4Hz")  # slightly deeper = more gravitas
 
 # ---------------------------------------------------------------------------
-# Gemini native TTS — top priority when configured
+# Kokoro TTS — local, offline, top priority
 #
-# Reuses GEMINI_API_KEY outright: same key, same account, same free tier
-# already used for script generation. No new signup, no new secret.
+# See the module docstring for why this replaced Gemini TTS. hexgrad/Kokoro-
+# 82M, Apache 2.0. Picked by ear: https://huggingface.co/spaces/hexgrad/
+# Kokoro-TTS lets you type real narration and compare voices directly.
 #
-# Verified live (2026-09-05, model gemini-2.5-flash-preview-tts, voice Kore):
-# a plain narration prompt and the same text wrapped in a "say this as a
-# single dry, deadpan, ironic aside" instruction produced measurably
-# different output (197 vs 187 audio tokens, 378766 vs 359566 bytes) — the
-# style instruction does something. The full raw JSON response was searched
-# for every timing-related key (timepoint, wordTiming, alignment, mark,
-# offset, duration, timestamp): none exist. That is not a documentation gap,
-# it is what the API actually returns.
+# Runs through the 'kokoro-onnx' package (ONNX Runtime), not the reference
+# 'kokoro' package — tested both directly before choosing. The reference
+# package pulls in full PyTorch plus bundled CUDA wheels even though this
+# job only ever runs on a CPU: a clean install measured 5.9 GB. kokoro-onnx
+# measured 199 MB installed, produces identical audio (same underlying
+# weights), and generated a test clip at RTF≈0.25 (4x faster than real
+# time) on an ordinary CI CPU core — a 5.9 GB dependency for a GitHub
+# Actions job with single-digit GB of free disk was never going to be
+# survivable, especially alongside a long-form run's rendered images/video.
 # ---------------------------------------------------------------------------
 
-GEMINI_TTS_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
-# Puck — chosen after listening to the built-in voices live in AI Studio's
-# speech playground. The probe below was run against Kore before this voice
-# was picked; the mechanism itself is voice-agnostic, so switching the name
-# is the only change this needed. Override with GEMINI_TTS_VOICE if that
-# ever changes again, no code change required.
-GEMINI_TTS_VOICE = os.getenv("GEMINI_TTS_VOICE", "Puck")
-GEMINI_TTS_ENABLED = bool(GEMINI_TTS_KEY)
-GEMINI_TTS_URL = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-                  f"{GEMINI_TTS_MODEL}:generateContent")
+KOKORO_VOICE = os.getenv("KOKORO_VOICE", "am_onyx")
 
-# There is no numeric rate/pitch control on this engine — Gemini TTS takes a
-# natural-language instruction, not SSML prosody, so style has to be steered
-# in words. Only "funny" is actually assigned anywhere in the pipeline today
-# (the one joke beat); empathetic/relieved are defined for when that changes,
-# mirroring AZURE_STYLES's forward-compatible shape.
-_GEMINI_STYLE_INSTRUCTIONS = {
-    "funny": "Say this as a single dry, deadpan, ironic aside — a beat of "
-             "dark humor, not a cheerful or comedic voice:",
-    "empathetic": "Say this gently and empathetically, with real weight:",
-    "relieved": "Say this with quiet relief:",
-}
-_GEMINI_DEFAULT_INSTRUCTION = "Say in a calm, factual, forensic documentary voice:"
+# Downloaded once by the "Download Kokoro model" workflow step (cached
+# between runs — see the workflow YAMLs) rather than fetched by this code,
+# so a transient download failure shows up as an explicit, named CI step
+# instead of surfacing as a mysterious FileNotFoundError mid-render.
+KOKORO_MODEL_PATH = os.getenv("KOKORO_MODEL_PATH", "models/kokoro-v1.0.onnx")
+KOKORO_VOICES_PATH = os.getenv("KOKORO_VOICES_PATH", "models/voices-v1.0.bin")
 
-# A live run hit a 429 on scene 5 of 47 — five calls into the video, which is
-# almost certainly a per-minute rate limit on this preview model, not the
-# free tier's actual monthly allowance being spent (those two fail very
-# differently: a quota exhaustion response names the exhausted metric, a
-# rate limit does not). That run had no way to tell the two apart, because
-# _synthesize_gemini used to raise_for_status() without ever reading the
-# response body — and it paid for that ambiguity by discarding five good
-# clips and resynthesizing the entire video on edge-tts over what a few
-# seconds' wait would likely have survived. Retrying a 429 in place costs at
-# most a few seconds; treating it as fatal costs the whole reason Gemini was
-# worth choosing.
-#
-# The very next live run proved the first fix was scoped too narrowly: it
-# died on scene 1 with a 503 ("This model is currently experiencing high
-# demand... Please try again later") — Google's own wording is a more
-# explicit retry signal than the 429 case ever was, and it got zero retries
-# because only 429 was covered. The Gemini TEXT models hit this exact 503
-# shape too (see llm_provider.py's own comments), so it is evidently a
-# routine, recurring condition on Google's preview/flash tier generally, not
-# a one-off. Every status below is a transient-infrastructure shape, not a
-# rejection of the request itself, and gets the same retry treatment; a 4xx
-# that is NOT 429 (bad request, auth, not-found) still fails fast, because
-# retrying an actually-malformed request just wastes the same three calls
-# for the same guaranteed result.
-GEMINI_TTS_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
-# Two real runs hit the wall despite the 21s pace below and despite the
-# retry loop honoring Google's own "Please retry in Xs" number exactly: the
-# Falklands video's scene 12 waited the full 59.86s Google itself asked for
-# on its last attempt and was STILL throttled immediately after. One more
-# attempt is cheap (it only ever fires when the previous three all failed)
-# and gives that already-executed wait one more chance to have been enough.
-GEMINI_TTS_MAX_ATTEMPTS = 4
-# One entry per retry this schedule might be asked for (indices 0..MAX_ATTEMPTS-2)
-# — used only when Google's response gives no "retry in Xs" of its own.
-GEMINI_TTS_RETRY_DELAYS = (3, 8, 15)
+# Built once (loads the ~325MB ONNX model) and reused for every scene in the
+# run rather than once per scene — construction took ~1s in testing, trivial
+# next to a whole video, but there is no reason to pay it 40+ times.
+_kokoro_instance = None
 
-# The THIRD live run finally named A wall: Google's error body said "limit:
-# 3, model: gemini-2.5-flash-tts... Please retry in 59.65s" — three calls
-# per roughly a minute. The first five scenes had already gone through with
-# no pause between them at all, so scene 5 walked straight into that wall.
-# No amount of retrying fixes a rate limit you keep re-triggering the
-# instant it clears; the only real fix is to never approach it in the first
-# place. So every successful Gemini call is now followed by a deliberate
-# pause before the next one.
-#
-# "A wall" rather than "the wall": two later runs, both paced at 21s, still
-# failed partway through a long video — one at scene 5, one at scene 12,
-# each after Google's own error body named a DIFFERENT stated limit (3, then
-# 10) for the identical model. Whatever the true shape of this quota is, it
-# is not simply "3 per 60 seconds, reliably" — 21s is enough margin for a
-# SHORT video's 5-6 calls (never once failed there) but not consistently
-# enough across the 40+ calls a long-form video makes. See
-# GEMINI_TTS_PACE_SECONDS_LONGFORM in longform_main.py for the wider,
-# lane-specific pace that trades more render time for a better chance of
-# finishing the whole video on this voice — Shorts keeps this narrower
-# default since it has never needed the margin.
-GEMINI_TTS_PACE_SECONDS = float(os.getenv("GEMINI_TTS_PACE_SECONDS", "21"))
-
-# Google's 429 body names the exact wait when it has one ("Please retry in
-# 59.65s") — that number is authoritative and almost always longer than the
-# fixed fallback above, so use it whenever the response actually gives it
-# rather than guessing.
-_RETRY_AFTER_RE = re.compile(r"retry in ([\d.]+)\s*s", re.IGNORECASE)
+# If Kokoro fails once, every remaining scene in this run uses Azure/edge-tts
+# instead — never Kokoro again for scenes 1..N and something else for the
+# rest, which would put two different voices in one video. Module-level
+# because the pipeline calls _synthesize once per scene, not once per video.
+_kokoro_failed_this_run = False
 
 
-def _suggested_wait(detail: str, fallback: float) -> float:
-    match = _RETRY_AFTER_RE.search(detail or "")
-    if match:
-        try:
-            return float(match.group(1)) + 1.0  # small buffer past what Google asked for
-        except ValueError:
-            pass
-    return fallback
+def _kokoro_instance_get():
+    global _kokoro_instance
+    from kokoro_onnx import Kokoro  # imported lazily: optional dependency
+    if _kokoro_instance is None:
+        _kokoro_instance = Kokoro(KOKORO_MODEL_PATH, KOKORO_VOICES_PATH)
+    return _kokoro_instance
 
 
-def _write_wav(path: str, pcm_bytes: bytes, sample_rate: int,
-              channels: int = 1, sample_width: int = 2):
-    """Gemini returns raw PCM with no container. ffmpeg (used two lines
-    below to re-encode to the mp3 every other engine already produces) needs
-    something with a header to read, so this wraps it in the minimal WAV
-    header rather than pulling in a whole audio library for one struct."""
-    import struct
-    n_samples = len(pcm_bytes)
-    with open(path, "wb") as f:
-        f.write(b"RIFF")
-        f.write(struct.pack("<I", 36 + n_samples))
-        f.write(b"WAVE")
-        f.write(b"fmt ")
-        f.write(struct.pack("<IHHIIHH", 16, 1, channels, sample_rate,
-                            sample_rate * channels * sample_width,
-                            channels * sample_width, sample_width * 8))
-        f.write(b"data")
-        f.write(struct.pack("<I", n_samples))
-        f.write(pcm_bytes)
+def _kokoro_speed(rate: str) -> float:
+    """Converts this file's edge-tts-style "+8%"/"-4%" rate string into the
+    float multiplier Kokoro's speed parameter wants (1.0 = normal, 1.08 =
+    8% faster). Anything that doesn't parse as a percentage is left at 1.0
+    rather than raising — a scene's speed setting should never be able to
+    break synthesis."""
+    match = re.match(r"^([+-]?\d+(?:\.\d+)?)%$", (rate or "").strip())
+    if not match:
+        return 1.0
+    return 1.0 + float(match.group(1)) / 100.0
 
 
-def _synthesize_gemini(text: str, output_path: str, style: str = None):
-    """Gemini native TTS. Always returns an empty word list — see the module
-    docstring on why no timing data exists to return.
+def _kokoro_lang(voice: str) -> str:
+    """Kokoro's own naming convention: the first letter of the voice name is
+    its locale ('a' = American English, 'b' = British, ...), so the right
+    phonemizer language follows directly from whichever voice was asked for
+    instead of needing its own separate setting to stay in sync."""
+    return {"a": "en-us", "b": "en-gb"}.get((voice or "")[:1], "en-us")
 
-    Retries any status in GEMINI_TTS_RETRYABLE_STATUSES (429, and the 5xx
-    shapes that mean transient overload rather than a rejected request) up
-    to GEMINI_TTS_MAX_ATTEMPTS times with a short pause — see the comments
-    above those constants for why both shapes are routine on this preview
-    tier and neither means the free allowance is actually spent. Any other
-    error, or a retryable one that survives every attempt, raises
-    immediately with the actual response body attached: the caller
-    (generate_audio_pipeline) decides what THAT means for the whole video,
-    not this function, and it needs the real reason to log, not a generic
-    HTTP status line.
+
+def _synthesize_kokoro(text: str, output_path: str, voice: str = None,
+                       rate: str = None):
+    """Kokoro-82M, running locally inside this job via ONNX Runtime.
+
+    Always returns an empty word list — Kokoro has no word-boundary API.
+    See the module docstring for why that is an accepted trade-off, not a
+    bug (Gemini TTS had the exact same gap).
 
     Output is re-encoded to real mp3 rather than left as WAV-under-a-.mp3-
     extension, so every engine's output is identical in format, not just in
     filename.
     """
-    instruction = _GEMINI_STYLE_INSTRUCTIONS.get((style or "").strip().lower(),
-                                                  _GEMINI_DEFAULT_INSTRUCTION)
-    body = {
-        "contents": [{"parts": [{"text": f"{instruction} {text}"}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {"voiceName": GEMINI_TTS_VOICE}
-                },
-            },
-        },
-    }
+    import soundfile as sf
 
-    last_error = "unknown error"
-    for attempt in range(GEMINI_TTS_MAX_ATTEMPTS):
-        try:
-            r = requests.post(GEMINI_TTS_URL, params={"key": GEMINI_TTS_KEY},
-                              json=body, timeout=60)
-        except requests.exceptions.RequestException as e:
-            # A live run lost Puck for an entire 47-scene video over exactly
-            # this: scene 0 hit a plain read timeout ("Google never answered
-            # in 60s") and the whole thing fell back to edge-tts with ZERO
-            # retries — because everything below here only ever runs once a
-            # response object exists. A dropped connection or a timeout is
-            # not Google rejecting the request; it is the network not
-            # answering in time, which is exactly as transient as a 503 and
-            # deserves the same retry treatment, not instant surrender.
-            last_error = f"{type(e).__name__}: {e}"
-            if attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
-                wait = GEMINI_TTS_RETRY_DELAYS[attempt]
-                print(f"   ⏳ Gemini TTS request failed ({type(e).__name__} — "
-                      f"no response, not an error response) — waiting "
-                      f"{wait}s and retrying this scene (attempt "
-                      f"{attempt + 2}/{GEMINI_TTS_MAX_ATTEMPTS})...")
-                time.sleep(wait)
-                continue
-            raise RuntimeError(last_error)
+    voice = voice or KOKORO_VOICE
+    samples, sample_rate = _kokoro_instance_get().create(
+        text, voice=voice, speed=_kokoro_speed(rate), lang=_kokoro_lang(voice))
 
-        if r.status_code == 200:
-            data = r.json()
-            parts = data["candidates"][0]["content"]["parts"]
-            audio_part = next(p for p in parts if "inlineData" in p)
-            mime = audio_part["inlineData"]["mimeType"]
-            raw = base64.b64decode(audio_part["inlineData"]["data"])
+    tmp_wav = output_path + ".kokoro.wav"
+    sf.write(tmp_wav, samples, sample_rate)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-i", tmp_wav, "-q:a", "2", output_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    finally:
+        if os.path.exists(tmp_wav):
+            os.remove(tmp_wav)
 
-            rate_hz = 24000
-            for token in mime.split(";"):
-                token = token.strip()
-                if token.startswith("rate="):
-                    rate_hz = int(token.split("=")[1])
-
-            tmp_wav = output_path + ".gemini.wav"
-            _write_wav(tmp_wav, raw, rate_hz)
-            try:
-                subprocess.run(
-                    ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                     "-i", tmp_wav, "-q:a", "2", output_path],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
-            finally:
-                if os.path.exists(tmp_wav):
-                    os.remove(tmp_wav)
-
-            return []  # confirmed absent from the response — see module docstring
-
-        # Not 200: keep the actual body, not requests' generic "429 Client
-        # Error: Too Many Requests" — that alone cannot tell a per-minute
-        # rate limit apart from the free tier's allowance actually being
-        # spent, and the run that found this bug needed that distinction and
-        # did not have it.
-        detail = (r.text or "").strip().replace("\n", " ")[:500]
-        last_error = f"{r.status_code} {r.reason}: {detail}"
-
-        retryable = r.status_code in GEMINI_TTS_RETRYABLE_STATUSES
-        if retryable and attempt < GEMINI_TTS_MAX_ATTEMPTS - 1:
-            wait = _suggested_wait(detail, GEMINI_TTS_RETRY_DELAYS[attempt])
-            print(f"   ⏳ Gemini TTS returned {r.status_code} (transient — "
-                  f"rate limit or temporary overload) — waiting {wait}s and "
-                  f"retrying this scene (attempt {attempt + 2}/"
-                  f"{GEMINI_TTS_MAX_ATTEMPTS})...")
-            time.sleep(wait)
-            continue
-
-        raise RuntimeError(last_error)
-
-    raise RuntimeError(last_error)
-
-
-class GeminiTTSFailed(Exception):
-    """Raised the instant any scene fails on Gemini TTS. Caught exactly once,
-    in generate_audio_pipeline, which throws away the whole video's Gemini
-    output and restarts it entirely on edge-tts — see the module docstring
-    for why this engine does not fall back scene by scene the way Azure
-    does."""
+    return []
 
 
 # ---------------------------------------------------------------------------
-# Azure Speech — primary engine when configured
+# Azure Speech — second priority when configured
 #
 # Chosen voice: en-US-DavisMultilingualNeural. Unlike edge-tts, Azure's real
 # Speech SDK accepts SSML <mstts:express-as style="..."> — edge-tts explicitly
@@ -412,19 +297,34 @@ def _synthesize_azure(text: str, output_path: str, style: str = None,
     return words
 
 
-def _synthesize(text: str, output_path: str, rate: str = None, style: str = None):
+def _synthesize(text: str, output_path: str, rate: str = None, style: str = None,
+                voice: str = None):
     """Generates the MP3 and returns word timings: [(word, start_s, end_s), ...].
 
-    rate overrides the global narration speed for this scene. The long-form arc
-    reads its midpoint slower than its opening on purpose — see PACING in
-    longform_llm — and a single global rate made that impossible. style is an
-    Azure express-as style (see AZURE_STYLES); edge-tts silently ignores it,
-    since it cannot accept styles at all.
+    Tries Kokoro first (local, no signup, no rate limit), then Azure if
+    configured, then edge-tts — falling back for the rest of the run on any
+    tier's failure, never per scene, so one video never mixes voices
+    mid-way through. See the module docstring for why Kokoro sits ahead of
+    Azure: it is the voice actually chosen for this channel, so a failure
+    in it should degrade gracefully rather than silently hand narration to
+    a different configured engine scene by scene.
 
-    Tries Azure first when configured, falling back to edge-tts for the rest
-    of the run on any Azure failure — never per scene, see _azure_failed_this_run.
+    rate overrides the global narration speed for this scene. voice
+    overrides KOKORO_VOICE for this call only — see KOKORO_VOICE_ROTATION in
+    main.py, which alternates it per run for the Shorts A/B test. style is
+    an Azure express-as style (see AZURE_STYLES); Kokoro and edge-tts both
+    silently ignore it, since neither can accept styles at all.
     """
-    global _azure_failed_this_run
+    global _azure_failed_this_run, _kokoro_failed_this_run
+
+    if not _kokoro_failed_this_run:
+        try:
+            return _synthesize_kokoro(text, output_path, voice=voice, rate=rate)
+        except Exception as e:
+            next_engine = "Azure" if AZURE_ENABLED else "edge-tts"
+            print(f"⚠️ Kokoro TTS failed ({type(e).__name__}: {e}) — falling "
+                  f"back to {next_engine} for the rest of this run.")
+            _kokoro_failed_this_run = True
 
     if AZURE_ENABLED and not _azure_failed_this_run:
         try:
@@ -434,8 +334,9 @@ def _synthesize(text: str, output_path: str, rate: str = None, style: str = None
                   f"for the rest of this run.")
             _azure_failed_this_run = True
 
-    voice = EDGE_FALLBACK_VOICE if AZURE_ENABLED else VOICE
-    return asyncio.run(_synthesize_edge(text, output_path, rate=rate, voice=voice))
+    fallback_voice = EDGE_FALLBACK_VOICE if AZURE_ENABLED else VOICE
+    return asyncio.run(_synthesize_edge(text, output_path, rate=rate,
+                                        voice=fallback_voice))
 
 
 async def _synthesize_edge(text: str, output_path: str, rate: str = None,
@@ -605,42 +506,14 @@ def shift_word_timings(words, removed: float):
     return shifted
 
 
-def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool,
-                    pace_seconds: float = None):
-    """One full pass over every scene, on exactly one engine.
+def _run_audio_pass(scenes: list, output_dir: str, voice: str = None):
+    """One full pass over every scene, synthesizing each through _synthesize()
+    (Kokoro, falling back to Azure/edge-tts, with a per-scene gTTS emergency
+    fallback if every configured engine fails on one scene).
 
-    use_gemini=True calls _synthesize_gemini() directly and raises
-    GeminiTTSFailed the INSTANT any scene fails — no per-scene gTTS
-    fallback, no continuing to the next scene. That is deliberate: this
-    engine's failures are handled one level up, by throwing away the whole
-    video's Gemini output and calling this function again with
-    use_gemini=False, never by mixing engines within one pass.
-
-    use_gemini=False goes through _synthesize() (which already knows how to
-    blend Azure and edge-tts internally, unchanged from before) with its
-    existing per-scene gTTS emergency fallback.
-
-    Re-running this for every scene after a Gemini failure is safe without
-    any manual cleanup: every scene writes to the same scene_{idx}.mp3 path
-    regardless of engine, so a second pass simply overwrites whatever the
-    aborted first pass left behind, including for scenes that had already
-    succeeded on Gemini before a later one failed.
-
-    pace_seconds overrides GEMINI_TTS_PACE_SECONDS for this call only —
-    longform_main.py passes its own wider value; leaving it unset (Shorts)
-    keeps the narrower module default.
+    voice overrides KOKORO_VOICE for this whole video — see
+    KOKORO_VOICE_ROTATION in main.py for the Shorts A/B test that uses this.
     """
-    pace = GEMINI_TTS_PACE_SECONDS if pace_seconds is None else pace_seconds
-
-    # Used only to decide when to skip the post-call pacing pause below —
-    # there is no point waiting after the last real Gemini call this pass
-    # will ever make.
-    last_speakable_idx = None
-    if use_gemini:
-        for idx, scene in enumerate(scenes):
-            if is_speakable(scene.get("narration", "").strip()):
-                last_speakable_idx = idx
-
     skipped, trimmed_total = 0, 0.0
     for idx, scene in enumerate(scenes):
         audio_path = os.path.join(output_dir, f"scene_{idx}.mp3")
@@ -661,41 +534,25 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool,
         rate = scene.get("tts_rate") or RATE
         style = scene.get("tts_style")
         style_note = f", style={style}" if style else ""
-        engine_tag = "gemini" if use_gemini else "standard"
-        print(f"🗣️ [{engine_tag}] Synthesizing scene {idx} at {rate}"
-              f"{style_note}: '{text[:40]}...'")
+        print(f"🗣️ Synthesizing scene {idx} at {rate}{style_note}: "
+              f"'{text[:40]}...'")
 
         try:
-            if use_gemini:
-                words = _synthesize_gemini(text, audio_path, style=style)
-            else:
-                words = _synthesize(text, audio_path, rate=rate, style=style)
+            words = _synthesize(text, audio_path, rate=rate, style=style,
+                                voice=voice)
             if os.path.getsize(audio_path) < 1000:  # suspiciously small = failed
                 raise RuntimeError("TTS produced an empty file")
         except Exception as e:
-            if use_gemini:
-                # No per-scene recovery here on purpose — see this function's
-                # docstring and the module docstring for why.
-                raise GeminiTTSFailed(f"scene {idx}: {e}") from e
             print(f"⚠️ TTS failed ({e}) — falling back to gTTS for this scene.")
             try:
                 words = _synthesize_fallback(text, audio_path)
             except Exception as e2:
-                # Both engines gone for this scene. Every other scene still has
-                # a video to be part of.
+                # Every configured engine gone for this scene. Every other
+                # scene still has a video to be part of.
                 print(f"❌ Scene {idx}: gTTS also failed ({type(e2).__name__}: "
                       f"{e2}) — skipping this scene.")
                 skipped += 1
                 continue
-
-        # Gemini's free tier is tightly rate-limited (see the comment above
-        # GEMINI_TTS_PACE_SECONDS) — pause after every successful call except
-        # the last one this pass will make, so the next scene never walks
-        # straight into the wall the way scene 5 of 47 did on a real run.
-        if use_gemini and idx != last_speakable_idx:
-            print(f"   ⏳ Pacing Gemini TTS — waiting {pace:.0f}s before the "
-                  f"next request...")
-            time.sleep(pace)
 
         duration = get_audio_duration(audio_path)
 
@@ -716,35 +573,19 @@ def _run_audio_pass(scenes: list, output_dir: str, use_gemini: bool,
 
 
 def generate_audio_pipeline(script_data: dict, output_dir: str = "build",
-                            pace_seconds: float = None) -> dict:
+                            voice: str = None) -> dict:
+    """voice overrides KOKORO_VOICE for this whole video. Passed by main.py
+    for the Shorts KOKORO_VOICE_ROTATION A/B test; longform_main.py leaves it
+    unset and gets whichever voice that workflow's KOKORO_VOICE env var pins."""
     scenes = script_data.get("scenes", [])
     os.makedirs(output_dir, exist_ok=True)
 
-    if GEMINI_TTS_ENABLED:
-        pace = GEMINI_TTS_PACE_SECONDS if pace_seconds is None else pace_seconds
-        print(f"🎙️ Initializing Audio Engine (voice: {GEMINI_TTS_VOICE} via "
-              f"Gemini TTS, paced {pace:.0f}s/call; if it fails anywhere "
-              f"mid-video, the ENTIRE video is redone on edge-tts ({VOICE}) "
-              f"rather than mixing voices)...")
-        try:
-            skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
-                                                     use_gemini=True,
-                                                     pace_seconds=pace_seconds)
-        except GeminiTTSFailed as e:
-            print(f"⚠️ Gemini TTS failed ({e}) — discarding every Gemini clip "
-                  f"from this video and resynthesizing the ENTIRE thing on "
-                  f"edge-tts instead, so it never mixes two different voices.")
-            skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
-                                                     use_gemini=False)
-    else:
-        if AZURE_ENABLED:
-            print(f"🎙️ Initializing Audio Engine (voice: {AZURE_VOICE} via "
-                  f"Azure Speech, styles: {', '.join(sorted(AZURE_STYLES))}; "
-                  f"edge-tts fallback: {EDGE_FALLBACK_VOICE})...")
-        else:
-            print(f"🎙️ Initializing Audio Engine (voice: {VOICE} via edge-tts)...")
-        skipped, trimmed_total = _run_audio_pass(scenes, output_dir,
-                                                 use_gemini=False)
+    engine_note = f"Kokoro ({voice or KOKORO_VOICE})"
+    engine_note += (f", falling back to Azure ({AZURE_VOICE}) then edge-tts"
+                    if AZURE_ENABLED else f", falling back to edge-tts ({VOICE})")
+    print(f"🎙️ Initializing Audio Engine ({engine_note})...")
+
+    skipped, trimmed_total = _run_audio_pass(scenes, output_dir, voice=voice)
 
     note = f" ({skipped} scene(s) skipped)" if skipped else ""
     if trimmed_total > 0.5:

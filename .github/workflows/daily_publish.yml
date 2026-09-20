@@ -55,10 +55,29 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install FFmpeg
+      - name: Install FFmpeg and espeak-ng
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg espeak-ng
+
+      # ~355MB combined, so cached rather than pulled on every run. The key
+      # never changes unless the model version does, so after the first run
+      # this step is a cache hit and the fetch below is skipped entirely.
+      - name: Cache Kokoro model files
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+
+      - name: Fetch Kokoro model files (cache miss only)
+        run: |
+          mkdir -p models
+          if [ ! -f models/kokoro-v1.0.onnx ]; then
+            curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          fi
+          if [ ! -f models/voices-v1.0.bin ]; then
+            curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          fi
 
       - name: Install Python dependencies
         run: |
@@ -107,6 +126,13 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # A 1-2 week A/B test between the two Kokoro voices picked by ear
+          # (see audio_engine.py's module docstring) — main.py alternates
+          # through this list by run number so Shorts compares both before
+          # settling on one for good. The long-form lanes each pin a single
+          # voice instead; see their own workflow files.
+          KOKORO_VOICE_ROTATION: 'am_onyx,am_santa'
+          RUN_NUMBER: ${{ github.run_number }}
           PRIVACY_STATUS: public
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           # The channel's recurring format. Every Short is published as

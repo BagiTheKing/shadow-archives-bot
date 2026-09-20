@@ -2,6 +2,17 @@ openai>=1.56.0
 httpx>=0.27.2
 edge-tts>=7.0.0
 gTTS==2.5.4
+# The primary narration voice — local, offline, no key. Apache 2.0 licensed
+# (hexgrad/Kokoro-82M), so unlike some of the free cloud TTS alternatives
+# this pipeline compared it against, it carries no non-commercial
+# restriction. kokoro-onnx (ONNX Runtime), not the reference 'kokoro'
+# package: the reference package pulls in full PyTorch plus bundled CUDA
+# wheels for a job that only ever runs on CPU — measured at 5.9 GB installed
+# against kokoro-onnx's 199 MB for the identical model weights. Needs the
+# espeak-ng system package too, and the two model files downloaded by the
+# "Download Kokoro model" workflow step. See audio_engine.py's docstring.
+kokoro-onnx>=0.6.1
+soundfile>=0.12.1
 # Optional: only used when AZURE_SPEECH_KEY and AZURE_SPEECH_REGION are both
 # set. Without them audio_engine.py never imports this — edge-tts only.
 azure-cognitiveservices-speech>=1.40.0
