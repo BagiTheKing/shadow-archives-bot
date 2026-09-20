@@ -126,10 +126,19 @@ ARC = [
     ("The Verdict",
      "Answer the question chapter 2 raised, using only what the video has already "
      "shown — confirm it, complicate it, or overturn it, whatever the evidence "
-     "actually supports. Then close on either a stated lesson or a genuinely open "
-     "question the evidence itself leaves unresolved — not a tease, an ending. If "
-     "you name a counterfactual (the single change that would have broken the "
-     "chain), that can BE the lesson.",
+     "actually supports. Only after that verdict is delivered, zoom out: name what "
+     "this specific catastrophe reveals about people in general — how anyone can "
+     "miss a warning, trust the wrong assumption, or pay for someone else's "
+     "certainty — whatever is true here, whether the cause was a human decision, "
+     "a natural force, or both. Earn this turn, do not assert it cold; it only "
+     "lands because of everything the video already showed. If real people were "
+     "lost or hurt, do not let the zoom-out erase them — name what was actually "
+     "lost one last time before the final line, the same way the video opened. "
+     "Then close on either a stated lesson or a genuinely open question the "
+     "evidence itself leaves unresolved — not a tease, an ending, but the kind of "
+     "ending that makes someone want to know how this channel would tell the "
+     "next one. If you name a counterfactual (the single change that would have "
+     "broken the chain), that can BE the lesson.",
      210),
 ]
 
@@ -168,8 +177,12 @@ _UNSOLVED_SUBSTITUTIONS = {
         "Say plainly whether chapter 2's popular theory survived what chapter 4 ruled "
         "out. Then name the single detail that keeps this genuinely unresolved, and "
         "what would have to be found to settle it. State plainly what is known versus "
-        "what is speculated. End on the open question — do NOT supply an answer the "
-        "record does not support.",
+        "what is speculated. Only after that, zoom out: name what this specific "
+        "mystery reveals about how people make sense of the unexplained in general — "
+        "earn this turn, do not assert it cold. If real people were lost or affected, "
+        "do not let the zoom-out erase them. End on the open question — do NOT supply "
+        "an answer the record does not support, but make it the kind of open question "
+        "that makes someone want to know how this channel would chase the next one.",
         180),
 }
 
