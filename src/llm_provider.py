@@ -27,13 +27,28 @@ chapter is only lost when every model everywhere refuses it.
 
 ONE PROVIDER IS ALSO A SINGLE POINT OF *BILLING* FAILURE. Chaining Gemini to
 OpenRouter fixed outages but not allowances: both are free tiers, both run dry,
-and they run dry on the same busy afternoon. So the chain now spans four free
+and they run dry on the same busy afternoon. So the chain now spans five free
 providers and one paid one, and every tier is optional — configure none of the
 new ones and the pipeline behaves exactly as before.
+
+A run on 2026-09-17 lost every free layer AT ONCE: Gemini overloaded, Groq
+listing models this key can't call, Cerebras out of credit, and — the one
+that actually mattered, because it is supposed to be the deep catch-all —
+every OpenRouter free model came back with empty content on the same
+afternoon. OpenRouter is itself a single piece of infrastructure sitting in
+front of dozens of models; when OpenRouter's OWN layer has a bad day, every
+model behind it goes down together, no matter how many of them there are.
+Zhipu is not behind OpenRouter — a separate company, a separate API, a
+separate outage domain — which is the actual property this pipeline needed
+that day, not just "one more model."
 
     gemini      free, no card. The best writer of the free tiers.
     groq        free, no card. Very fast, generous daily allowance.
     cerebras    free, no card. Another independent allowance.
+    zhipu       free, no card (glm-4-flash is explicitly a free-forever model
+                for individual developers). A Chinese provider on its own
+                infrastructure — independent of every other layer here,
+                OpenRouter included.
     openrouter  free, ~50 requests a day across whatever is free that morning.
     anthropic   PAID, and last on purpose — it is the only tier that can cost
                 money, so it is only ever reached when every free tier has
@@ -49,6 +64,12 @@ Get keys — all free, none need a card:
     Gemini    https://aistudio.google.com/apikey
     Groq      https://console.groq.com/keys
     Cerebras  https://cloud.cerebras.ai
+    Zhipu     https://open.bigmodel.cn/usercenter/apikeys (sign-up may ask
+              for phone verification — not confirmed from here, since this
+              file was written without a live account to test against; if
+              the shape of Zhipu's API turns out to differ from what is
+              assumed below, this tier degrades to contributing nothing,
+              same as any other provider whose discovery call fails)
 """
 
 import os
@@ -64,6 +85,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # hand-written model list — see the "model names are not stable" lesson above.
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 
 # Only used if live discovery fails. Deliberately generic aliases, which Google
 # keeps pointed at a current model, rather than pinned versions that retire.
@@ -90,6 +112,10 @@ def groq_available() -> bool:
 
 def cerebras_available() -> bool:
     return bool(os.getenv("CEREBRAS_API_KEY"))
+
+
+def zhipu_available() -> bool:
+    return bool(os.getenv("ZHIPU_API_KEY"))
 
 
 def anthropic_available() -> bool:
@@ -413,6 +439,25 @@ def get_pool() -> ModelPool:
         for model in _discover_openai_models(client, "cerebras"):
             entries.append((model, client, "cerebras"))
 
+    if zhipu_available():
+        # Not discovered like the other tiers on purpose. Every model a Groq
+        # or Cerebras key can list is free for that key — discovery is safe
+        # there because the worst case is a stale name. Zhipu hosts free and
+        # PAID models under the same key and the same catalogue; a discovery
+        # pass here could just as easily hand back a paid model as the free
+        # one, silently spending money the whole reason for this tier is to
+        # avoid. glm-4-flash specifically is documented as free for
+        # individual developers, so it is pinned rather than guessed at.
+        # ZHIPU_MODELS overrides this the same way *_MODELS does elsewhere,
+        # for whoever wants a different (and still confirmed-free) model.
+        override = os.getenv("ZHIPU_MODELS")
+        models = ([m.strip() for m in override.split(",") if m.strip()]
+                  if override else ["glm-4-flash"])
+        client = OpenAI(base_url=ZHIPU_BASE_URL,
+                        api_key=os.getenv("ZHIPU_API_KEY"))
+        for model in models:
+            entries.append((model, client, "zhipu"))
+
     if openrouter_available():
         from llm_engine import get_free_models
         client = OpenAI(base_url=OPENROUTER_BASE_URL,
@@ -434,6 +479,7 @@ _PROVIDERS = (
     ("gemini", gemini_available, "free"),
     ("groq", groq_available, "free"),
     ("cerebras", cerebras_available, "free"),
+    ("zhipu", zhipu_available, "free"),
     ("openrouter", openrouter_available, "free"),
     ("anthropic", anthropic_available, "paid"),
 )

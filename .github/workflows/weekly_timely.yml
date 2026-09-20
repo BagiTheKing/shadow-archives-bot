@@ -71,13 +71,20 @@ jobs:
           # Absent, the pipeline uses OpenRouter exactly as before.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # More free writers, each with its own daily allowance. The chain is
-          # gemini -> groq -> cerebras -> openrouter, and a provider that runs
-          # dry now retires itself and hands over instead of ending the run.
-          # Both are free and neither needs a card:
+          # gemini -> groq -> cerebras -> zhipu -> openrouter, and a provider
+          # that runs dry now retires itself and hands over instead of ending
+          # the run. All free, none need a card:
           #   https://console.groq.com/keys
           #   https://cloud.cerebras.ai
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          # Independent of every provider above — a separate company, on its
+          # own infrastructure, not sitting behind OpenRouter the way most of
+          # the free chain ultimately does. glm-4-flash specifically is
+          # documented as free for individual developers.
+          # https://open.bigmodel.cn/usercenter/apikeys (sign-up may ask for
+          # phone verification — not confirmed from here).
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           # Last in the chain and the only tier that bills, so nothing reaches
           # it until every free allowance above is spent. Leave the secret
           # unset to keep the pipeline entirely free. NOTE: a Claude Pro
