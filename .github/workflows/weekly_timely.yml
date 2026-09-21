@@ -1,7 +1,8 @@
-name: Weekly Long-Form — Trending Lane
+name: Long-Form — Trending Lane
 
-# Lane 2 of 2. Picks a subject that is genuinely hot this week (Google Trends
-# crossed with Google News), then tells the HISTORY behind it.
+# Lane 2 of 2. Picks a subject that is genuinely hot right now (Google Trends
+# crossed with Google News, and a watched channel's recent uploads — see
+# channel_watch.py), then tells the HISTORY behind it.
 #
 # The separation is the whole design. The trend chooses the subject; it never
 # supplies the content. A headline about the Spanish-Moroccan border becomes a
@@ -12,11 +13,21 @@ name: Weekly Long-Form — Trending Lane
 
 on:
   schedule:
-    # Thursdays 09:00 UTC. Shorts publish Mon/Wed/Fri/Sat/Sun, so Tuesday and
-    # Thursday are the only days with no other run — and OpenRouter's free tier
-    # is 50 requests per DAY across everything. This lane was on Wednesday and
-    # was sharing that budget with a Shorts run.
-    - cron: '0 9 * * 4'
+    # Every 2 days at 15:00 UTC (day-of-month step of 2 — the 1st, 3rd, 5th,
+    # ...), owner's explicit request to move off a weekly cadence.
+    #
+    # WORTH KNOWING: this was Thursdays specifically because Shorts publish
+    # Mon/Wed/Fri/Sat/Sun at 15:23 UTC and Encore runs Tuesday 09:00 UTC —
+    # Thursday was the one day nothing else touched the shared free-tier LLM
+    # budget (50 requests/day on OpenRouter, across everything). An every-
+    # 2-days cadence will regularly land on a Shorts day, and at 15:00 UTC
+    # that is only ~23 minutes before the 15:23 Shorts run — so some runs may
+    # now compete for that same daily allowance. Every provider in the chain
+    # already retires itself and hands off on a 429 rather than failing the
+    # run (see llm_engine.py), so a collision degrades quality/cost, it does
+    # not break anything — but it is a real tradeoff of this schedule, not a
+    # free change.
+    - cron: '0 15 */2 * *'
   workflow_dispatch:
     inputs:
       skip_upload:
@@ -122,10 +133,11 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          # Pinned for a 1-2 week A/B test against the Encore lane's
-          # am_onyx (see audio_engine.py's module docstring) — Shorts
-          # alternates between both instead; see daily_publish.yml.
-          KOKORO_VOICE: am_santa
+          # Swapped from am_santa: owner's explicit call after the A/B
+          # period, not a data-driven pick either way — Encore now carries
+          # am_santa instead (see weekly_longform.yml). Shorts still
+          # alternates between both; see daily_publish.yml.
+          KOKORO_VOICE: am_onyx
           # Optional. A free key from https://www.pexels.com/api/ unlocks muted
           # real b-roll clips between the stills. Absent, the pipeline simply
           # uses no stock video — nothing fails.
@@ -148,9 +160,11 @@ jobs:
           # Checked first, ahead of the trend feeds above — see
           # channel_watch.py for the safety boundary (only a fixed generic
           # theme label ever reaches the anchor step, never the channel's
-          # own video text). Blank disables it; the pipeline then behaves
-          # exactly as it did before this existed.
+          # own video description). Blank handle disables it; the pipeline
+          # then behaves exactly as it did before this existed.
           WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
+          # 48h per the owner (was 24h).
+          WATCH_LOOKBACK_HOURS: '48'
           # Nothing after this year may appear in the narration.
           HISTORY_CUTOFF_YEAR: '2005'
         run: python src/longform_main.py

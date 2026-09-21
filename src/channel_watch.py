@@ -32,8 +32,10 @@ defamation and privacy exposure, not a style problem.
 
 So this module NEVER hands a video's title or description forward as a
 candidate subject. It only ever extracts a fixed, pre-written generic
-theme label (see THEMES below) when the title+description contains that
-theme's keywords, and drops the video entirely if none match — the same
+theme label (see THEMES below) when the video's DESCRIPTION contains
+that theme's keywords — not the title, which the video's own title
+never contributes to matching, only to the console log line so a run
+is human-readable — and drops the video entirely if none match. Same
 "subject, never a take" boundary trend_source.py already draws for
 headlines, applied here to a talk show instead. The theme label is then
 subject to every one of select_historical_anchor's existing hard rules
@@ -54,10 +56,11 @@ WATCH_LOOKBACK_HOURS = int(os.getenv("WATCH_LOOKBACK_HOURS", "24"))
 WATCH_MAX_VIDEOS = int(os.getenv("WATCH_MAX_VIDEOS", "10"))
 
 # Generic, pre-written theme labels only — see the safety boundary above.
-# Keyed by keywords that must appear in the video's title+description; each
-# label names a real, settled historical angle THE FAULT LINE can actually
-# tell (see topics.py's _FAULTLINE and select_historical_anchor's worked
-# examples), never the live show's own framing of the argument.
+# Keyed by keywords that must appear in the video's DESCRIPTION (not the
+# title — see _extract_theme); each label names a real, settled historical
+# angle THE FAULT LINE can actually tell (see topics.py's _FAULTLINE and
+# select_historical_anchor's worked examples), never the live show's own
+# framing of the argument.
 #
 # An earlier draft of this list had six entries and gave religion exactly
 # one bucket, Islam — too narrow to be useful, and a real editorial bias in
@@ -100,8 +103,6 @@ THEMES = [
       "healthcare reform", "drug prices"), "US healthcare policy"),
     (("government shutdown", "debt ceiling", "national debt",
       "federal budget"), "the US national debt and government shutdowns"),
-    (("lgbtq", "gay marriage", "same-sex marriage", "transgender rights",
-      "gender-affirming care"), "LGBTQ+ rights in American politics"),
     (("opioid crisis", "fentanyl", "drug decriminalization",
       "war on drugs"), "drug policy and the opioid crisis"),
     (("capitol riot", "election certification", "peaceful transfer of power",
@@ -127,10 +128,16 @@ THEMES = [
 ]
 
 
-def _extract_theme(title: str, description: str):
+def _extract_theme(description: str):
     """A fixed label from THEMES, or None. Never returns anything derived
-    from the video's own text — see the module docstring."""
-    text = f"{title} {description}".lower()
+    from the video's own text — see the module docstring.
+
+    Description only, not the title — titles on a show like this are
+    written to be provocative shorthand ("Mehdi DESTROYS Nancy Mace!") and
+    match on name and tone rather than subject; the description is where
+    the actual topic of the segment gets spelled out.
+    """
+    text = (description or "").lower()
     for keywords, label in THEMES:
         if any(k in text for k in keywords):
             return label
@@ -210,7 +217,7 @@ def get_watch_candidates(handle=None, hours=None, youtube=None):
 
     seen, out = set(), []
     for v in videos:
-        theme = _extract_theme(v["title"], v["description"])
+        theme = _extract_theme(v["description"])
         if not theme or theme in seen:
             continue
         seen.add(theme)

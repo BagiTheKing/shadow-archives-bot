@@ -117,10 +117,11 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          # Pinned for a 1-2 week A/B test against the Trending lane's
-          # am_santa (see audio_engine.py's module docstring) — Shorts
-          # alternates between both instead; see daily_publish.yml.
-          KOKORO_VOICE: am_onyx
+          # Swapped from am_onyx: owner's explicit call after the A/B
+          # period, not a data-driven pick either way — Trending now
+          # carries am_onyx instead (see weekly_timely.yml). Shorts still
+          # alternates between both; see daily_publish.yml.
+          KOKORO_VOICE: am_santa
           # Optional. A free key from https://www.pexels.com/api/ unlocks muted
           # real b-roll clips between the stills. Absent, the pipeline simply
           # uses no stock video — nothing fails.

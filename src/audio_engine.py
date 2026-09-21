@@ -52,10 +52,11 @@ restriction (Apache 2.0), and removes the quota wall entirely by not making
 a network call at all.
 
 KOKORO_VOICE picks the voice (default "am_onyx"). The three workflows pin it
-differently on purpose, as a deliberate 1-2 week comparison before settling
-on one voice for good:
-    weekly_longform.yml (Encore lane)   -> am_onyx
-    weekly_timely.yml   (Trending lane) -> am_santa
+differently. The long-form lanes started as a deliberate 1-2 week A/B
+comparison and were then swapped to the owner's explicit final choice
+(not a data-driven pick either way):
+    weekly_longform.yml (Encore lane)   -> am_santa
+    weekly_timely.yml   (Trending lane) -> am_onyx
     daily_publish.yml   (Shorts)        -> alternates am_onyx/am_santa by
                                             run, via KOKORO_VOICE_ROTATION —
                                             see main.py.
