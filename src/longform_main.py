@@ -269,6 +269,28 @@ def resolve_topic(lane: str, history=None):
         return fallback(), False, False, None
 
     if lane == "timely":
+        # Checked first, ahead of the trend feeds below: a live political
+        # talk show can have a heated, highly-searched debate up hours
+        # before Trends or News RSS catch up to it. Off by default
+        # (WATCH_CHANNEL_HANDLE unset) and, even enabled, only ever hands
+        # select_historical_anchor a fixed generic theme label — never a
+        # video's own title or description. See channel_watch.py's
+        # docstring for why that boundary is load-bearing, not stylistic.
+        try:
+            from channel_watch import get_watch_candidates
+            watch_candidates = get_watch_candidates()
+            if watch_candidates:
+                anchor = select_historical_anchor(
+                    watch_candidates, avoid_titles=recent_titles(history, 20))
+                if anchor:
+                    print(f"📺 Anchored to a channel-watch theme: "
+                          f"{anchor['topic'][:70]}")
+                    return anchor["topic"], True, False, anchor.get("anchor_year")
+        except QuotaExhausted:
+            raise
+        except Exception as e:
+            print(f"⚠️ Channel watch failed ({type(e).__name__}: {e}).")
+
         try:
             from trend_source import get_trending_subjects
             region, candidates = get_trending_subjects()

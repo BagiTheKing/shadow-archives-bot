@@ -202,6 +202,11 @@ _REGIME = [
 _FAULTLINE = [
     ("The Sykes-Picot Agreement (1916), the secret map on which two diplomats divided the Ottoman Middle East between Britain and France", WIDE),
     ("The Balfour Declaration (1917), the 67-word letter promising a national home in a territory Britain did not yet control", WIDE),
+    ("The UN Partition Plan for Palestine (1947), the vote that split the British Mandate into Jewish and Arab states, accepted by one side and rejected by the other within a day", WIDE),
+    ("Israel's Declaration of Independence (1948) and the five-army invasion that began within 24 hours of it being read aloud", WIDE),
+    ("The 1949 Armistice Lines between Israel and its neighbours, drawn as a temporary ceasefire boundary that hardened into the West Bank's edge for the next fifty-eight years", WIDE),
+    ("The Camp David Accords (1978), the Egypt-Israel peace treaty that traded the Sinai for recognition and left the Palestinian question deliberately unresolved", WIDE),
+    ("The Oslo Accords (1993), the five-year interim arrangement between Israel and the PLO that was never meant to still be the status quo three decades later", WIDE),
     ("The Radcliffe Line (1947), drawn in five weeks by a lawyer who had never been to India, dividing it for 400 million people", WIDE),
     ("Operation Ajax (1953), the coup that removed Iran's elected prime minister Mohammad Mossadegh after he nationalised the oil industry", WIDE),
     ("The Anglo-Persian oil concession of 1901, under which Iran received sixteen percent of the profits from its own oil", WIDE),
@@ -219,6 +224,9 @@ _FAULTLINE = [
     ("The Kuwait-Iraq border, drawn by a British official in 1922 and the stated grievance behind the 1990 invasion", WIDE),
     ("The partition of Ireland (1921) and the boundary commission whose report was suppressed and never implemented", WIDE),
     ("The Congress of Berlin (1878) and the Balkan borders that produced a century of wars", NARROW),
+    ("The transfer of Crimea from Soviet Russia to Soviet Ukraine (1954), a boundary change inside one country that became an international border when the USSR dissolved", WIDE),
+    ("The Budapest Memorandum (1994), the security assurances Ukraine received in exchange for surrendering the world's third-largest nuclear arsenal", WIDE),
+    ("The Holodomor (1932-33), the Soviet grain requisition that killed millions in Ukraine and the decades Moscow spent denying it happened", WIDE),
 ]
 
 # ---------------------------------------------------------------------------
