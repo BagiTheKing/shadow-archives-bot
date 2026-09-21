@@ -145,6 +145,12 @@ jobs:
           LONGFORM_LANE: timely
           TREND_GEOS: ${{ inputs.trend_geos }}
           TREND_EDITIONS: ${{ inputs.trend_editions }}
+          # Checked first, ahead of the trend feeds above — see
+          # channel_watch.py for the safety boundary (only a fixed generic
+          # theme label ever reaches the anchor step, never the channel's
+          # own video text). Blank disables it; the pipeline then behaves
+          # exactly as it did before this existed.
+          WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
           # Nothing after this year may appear in the narration.
           HISTORY_CUTOFF_YEAR: '2005'
         run: python src/longform_main.py
