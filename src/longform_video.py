@@ -37,7 +37,7 @@ import random
 import re
 import subprocess
 
-from caption_track import write_srt
+from caption_track import write_srt, _ends_sentence
 from music_attribution import attribution_for
 
 W, H = 1920, 1080
@@ -221,6 +221,69 @@ def _find_stat_value_time(group, offs, value):
                                    re.sub(r"\D", "", token) == target_digits):
                 return local_start + float(w.get("start", 0.0))
     return None
+
+
+# ---------------------------------------------------------------------------
+# The brand sting — PROTOTYPE, not yet wired into generate_longform_video.
+#
+# The owner's original idea was a teaser + 5s intro before "The Cost". That
+# repeats a mistake this codebase already measured and fixed: the old chapter
+# title card sat over the opening hook for its first few seconds, and 69% of
+# viewers were gone inside 23 (see _opening_hook_ok). Anything in front of
+# the hook is the same mistake at a larger size.
+#
+# This instead places a small, restrained brand identifier ONCE, right after
+# the hook sentence has finished (never before it), as a corner overlay on
+# top of whatever footage and narration are already playing — no scrim, no
+# pause, no added runtime. Same shape as the CTA end card's own reasoning:
+# "spoken CTAs cost retention, so this is a silent overlay" — here applied to
+# brand recognition instead of a subscribe ask.
+# ---------------------------------------------------------------------------
+
+HOOK_STING_TEXT = os.getenv("CHANNEL_NAME", "The Archive Paradox").upper()
+HOOK_STING_HOLD = 2.0
+HOOK_STING_X, HOOK_STING_Y = 60, 60
+HOOK_STING_W, HOOK_STING_H = 560, 76
+
+
+def _find_hook_end_time(group, offs):
+    """Chapter-local second at which the opening chapter's hook sentence —
+    the FIRST sentence of its narration, the same span
+    longform_llm._opening_hook_ok judges — finishes being spoken. Walks the
+    chapter's scenes in word order and stops at the first sentence-ending
+    token (see caption_track._ends_sentence), so it works whether the hook
+    is the whole of scene 0 or only part of it.
+
+    Returns None when no scene has word timings to measure from (should not
+    happen post the Kokoro/gTTS estimated-timing fix, but a caller should
+    never crash for want of a brand sting).
+    """
+    for scene, local_start in zip(group, offs):
+        for w in scene.get("words") or []:
+            if _ends_sentence(w.get("word", "")):
+                return local_start + float(w.get("end", w.get("start", 0.0)))
+    return None
+
+
+def _hook_sting_event(start: float):
+    """A small corner brand chip, once, holding HOOK_STING_HOLD seconds.
+    Returns [chip, text] — the drawn background and the label, same
+    two-layer shape _stat_event uses for its accent rule."""
+    end = start + HOOK_STING_HOLD
+    fade = r"\fad(220,340)"
+    chip = (
+        f"{{\\an7\\pos({HOOK_STING_X},{HOOK_STING_Y})\\1c&H1A1A1A&\\1a&H30&"
+        f"\\bord0\\shad0{fade}\\p1}}"
+        f"m 0 0 l {HOOK_STING_W} 0 l {HOOK_STING_W} {HOOK_STING_H} "
+        f"l 0 {HOOK_STING_H}{{\\p0}}"
+    )
+    chip_line = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Scrim,,0,0,0,,{chip}"
+    text = (
+        f"{{\\an4\\pos({HOOK_STING_X + 26},{HOOK_STING_Y + HOOK_STING_H // 2})"
+        f"{fade}\\q2}}{{\\fs42\\c{ACCENT_ASS}\\bord2}}{HOOK_STING_TEXT}"
+    )
+    text_line = f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Cta,,0,0,0,,{text}"
+    return [chip_line, text_line]
 
 
 def _chapter_title_event(start: float, duration: float, number: int,
