@@ -13,10 +13,14 @@ two-to-three word chunks in caps, tuned to be read at a glance over the picture.
 A transcript wants sentences in ordinary case, which is what a human reads and
 what an indexer parses.
 
-The word timings come free from edge-tts (audio_engine records a WordBoundary
-event for every word), so the cues land on the syllable rather than being
-guessed from character counts. Scenes narrated by the gTTS fallback have no
-timings and fall back to spreading the sentence across the scene's duration.
+Real timings come free from edge-tts and Azure (audio_engine records a
+WordBoundary event for every word). Scenes narrated by Kokoro or the gTTS
+emergency fallback get estimated timings instead — audio_engine's
+_estimate_word_timings weights each word by letter count and adds a pause
+after punctuation, which is not measured alignment but tracks speech rhythm
+far better than spreading the sentence evenly by word count. Either way
+every scene reaches this module with a `words` list; _group_untimed below
+is now only a last-resort for the rare scene that has none at all.
 """
 
 import os

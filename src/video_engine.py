@@ -157,7 +157,10 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
                     f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Word,,0,0,0,,{fx}{text}"
                 )
         else:
-            # fallback (gTTS scene, no timings): show the sentence in halves
+            # last-resort: every engine now returns estimated timings even
+            # without real ones (see audio_engine._estimate_word_timings), so
+            # this only fires if a scene somehow has an empty words list —
+            # show the sentence in halves rather than nothing at all
             dur = scene["duration"]
             sentence = scene.get("narration", "").upper()
             half = len(sentence) // 2

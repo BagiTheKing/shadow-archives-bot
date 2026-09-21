@@ -61,8 +61,15 @@ on one voice for good:
                                             see main.py.
 
 Kokoro has no word-boundary API (it yields graphemes/phonemes/audio per
-chunk, not timestamps) — same gap Gemini TTS had, same accepted trade-off:
-captions degrade to per-scene sync for a video narrated this way.
+chunk, not timestamps) — same gap Gemini TTS had. Unlike Gemini, this is no
+longer a silent gap: _estimate_word_timings() below approximates per-word
+start/end from letter counts and punctuation pauses, so captions still get
+real per-word chunks instead of the old two-halves-of-the-scene fallback.
+It is an estimate, not measured alignment, but it fixed the "captions don't
+track what's being said" complaint that shipped once Kokoro (with its 0
+real word timings) became the primary engine every video actually uses,
+instead of only the occasional edge-tts fallback Gemini's quota wall used
+to force most long-form videos onto anyway.
 
 GEMINI vs AZURE FAILURE HANDLING WERE DELIBERATELY DIFFERENT (Azure has an
 edge-tts voice that matches its character, so falling back scene-by-scene
@@ -90,6 +97,41 @@ _SPEAKABLE = re.compile(r"[^\W_]", re.UNICODE)
 def is_speakable(text: str) -> bool:
     """Whether a TTS engine can make sound out of this."""
     return bool(_SPEAKABLE.search(text or ""))
+
+
+def _estimate_word_timings(text: str, duration: float):
+    """Approximates per-word start/end for an engine that gives no real
+    timing (Kokoro and the gTTS emergency fallback both land here).
+
+    Not true alignment — there is no audio analysis — but weighting each
+    word by its letter count, with an added pause after clause and sentence
+    ends, tracks natural speech rhythm far better than the two fallbacks
+    this replaced: splitting the whole sentence into two blind halves held
+    for the scene's duration (video_engine's old no-timings case), or
+    spreading words evenly regardless of length (equal screen time for "a"
+    and "chrysanthemum"). Good enough for the chunk-level granularity
+    captions actually render at.
+    """
+    words = (text or "").split()
+    if not words or duration <= 0:
+        return []
+
+    def _weight(word):
+        letters = len(re.sub(r"[^\w]", "", word, flags=re.UNICODE))
+        stripped = word.rstrip()
+        pause = (3.0 if stripped.endswith((".", "!", "?"))
+                 else 1.2 if stripped.endswith((",", ";", ":", "—")) else 0.0)
+        return max(letters, 1) + pause
+
+    weights = [_weight(w) for w in words]
+    total = sum(weights)
+
+    out, spent = [], 0.0
+    for word, w in zip(words, weights):
+        start = spent / total * duration
+        spent += w
+        out.append({"word": word, "start": start, "end": spent / total * duration})
+    return out
 
 # Deep, calm British male — fits the dark-documentary tone.
 # Other strong options: en-US-AndrewMultilingualNeural (warm US male),
@@ -170,9 +212,13 @@ def _synthesize_kokoro(text: str, output_path: str, voice: str = None,
                        rate: str = None):
     """Kokoro-82M, running locally inside this job via ONNX Runtime.
 
-    Always returns an empty word list — Kokoro has no word-boundary API.
-    See the module docstring for why that is an accepted trade-off, not a
-    bug (Gemini TTS had the exact same gap).
+    Kokoro has no word-boundary API (it yields audio per chunk, not
+    timestamps), so the word list returned here is estimated by
+    _estimate_word_timings rather than measured — see that function's
+    docstring. The estimate is built from the raw sample count before the
+    ffmpeg re-encode below, i.e. the same untrimmed-audio timeline real
+    engines report into, so it composes correctly with the caller's later
+    silence-trim shift.
 
     Output is re-encoded to real mp3 rather than left as WAV-under-a-.mp3-
     extension, so every engine's output is identical in format, not just in
@@ -183,6 +229,7 @@ def _synthesize_kokoro(text: str, output_path: str, voice: str = None,
     voice = voice or KOKORO_VOICE
     samples, sample_rate = _kokoro_instance_get().create(
         text, voice=voice, speed=_kokoro_speed(rate), lang=_kokoro_lang(voice))
+    duration = len(samples) / float(sample_rate)
 
     tmp_wav = output_path + ".kokoro.wav"
     sf.write(tmp_wav, samples, sample_rate)
@@ -195,7 +242,7 @@ def _synthesize_kokoro(text: str, output_path: str, voice: str = None,
         if os.path.exists(tmp_wav):
             os.remove(tmp_wav)
 
-    return []
+    return _estimate_word_timings(text, duration)
 
 
 # ---------------------------------------------------------------------------
@@ -357,11 +404,12 @@ async def _synthesize_edge(text: str, output_path: str, rate: str = None,
 
 def _synthesize_fallback(text: str, output_path: str):
     """Emergency fallback if Microsoft's endpoint is unreachable. Robotic, but the
-    pipeline survives. No word timings — captions degrade to per-scene mode."""
+    pipeline survives. gTTS gives no word-boundary API either, so the word
+    list is estimated the same way Kokoro's is — see _estimate_word_timings."""
     from gtts import gTTS
 
     gTTS(text=text, lang="en", tld="co.uk").save(output_path)
-    return []
+    return _estimate_word_timings(text, get_audio_duration(output_path))
 
 
 def get_audio_duration(file_path: str) -> float:
