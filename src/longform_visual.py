@@ -17,7 +17,12 @@ painting. Three changes fix that:
    trimmed to a short, fixed length regardless of the source item's own
    length. Optional muted Pexels b-roll fills whatever is still missing when
    a PEXELS_API_KEY is configured. Pollinations remains the fallback, not the
-   default.
+   default. A recurring subject (the story's central figure) is capped at
+   MAX_REAL_PHOTOS_PER_SUBJECT real appearances, steered toward a different
+   real moment on each repeat — a real Trending run showed the same "official
+   1993 portrait" style four times for one person across the video, which
+   read as the picture looping even though the files were technically
+   distinct; past the cap, later scenes fall through to generation instead.
 
 2. NO SHOT OUTLIVES ITS WELCOME. A scene longer than MAX_SHOT_SECONDS gets
    extra images (a second Commons result, or a re-seeded generation), and the
@@ -123,6 +128,34 @@ def _widen_query(query: str):
     return widened if widened.lower() != query.strip().lower() else None
 
 
+# A recurring central figure legitimately needs to appear more than once —
+# but the real Kim Jong Il test video asked for the literal, unchanged query
+# "Kim Jong Il 1993" at four widely-spaced scenes, and Commons/LoC search
+# keeps returning candidates from the same narrow "official 1993 portrait"
+# style for an identical query, so the video read as looping the same photo
+# even though used_urls (below) guaranteed four technically distinct files.
+# used_urls stops the exact same FILE repeating; nothing stopped the same
+# SUBJECT reappearing from the same stylistic pool, which is what a viewer
+# actually notices.
+MAX_REAL_PHOTOS_PER_SUBJECT = 3
+
+# On a repeat appearance, tried before the bare query — steering the search
+# toward a different real moment of the same subject (a meeting, a ceremony)
+# instead of the closest match to whatever the first appearance's exact
+# phrasing already pulled. Rotated by how many times this subject has
+# already appeared, so a fifth+ appearance (already capped by
+# MAX_REAL_PHOTOS_PER_SUBJECT and routed to generation) never needs one.
+_SUBJECT_QUALIFIERS = ["meeting", "ceremony", "military", "delegation", "podium"]
+
+
+def _subject_key(query: str) -> str:
+    """Normalises an archive_query to the recurring subject it names, so
+    "Kim Jong Il 1993" and a later scene's identical or near-identical query
+    for the same person are recognised as the same subject regardless of
+    which year happens to be attached."""
+    return _YEAR_RE.sub("", query).strip().lower()
+
+
 def _era_appropriate(candidate: dict, era_year) -> bool:
     """Whether a Commons candidate can appear in a story set in era_year."""
     if not era_year or era_year >= PHOTOGRAPHY_YEAR:
@@ -209,6 +242,11 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     # photograph for two scenes and the same stock clip four times, which is
     # what "repetitive" looked like on screen.
     used_urls, used_broll_queries = set(), set()
+    # How many times each recurring subject (the story's central figure,
+    # typically) has already supplied a real photo — see
+    # MAX_REAL_PHOTOS_PER_SUBJECT above for why used_urls alone (distinct
+    # FILES) was not enough to stop a video reading as the same photo looping.
+    subject_counts = {}
     # Every real frame obtained so far. When generation fails, a re-framed
     # archival image stands in — infinitely better than the black screen the
     # designed fallback produces.
@@ -224,11 +262,33 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
         # period paintings, engravings and maps — filtered so a modern photo
         # of the place can never stand in for its fifteenth-century self.
         query = (scene.get("archive_query") or "").strip()
+        subject_repeat = subject_counts.get(_subject_key(query), 0) if query else 0
+        if query and subject_repeat >= MAX_REAL_PHOTOS_PER_SUBJECT:
+            print(f"🔁 Scene {idx}: {query!r} already supplied "
+                  f"{subject_repeat} real photos this video — skipping to "
+                  f"keep the recurring subject from looping, trying other "
+                  f"sources instead.")
+            query = ""
         if query:
             def _search(q):
                 return [c for c in search_archives(q)
                         if _era_appropriate(c, era) and c.get("url") not in used_urls]
-            candidates = _search(query)
+            candidates = []
+            # A repeat appearance of the same subject is steered toward a
+            # different real moment first (a meeting, a ceremony) rather than
+            # straight to the bare query, which tends to re-rank the same
+            # narrow "default portrait" pool the first appearance already drew
+            # from — technically distinct files, but visually near-identical.
+            if subject_repeat > 0:
+                qualifier = _SUBJECT_QUALIFIERS[
+                    (subject_repeat - 1) % len(_SUBJECT_QUALIFIERS)]
+                candidates = _search(f"{query} {qualifier}")
+                if candidates:
+                    print(f"🔀 Scene {idx}: subject's {subject_repeat + 1}. "
+                          f"appearance — steered to {qualifier!r} for a "
+                          f"different real photo of the same subject.")
+            if not candidates:
+                candidates = _search(query)
             if (not candidates and era and era < PHOTOGRAPHY_YEAR
                     and not any(a in query.lower() for a in ART_WORDS)):
                 candidates = [c for c in search_commons(f"{query} painting")
@@ -254,6 +314,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
                 archival_used += len(images)
                 scene["is_real"] = True
                 real_pool.extend(images)
+                subject_counts[_subject_key(query)] = subject_repeat + 1
                 print(f"📜 Scene {idx}: {len(images)} archival image(s) "
                       f"for {query!r}")
 
