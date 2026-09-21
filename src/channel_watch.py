@@ -54,22 +54,76 @@ WATCH_LOOKBACK_HOURS = int(os.getenv("WATCH_LOOKBACK_HOURS", "24"))
 WATCH_MAX_VIDEOS = int(os.getenv("WATCH_MAX_VIDEOS", "10"))
 
 # Generic, pre-written theme labels only — see the safety boundary above.
-# Keyed by keywords that must appear in the video's title+description;
-# each label names a real, settled historical angle THE FAULT LINE can
-# actually tell (see topics.py's _FAULTLINE and select_historical_anchor's
-# worked examples), never the live show's own framing of the argument.
+# Keyed by keywords that must appear in the video's title+description; each
+# label names a real, settled historical angle THE FAULT LINE can actually
+# tell (see topics.py's _FAULTLINE and select_historical_anchor's worked
+# examples), never the live show's own framing of the argument.
+#
+# An earlier draft of this list had six entries and gave religion exactly
+# one bucket, Islam — too narrow to be useful, and a real editorial bias in
+# its own right on a channel that has no reason to single out one faith.
+# This version does two things about that: every major religion gets the
+# same treatment, and US domestic politics — where a talk show like this
+# actually spends most of its runtime, not on foreign policy — gets proper
+# coverage instead of one immigration bucket.
 THEMES = [
+    # Religion and politics — no religion gets a bucket the others don't.
     (("muslim", "islam", "islamic", "sharia", "mosque", "hijab", "trojan horse",
       "caliphate"), "Islam and Western politics"),
+    (("evangelical", "christian nationalis", "megachurch", "christian right",
+      "bible belt"), "Christianity and American politics"),
+    (("antisemit", "synagogue", "jewish community", "zionis"),
+     "Judaism, antisemitism and politics"),
+    (("hindu nationalis", "hindutva"), "religious nationalism in South Asia"),
+    (("separation of church and state", "establishment clause",
+      "religious freedom law", "religious liberty"),
+     "religion and the American constitution"),
+
+    # US domestic politics — the actual gap in the old list.
+    (("election fraud", "voter id", "swing state", "electoral college",
+      "gerrymander", "midterm election"), "US elections and voting rights"),
+    (("abortion", "roe v wade", "roe vs wade", "pro-life", "pro-choice",
+      "reproductive rights"), "abortion policy in America"),
+    (("gun control", "second amendment", "mass shooting", "assault weapon",
+      "gun violence"), "gun policy in America"),
+    (("immigra", "migrant", "asylum", "border crossing", "deportation",
+      "border wall", "sanctuary city"), "US immigration policy"),
+    (("free speech", "censorship", "cancel culture", "first amendment",
+      "content moderation", "deplatform"),
+     "free speech and censorship in America"),
+    (("police reform", "defund the police", "mass incarceration",
+      "criminal justice reform", "police brutality"),
+     "policing and criminal justice in America"),
+    (("supreme court", "scotus", "constitutional amendment",
+      "judicial nominee"), "the US Supreme Court and constitutional law"),
+    (("obamacare", "affordable care act", "medicare", "medicaid",
+      "healthcare reform", "drug prices"), "US healthcare policy"),
+    (("government shutdown", "debt ceiling", "national debt",
+      "federal budget"), "the US national debt and government shutdowns"),
+    (("lgbtq", "gay marriage", "same-sex marriage", "transgender rights",
+      "gender-affirming care"), "LGBTQ+ rights in American politics"),
+    (("opioid crisis", "fentanyl", "drug decriminalization",
+      "war on drugs"), "drug policy and the opioid crisis"),
+    (("capitol riot", "election certification", "peaceful transfer of power",
+      "insurrection"), "the peaceful transfer of power in America"),
+    (("impeachment", "articles of impeachment"),
+     "presidential impeachment in America"),
+
+    # Foreign policy.
     (("israel", "gaza", "palestin", "hamas", "west bank", "idf", "hezbollah"),
      "the Israel-Palestine conflict"),
     (("ukrain", "russia", "putin", "zelensky", "kremlin", "crimea"),
      "the Russia-Ukraine war"),
     (("iran", "tehran", "ayatollah", "irgc", "nuclear deal"),
      "Iran and the West"),
-    (("immigra", "migrant", "asylum", "border crossing", "deportation"),
-     "immigration policy"),
+    (("north korea", "pyongyang", "kim jong"), "North Korea and the West"),
+    (("kashmir", "india-pakistan", "line of control"),
+     "India, Pakistan and Kashmir"),
     (("nato", "taiwan", "south china sea"), "great-power rivalry"),
+
+    # Economy.
+    (("inflation", "interest rates", "federal reserve", "recession",
+      "tariff", "trade war"), "inflation and economic policy"),
 ]
 
 
