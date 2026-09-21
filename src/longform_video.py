@@ -136,6 +136,60 @@ def _style_chunk(text: str) -> str:
     return f"{fx}{body}"
 
 
+# On-screen image-source credit, bottom-left, light grey — the same credit
+# text that already goes into the description's "Archival imagery and
+# footage" block (build_credit_block in longform_main.py), now also burned
+# into the frame it names. Small and corner-anchored on purpose: this is a
+# citation, not a graphic moment, so it gets none of the stat callout's
+# fanfare — just an outline for legibility over an unpredictable photo, the
+# same treatment the narration captions already use.
+CREDIT_FONT_SIZE = 30
+CREDIT_MARGIN_X, CREDIT_MARGIN_Y = 24, 22
+CREDIT_MAX_CHARS = 70
+CREDIT_MIN_SECONDS = 0.4  # shorter than this and it would only flash
+
+
+def _shorten_credit(text: str) -> str:
+    text = text.strip()
+    return text if len(text) <= CREDIT_MAX_CHARS else text[:CREDIT_MAX_CHARS - 1].rstrip() + "…"
+
+
+def _credit_events(scene: dict, offset: float):
+    """One event per real photo/footage credit this scene actually has,
+    timed to roughly track which shot is on screen. A scene with two real
+    photos and one generated fill-in (longform_visual fills gaps with AI
+    when a query comes up short) only gets two credit events, aligned to
+    the two real shots — the generated one gets none, because there is
+    nothing to credit.
+
+    credits[i] corresponds to image_paths[i] by construction (see
+    longform_visual.generate_longform_visuals: real images and their
+    credits are appended together, generated fill-ins after and uncredited),
+    so no separate mapping is needed beyond that shared index.
+    """
+    credits = scene.get("credit") or []
+    if not credits:
+        return []
+    images = scene.get("image_paths") or [scene.get("image_path")]
+    n = max(1, len(images))
+    duration = float(scene.get("duration") or 0.0)
+    starts = _shot_starts(duration, n)
+
+    events = []
+    for i, credit in enumerate(credits):
+        if i >= len(starts):
+            break
+        start = offset + max(0.0, starts[i])
+        end = offset + (starts[i + 1] if i + 1 < len(starts) else duration)
+        if end - start < CREDIT_MIN_SECONDS:
+            continue
+        text = _shorten_credit(credit).replace("{", "").replace("}", "")
+        fx = (f"{{\\an1\\pos({CREDIT_MARGIN_X},{H - CREDIT_MARGIN_Y})\\fad(200,200)"
+              f"\\fs{CREDIT_FONT_SIZE}\\c&HD8D8D8&\\bord2\\shad1}}")
+        events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,{fx}{text}")
+    return events
+
+
 _PART_WORDS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT"]
 
 
@@ -326,6 +380,8 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
+        events.extend(_credit_events(scene, offset))
+
     # Number callouts, top of frame. _stat_event returns [rule, text] — two
     # events, since the accent rule and the value/label are separate layers.
     for start, value, label in (stat_cues or []):
@@ -434,6 +490,21 @@ def _shot_durations(duration: float, n: int, overlap: float = INNER_XFADE):
     return [each] * n
 
 
+def _shot_starts(duration: float, n: int, overlap: float = INNER_XFADE):
+    """Local start second of each of n shots inside one scene — the same
+    cumulative crossfade math _scene_clip uses to place its xfade offsets,
+    exposed here for anything else (like _credit_events) that needs to know
+    which shot is actually on screen at a given moment."""
+    if n <= 1:
+        return [0.0]
+    durs = _shot_durations(duration, n, overlap)
+    starts, t = [0.0], 0.0
+    for i in range(1, n):
+        t += durs[i - 1] - overlap
+        starts.append(t)
+    return starts
+
+
 # ---------------------------------------------------------------------------
 # Why every clip runs XFADE longer than its narration
 #
@@ -495,9 +566,9 @@ def _scene_clip(scene, out, style):
 
     fc = [f"[{i}:v]{_ken_burns(d, style + i * 3)}[z{i}]"
           for i, d in enumerate(durs)]
-    prev, t = "[z0]", 0.0
+    starts = _shot_starts(clip_len, len(images))
+    prev = "[z0]"
     for i in range(1, len(images)):
-        t += durs[i - 1] - INNER_XFADE
         vout = f"[m{i}]" if i < len(images) - 1 else "[vout]"
         # Same curated pool the between-scene cuts already rotate through
         # (see TRANSITIONS) rather than a flat "fade" every time — these
@@ -506,7 +577,7 @@ def _scene_clip(scene, out, style):
         # read as a slideshow rather than an edit.
         trans = TRANSITIONS[(style + i) % len(TRANSITIONS)]
         fc.append(f"{prev}[z{i}]xfade=transition={trans}:duration={INNER_XFADE}"
-                  f":offset={t:.3f}{vout}")
+                  f":offset={starts[i]:.3f}{vout}")
         prev = vout
     _run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),
           "-map", "[vout]", "-map", f"{len(images)}:a", *tail])
