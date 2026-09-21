@@ -290,8 +290,35 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
           f"{len(chapter_titles or [])} chapter titles)")
 
 
+# A real Trending run's owner called the motion too "classic" — textbook
+# Ken Burns is dead smooth by design, which is exactly what reads as inert
+# next to the genre's own successful channels (Fascinating Horror, Plainly
+# Difficult), whose archival footage is never perfectly stable. This is a
+# small, continuous handheld-style drift layered onto every path below, not
+# a shake-cam effect: JITTER_AMOUNT is a fraction of the frame, and at the
+# zoom levels here (1.0-1.20) there is 12-20% of headroom between the crop
+# window and the source edge, so this jitter — under 1% — never risks
+# pushing the window past it even at a pan's extreme; clip() in _jitter
+# guards that regardless.
+JITTER_AMOUNT = 0.006
+
+
+def _jitter(expr: str, axis_max: str, style: int, axis: str) -> str:
+    """Wraps a base zoompan x/y path expression with a small sinusoidal
+    drift, clamped back into the valid crop range. Period lengths (in
+    frames) are derived from `style` and differ between x and y so the
+    drift traces a loose, organic path rather than a perfect circle, and
+    differ scene to scene so neighbouring clips don't shake in lockstep."""
+    period = (55 if axis == "x" else 71) + (style * (17 if axis == "x" else 23)) % 40
+    phase = 0 if axis == "x" else 1.3
+    dim = "iw" if axis == "x" else "ih"
+    jitter = f"{dim}*{JITTER_AMOUNT}*sin(2*PI*on/{period}+{phase})"
+    return f"clip({expr}+{jitter},0,{axis_max})"
+
+
 def _ken_burns(duration: float, style: int) -> str:
-    """Eight motions instead of four, including diagonals and vertical drifts.
+    """Eight motions instead of four, including diagonals and vertical
+    drifts, each with a small handheld drift layered on top (see _jitter).
     No scale= prefix: longform_visual already saved the frame upscaled."""
     frames = max(int(duration * FPS), 1)
     common = f"d={frames}:s={W}x{H}:fps={FPS}"
@@ -300,27 +327,26 @@ def _ken_burns(duration: float, style: int) -> str:
     # Horizontal / vertical travel expressions for a held zoom.
     right, left = f"(iw-iw/zoom)*on/{frames}", f"(iw-iw/zoom)*(1-on/{frames})"
     down, up = f"(ih-ih/zoom)*on/{frames}", f"(ih-ih/zoom)*(1-on/{frames})"
+    x_max, y_max = "iw-iw/zoom", "ih-ih/zoom"
 
-    style %= 8
+    raw_style, style = style, style % 8
+    xy = {0: (cx, cy), 1: (cx, cy), 2: (right, cy), 3: (left, cy),
+          4: (cx, down), 5: (cx, up), 6: (right, down), 7: (left, up)}
+    x_expr, y_expr = xy[style]
+    x = _jitter(x_expr, x_max, raw_style, "x")
+    y = _jitter(y_expr, y_max, raw_style, "y")
+
     if style == 0:   # slow push in
-        return f"zoompan=z='min(zoom+{rate:.6f},1.18)':x='{cx}':y='{cy}':{common}"
-    if style == 1:   # pull out
-        return (f"zoompan=z='if(eq(on,1),1.18,max(zoom-{rate:.6f},1.0))'"
-                f":x='{cx}':y='{cy}':{common}")
-    if style == 2:   # pan right
-        return f"zoompan=z='1.12':x='{right}':y='{cy}':{common}"
-    if style == 3:   # pan left
-        return f"zoompan=z='1.12':x='{left}':y='{cy}':{common}"
-    if style == 4:   # drift down
-        return f"zoompan=z='1.12':x='{cx}':y='{down}':{common}"
-    if style == 5:   # drift up
-        return f"zoompan=z='1.12':x='{cx}':y='{up}':{common}"
-    if style == 6:   # diagonal, top-left to bottom-right, pushing in
-        return (f"zoompan=z='min(zoom+{rate:.6f},1.20)'"
-                f":x='{right}':y='{down}':{common}")
-    # diagonal, bottom-right to top-left, pulling out
-    return (f"zoompan=z='if(eq(on,1),1.20,max(zoom-{rate:.6f},1.0))'"
-            f":x='{left}':y='{up}':{common}")
+        z = f"min(zoom+{rate:.6f},1.18)"
+    elif style == 1:  # pull out
+        z = f"if(eq(on,1),1.18,max(zoom-{rate:.6f},1.0))"
+    elif style in (2, 3, 4, 5):  # pan/drift with a slight held zoom
+        z = "1.12"
+    elif style == 6:  # diagonal, top-left to bottom-right, pushing in
+        z = f"min(zoom+{rate:.6f},1.20)"
+    else:             # diagonal, bottom-right to top-left, pulling out
+        z = f"if(eq(on,1),1.20,max(zoom-{rate:.6f},1.0))"
+    return f"zoompan=z='{z}':x='{x}':y='{y}':{common}"
 
 
 def _run(cmd):
@@ -407,7 +433,13 @@ def _scene_clip(scene, out, style):
     for i in range(1, len(images)):
         t += durs[i - 1] - INNER_XFADE
         vout = f"[m{i}]" if i < len(images) - 1 else "[vout]"
-        fc.append(f"{prev}[z{i}]xfade=transition=fade:duration={INNER_XFADE}"
+        # Same curated pool the between-scene cuts already rotate through
+        # (see TRANSITIONS) rather than a flat "fade" every time — these
+        # inner cuts happen mid-sentence inside one long scene, so a plain
+        # dissolve every single time was the other place the video still
+        # read as a slideshow rather than an edit.
+        trans = TRANSITIONS[(style + i) % len(TRANSITIONS)]
+        fc.append(f"{prev}[z{i}]xfade=transition={trans}:duration={INNER_XFADE}"
                   f":offset={t:.3f}{vout}")
         prev = vout
     _run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),
