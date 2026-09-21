@@ -97,6 +97,31 @@ _MODERN_TITLE_RE = re.compile(r"\b(19|20)\d{2}\b")
 _MODERN_TITLE_WORDS = ("aerial", "panorama", "skyline", "beach", "street",
                        "marina", "airport", "stadium", "modern", "night view")
 
+# Archives are captioned with subjects, not actions: a Commons/LoC file about
+# Kim Jong Il is titled with his name, never with "Kim Jong Il signing the
+# withdrawal decree" verbatim. A specific, action-bearing archive_query for a
+# segment about a person's own decision (the writer's prompt allows this even
+# though it favours bare-subject shapes) can return nothing while the exact
+# same story's other, plainer "<person> <year>" queries return real photos
+# several times over — this widens the failed query back down to its bare
+# subject (a run of Title Case words, closest to a proper noun) plus any year
+# mentioned, before giving up and routing the scene to AI generation.
+_YEAR_RE = re.compile(r"\b(1[5-9]\d{2}|20\d{2})\b")
+_PROPER_NOUN_RUN_RE = re.compile(r"\b[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){0,4}\b")
+
+
+def _widen_query(query: str):
+    """The bare-subject fallback for a specific archive_query that found
+    nothing, or None when the query has no proper-noun core to fall back to
+    (or widening would just repeat the same search)."""
+    names = _PROPER_NOUN_RUN_RE.findall(query)
+    if not names:
+        return None
+    core = max(names, key=len)
+    year = _YEAR_RE.search(query)
+    widened = f"{core} {year.group(0)}" if year else core
+    return widened if widened.lower() != query.strip().lower() else None
+
 
 def _era_appropriate(candidate: dict, era_year) -> bool:
     """Whether a Commons candidate can appear in a story set in era_year."""
@@ -200,14 +225,22 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
         # of the place can never stand in for its fifteenth-century self.
         query = (scene.get("archive_query") or "").strip()
         if query:
-            candidates = [c for c in search_archives(query)
-                          if _era_appropriate(c, era)
-                          and c.get("url") not in used_urls]
+            def _search(q):
+                return [c for c in search_archives(q)
+                        if _era_appropriate(c, era) and c.get("url") not in used_urls]
+            candidates = _search(query)
             if (not candidates and era and era < PHOTOGRAPHY_YEAR
                     and not any(a in query.lower() for a in ART_WORDS)):
                 candidates = [c for c in search_commons(f"{query} painting")
                               if _era_appropriate(c, era)
                               and c.get("url") not in used_urls]
+            if not candidates:
+                widened = _widen_query(query)
+                if widened:
+                    candidates = _search(widened)
+                    if candidates:
+                        print(f"🔎 Scene {idx}: {query!r} found nothing — "
+                              f"widened to {widened!r}")
             for cand in candidates:
                 if len(images) >= wanted:
                     break
