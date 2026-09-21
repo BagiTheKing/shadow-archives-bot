@@ -139,22 +139,63 @@ def _style_chunk(text: str) -> str:
 _PART_WORDS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT"]
 
 
-def _stat_event(start: float, value: str, label: str) -> str:
-    """The number callout as a SINGLE event: value, forced line break, label.
+# Where the accent rule sits beneath the stat block, and how wide it draws
+# in. Hand-placed against the Stat style's own metrics (170pt value line +
+# 46pt label line starting at MarginV=120) and confirmed against a real
+# rendered frame — see the comment on _stat_event.
+STAT_RULE_Y = 405
+STAT_RULE_WIDTH = 460
 
-    It used to be two independent events with fixed vertical margins, and a
-    value long enough to wrap dropped its second line straight onto the label
-    (the '1,300 / U1' collision). One event with \\N makes the layout engine
-    stack them, whatever their sizes; \\q2 stops the value wrapping at all.
+
+def _stat_event(start: float, value: str, label: str):
+    """The number callout: value + forced line break + label, as a SINGLE
+    event so long values can never wrap onto the label (see \\q2 below), plus
+    a second event for the accent rule beneath it. Returns [rule, text] —
+    two Dialogue lines, since ASS has no way to layer two effects in one.
+
+    The old animation was a flat fade-and-grow, which the owner called out
+    on a real render as too plain for what should be the video's biggest
+    graphic beat. This is a fast "detail snapping into focus" reveal
+    instead: the value starts small, blurred and transparent, sharpens and
+    punches past full size, then settles back — under 300ms total, so it
+    reads as impact rather than a wobble, and still holds clearly for the
+    remaining ~3.2s of STAT_HOLD. \\be (edge blur) and a couple of degrees
+    of \\frz rotation do the "coming into focus" and "landing" work; there
+    is no colour flash or spin, which would read as a lower-tier social
+    template rather than this channel's restrained, forensic look.
+
+    The rule draws in from its left edge over the same window (reusing the
+    \\p1 vector-rectangle technique _pivot_events already uses for its own
+    accent rule), so the video's two "big graphic moment" beats — the
+    pivot card and this — share one visual language instead of two.
     """
     end = start + STAT_HOLD
-    grow = (r"{\an8\q2\fad(200,260)\fscx60\fscy60\t(0,220,\fscx100\fscy100)}")
+    # Two non-overlapping \t() stages per tag — libass's handling of two
+    # \t() blocks racing the SAME tag over overlapping windows is undefined,
+    # which an earlier draft of this did with \be (blur cleared by both a
+    # 0-90ms and a 0-180ms block at once). Stage 1 (0-180ms) resolves alpha,
+    # blur and the overshoot scale/rotation together; stage 2 (180-260ms)
+    # settles scale and rotation back to rest.
+    punch = (
+        r"{\an8\q2\alpha&HFF&\be8\fscx55\fscy55\frz-3"
+        r"\t(0,180,\alpha&H00&\fscx116\fscy116\frz2\be0)"
+        r"\t(180,260,\fscx100\fscy100\frz0)}"
+    )
     body = value.replace("{", "").replace("}", "")
-    text = f"{grow}{body}"
+    text = f"{punch}{body}"
     if label:
         clean = label.replace("{", "").replace("}", "").upper()
         text += r"\N{\fs46\c&HE8E8E8&\bord3}" + clean
-    return f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{text}"
+    stat_line = f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{text}"
+
+    rule_x = W // 2 - STAT_RULE_WIDTH // 2
+    rule = (
+        f"{{\\an4\\pos({rule_x},{STAT_RULE_Y})\\1c{ACCENT_ASS}\\1a&H30&"
+        f"\\bord0\\shad0\\fscx0\\fad(0,300)\\t(60,260,\\fscx100)\\p1}}"
+        f"m 0 0 l {STAT_RULE_WIDTH} 0 l {STAT_RULE_WIDTH} 5 l 0 5{{\\p0}}"
+    )
+    rule_line = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Scrim,,0,0,0,,{rule}"
+    return [rule_line, stat_line]
 
 
 def _find_stat_value_time(group, offs, value):
@@ -285,10 +326,10 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
-    # Number callouts, top of frame, one event each so value and label can
-    # never overlap.
+    # Number callouts, top of frame. _stat_event returns [rule, text] — two
+    # events, since the accent rule and the value/label are separate layers.
     for start, value, label in (stat_cues or []):
-        events.append(_stat_event(start, str(value), str(label or "")))
+        events.extend(_stat_event(start, str(value), str(label or "")))
 
     for cue in (chapter_titles or []):
         # (start, duration, number, heading[, is_pivot])
