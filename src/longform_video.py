@@ -157,6 +157,31 @@ def _stat_event(start: float, value: str, label: str) -> str:
     return f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{text}"
 
 
+def _find_stat_value_time(group, offs, value):
+    """Chapter-local second at which this chapter's key_stat value is
+    actually spoken, found from the scene word timings (real or estimated —
+    see audio_engine.py's _estimate_word_timings) rather than guessed from
+    chapter position. The old placement ("1s after the first scene, or 35%
+    into the chapter") had no relation to the narration at all — the owner's
+    complaint on a real render was exactly this: a number appearing on
+    screen with no sync to when it was actually said.
+
+    Returns None when no scene's words literally contain the value (the
+    script phrased it differently, e.g. narrating "thirteen thousand" for a
+    key_stat of "13,000"), so the caller can fall back to the old
+    percentage-of-chapter placement rather than show nothing at all.
+    """
+    target = str(value).strip()
+    target_digits = re.sub(r"\D", "", target)
+    for scene, local_start in zip(group, offs):
+        for w in scene.get("words") or []:
+            token = (w.get("word") or "").strip().strip("\"'.,!?;:—")
+            if token == target or (target_digits and
+                                   re.sub(r"\D", "", token) == target_digits):
+                return local_start + float(w.get("start", 0.0))
+    return None
+
+
 def _chapter_title_event(start: float, duration: float, number: int,
                          heading: str) -> str:
     """Documentary-style chapter title over the footage: small accent kicker,
@@ -841,10 +866,18 @@ def generate_longform_video(scenes, build_dir="build"):
             global_offsets.append(cursor + o)
 
         # A chapter's headline number, held over whatever frame is on screen.
-        # Scheduled after the first scene so it never lands on top of the
-        # chapter title that opens the chapter.
+        # Synced to the moment it is actually spoken when the narration
+        # contains it in numeral form; otherwise falls back to the old
+        # position guess (after the first scene, so it never lands on top of
+        # the chapter title that opens the chapter) rather than showing
+        # nothing.
         stat = group[0].get("key_stat") or {}
-        stat_start = cursor + max(group[0]["duration"] + 1.0, total * 0.35)
+        spoken_at = (_find_stat_value_time(group, offs, stat["value"])
+                    if stat.get("value") else None)
+        if spoken_at is not None:
+            stat_start = cursor + spoken_at
+        else:
+            stat_start = cursor + max(group[0]["duration"] + 1.0, total * 0.35)
         if (stat.get("value") and total > STAT_HOLD + 4
                 and stat_start + STAT_HOLD < cursor + total - 1.5):
             stat_cues.append((stat_start, str(stat["value"]),
