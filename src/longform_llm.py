@@ -765,23 +765,24 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
         f"Each segment should be roughly {max(20, words // n_images)} words — do not "
         f"write one-line segments.\n\n"
         f"{_archive_query_rule(era_year)}\n\n"
-        "Also give this chapter's single most striking figure as key_stat — a bare "
-        "number or short quantity and a four-word label, taken from THIS story. "
-        "If the chapter has no meaningful figure, set key_stat to null rather "
-        "than inventing one.\n\n"
+        "In exactly ONE segment's narration, mark the single punchiest short "
+        f"phrase — {MIN_PUNCH_WORDS} to {MAX_PUNCH_WORDS} words, verbatim, exactly as "
+        "you wrote them — by wrapping it in double square brackets. It will flash "
+        "on screen as a bold callout timed to the instant you say it, so pick "
+        "whatever would hit hardest that way: a number, a name, a stark "
+        "consequence — never a full clause or a restatement of the sentence "
+        "around it. The brackets are removed before the narration is spoken, so "
+        "the sentence must read completely naturally without them.\n"
+        "Example: \"...and the order [[killed six hundred men]] before dawn.\"\n"
+        "If nothing in this chapter is punchy enough for a callout, mark "
+        "nothing — never force one.\n\n"
         "Every sentence must carry information the viewer did not have a "
         "sentence ago. Never pad by restating an earlier line in new words.\n\n"
         f"{_handoff_rule(next_heading)}"
-        # The placeholders below are deliberately not plausible facts. This
-        # example once read {"value": "1,415", "label": "men lost with Hood"},
-        # and a model copied 1,415 into a video about a different battle
-        # entirely, as its casualty figure. An example that looks like an
-        # answer will be used as one.
         "Output ONLY a JSON object, no markdown fences. Replace every "
         "placeholder below with material from this story:\n"
-        '{"key_stat": {"value": "<figure from this story>", '
-        '"label": "<four word label>"}, '
-        '"segments": [{"narration": "<narration>", '
+        '{"segments": [{"narration": "<narration, with at most one '
+        '[[punch phrase]] marked inline>", '
         '"image_prompt": "<shot type, subject, setting>", '
         '"archive_query": "<real subject to search for, or null>"}]}'
     )
@@ -839,81 +840,44 @@ def _entities(text: str):
     return [w for w in words if w not in skip]
 
 
-_STAT_ONES_WORDS = ["zero", "one", "two", "three", "four", "five", "six",
-                   "seven", "eight", "nine", "ten", "eleven", "twelve",
-                   "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
-                   "eighteen", "nineteen"]
-_STAT_TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty",
-                   "seventy", "eighty", "ninety"]
+# The old key_stat design asked the model for a separate "value + label"
+# JSON field and then had to search the narration afterward to find out
+# whether it was ever actually said — which it wasn't, once, on a real
+# render ("83" as key_stat, "eighty competing nationalities" as what the
+# narration actually said — a true, related, but different figure). No
+# search can fix a fact that was never spoken. This replaces it: the model
+# marks a short phrase INLINE, inside the narration it is already writing,
+# so the callout is a verbatim quote of the same words the audio will say —
+# grounded by construction, not validated after the fact.
+MIN_PUNCH_WORDS = 2
+MAX_PUNCH_WORDS = 6
+
+_PUNCH_RE = re.compile(r"\[\[(.+?)\]\]")
 
 
-def _stat_spelled_out_forms(n: int):
-    """Every plausible spelled-out English phrasing for n, for n < 1000 —
-    mirrors longform_video.py's _spelled_out_forms (same reasoning: large
-    figures stay as digits in this channel's narration, small counts get
-    spelled out in flowing prose). Duplicated rather than imported: this
-    module generates the script, longform_video.py renders it, and a script
-    module reaching into the renderer for a plain number-to-words helper is
-    the wrong direction for that dependency.
+def _extract_punch_phrase(segs):
+    """Finds the model's marked punch phrase across a chapter's segments and
+    strips the [[ ]] markers from every segment's narration so they are
+    never spoken or captioned — this must run even when nothing is used as
+    the callout, or a model that ignores "exactly ONE" leaks literal
+    brackets into the published narration.
+
+    Returns (phrase, segment_index) for the first marked phrase that is
+    within MIN_PUNCH_WORDS..MAX_PUNCH_WORDS words, or (None, None) if the
+    model marked nothing usable.
     """
-    if not (0 <= n < 1000):
-        return []
-    if n < 20:
-        return [[_STAT_ONES_WORDS[n]]]
-    if n < 100:
-        tens, ones = divmod(n, 10)
-        if ones == 0:
-            return [[_STAT_TENS_WORDS[tens]]]
-        return [[_STAT_TENS_WORDS[tens], _STAT_ONES_WORDS[ones]],
-                [f"{_STAT_TENS_WORDS[tens]}-{_STAT_ONES_WORDS[ones]}"]]
-    hundreds, rest = divmod(n, 100)
-    prefix = [_STAT_ONES_WORDS[hundreds], "hundred"]
-    if rest == 0:
-        return [prefix]
-    return [prefix + ["and"] + t for t in _stat_spelled_out_forms(rest)] + \
-           [prefix + t for t in _stat_spelled_out_forms(rest)]
-
-
-def _stat_value_in_text(value, text: str) -> bool:
-    """Whether a key_stat's value is actually stated in this chapter's own
-    narration — numeral form (exact or comma/digit-normalised, e.g. "13,000"
-    matches "13000") or spelled-out English form (e.g. "83" matches
-    "eighty-three" text). Real evidence (a "83 / RECOGNIZED ETHNIC GROUPS"
-    callout appearing over an unrelated sentence) showed the model can pick
-    a true, on-topic figure as key_stat without ever actually saying it —
-    the narration used a different, related number instead ("eighty
-    competing nationalities") — which nothing downstream can ever sync to,
-    because there is nothing to sync to. Checked here, at generation time,
-    so an ungrounded stat gets dropped before it ever reaches the renderer.
-    """
-    target = str(value).strip()
-    target_digits = re.sub(r"\D", "", target)
-    # Whitespace-only split, not a punctuation-aware regex: "13,000" must
-    # stay one token, the same way audio_engine._estimate_word_timings and
-    # longform_video._find_stat_value_time already tokenize narration (both
-    # just call text.split()). A regex that treats "," as a separator would
-    # break "13,000" into "13" and "000", neither of which digit-normalises
-    # back to "13000" — caught by testing this exact value before shipping.
-    words = text.split()
-    normalized = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in words]
-
-    for w in words:
-        clean = w.strip().strip("\"'.,!?;:—")
-        if clean == target or (target_digits and
-                               re.sub(r"\D", "", clean) == target_digits):
-            return True
-
-    if target_digits.isdigit():
-        wanted = {"".join(re.sub(r"[^a-z0-9]", "", tok.lower()) for tok in form)
-                  for form in _stat_spelled_out_forms(int(target_digits))}
-        if wanted:
-            for i in range(len(normalized)):
-                joined = ""
-                for j in range(i, min(i + 4, len(normalized))):
-                    joined += normalized[j]
-                    if joined in wanted:
-                        return True
-    return False
+    phrase, idx = None, None
+    for i, s in enumerate(segs):
+        text = s.get("narration", "")
+        matches = _PUNCH_RE.findall(text)
+        if matches and phrase is None:
+            candidate = matches[0].strip()
+            n_words = len(candidate.split())
+            if MIN_PUNCH_WORDS <= n_words <= MAX_PUNCH_WORDS:
+                phrase, idx = candidate, i
+        if matches:
+            s["narration"] = _PUNCH_RE.sub(lambda m: m.group(1), text)
+    return phrase, idx
 
 
 def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
@@ -1687,40 +1651,22 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                                         era_year=era_year)
             s["archive_query"] = _clean_archive_query(s.get("archive_query"))
 
+        # Strips [[ ]] markers from segs in place — must run before
+        # chapter_text below, so continuity tracking and the joke-beat
+        # prompt never see stray brackets in "already narrated" text.
+        punch_phrase, punch_idx = _extract_punch_phrase(segs)
+
         chapter_text = " ".join(x["narration"] for x in segs)
         said_sentences.extend(_sentences(chapter_text))
         said_lines.extend(
             line.strip() for line in re.split(r"(?<=[.!?])\s+", chapter_text)
             if len(line.split()) >= 4)
 
-        stat = data.get("key_stat") or {}
-        if isinstance(stat, dict) and stat.get("value"):
-            # The on-screen callout is ~10 characters wide before it looks silly.
-            stat = {"value": str(stat["value"])[:14],
-                    "label": str(stat.get("label", ""))[:34]}
-        else:
-            stat = {}
-
-        # A real render showed a "83 / RECOGNIZED ETHNIC GROUPS" callout
-        # landing over an unrelated sentence — not a sync bug, a grounding
-        # one: the narration never actually said "83" in any form, only a
-        # different, related figure ("eighty competing nationalities").
-        # Nothing downstream can sync a callout to a number that was never
-        # spoken, so it has to be caught here, at the source, not patched at
-        # render time. _stat_value_in_text checks both the numeral and
-        # spelled-out English forms (the same two forms longform_video.py's
-        # _find_stat_value_time looks for when it places the callout).
-        if stat.get("value") and not _stat_value_in_text(stat["value"], chapter_text):
-            print(f"   ⚠️ key_stat {stat['value']!r} does not appear in "
-                  f"{heading!r}'s own narration (checked numeral and "
-                  f"spelled-out forms) — dropping it rather than show a "
-                  f"number the video can never sync to what's being said.")
-            stat = {}
-
         # arc_index, not the position in this list: a chapter that failed to
         # generate is dropped, and everything downstream that cares about the
         # midpoint would otherwise silently shift to the wrong chapter.
-        chapters.append({"heading": heading, "scenes": segs, "key_stat": stat,
+        chapters.append({"heading": heading, "scenes": segs,
+                         "punch_phrase": punch_phrase, "punch_idx": punch_idx,
                          "arc_index": c_index, "pacing": pacing})
         tail = segs[-1]["narration"][-160:]
         total = sum(len(x["narration"].split()) for x in segs)
@@ -1960,9 +1906,12 @@ def flatten_scenes(script: dict) -> list:
             s["tts_rate"] = pacing.get("tts_rate")
             # The visual engine gates archival search and b-roll on the era.
             s["era_year"] = script.get("era_year")
-            if s_idx == 0:
-                # longform_video reads key_stat off the chapter's first scene.
-                s["key_stat"] = chapter.get("key_stat") or {}
+            if chapter.get("punch_phrase") and s_idx == chapter.get("punch_idx"):
+                # Attached to the scene that actually contains the phrase —
+                # not always scene 0 — since longform_video only needs to
+                # search this one scene's word timings for the exact words,
+                # not the whole chapter, to sync the callout.
+                s["punch_phrase"] = chapter["punch_phrase"]
             if s_idx == last:
                 if c_idx == len(chapters) - 1:
                     s["pause_after"] = CLOSING_BEAT

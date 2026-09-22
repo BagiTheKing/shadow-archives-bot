@@ -43,7 +43,7 @@ from music_attribution import attribution_for
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
-STAT_HOLD = 3.5          # seconds a headline number stays on screen
+PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
 FONT_NAME = "Anton"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,7 +61,7 @@ PlayResY: {H}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Body,{FONT_NAME},54,&H00FFFFFF,&H0000E8FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,2,2,140,140,70,1
-Style: Stat,{FONT_NAME},170,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,8,120,120,120,1
+Style: Punch,{FONT_NAME},84,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,1,0,1,3,2,8,130,130,130,1
 Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,1,0,1,4,3,4,150,150,60,1
 Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
 Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
@@ -193,37 +193,42 @@ def _credit_events(scene: dict, offset: float):
 _PART_WORDS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT"]
 
 
-# Where the accent rule sits beneath the stat block, and how wide it draws
-# in. Hand-placed against the Stat style's own metrics (170pt value line +
-# 46pt label line starting at MarginV=120) and confirmed against a real
-# rendered frame — see the comment on _stat_event.
-STAT_RULE_Y = 405
-STAT_RULE_WIDTH = 460
+# Where the accent rule sits beneath the phrase, and how wide it draws in.
+# Hand-placed against the Punch style's own metrics (84pt, up to two lines,
+# starting at MarginV=130) and confirmed against a real rendered frame —
+# see the comment on _punch_phrase_event.
+PUNCH_RULE_Y = 340
+PUNCH_RULE_WIDTH = 460
+
+# A phrase still being spoken when PUNCH_HOLD would end it holds this much
+# longer past the last word instead — never disappears mid-word, never
+# lingers long after the words that earned it are gone.
+PUNCH_TAIL = 1.2
 
 
-def _stat_event(start: float, value: str, label: str):
-    """The number callout: value + forced line break + label, as a SINGLE
-    event so long values can never wrap onto the label (see \\q2 below), plus
-    a second event for the accent rule beneath it. Returns [rule, text] —
-    two Dialogue lines, since ASS has no way to layer two effects in one.
+def _punch_phrase_event(start: float, end_spoken: float, phrase: str):
+    """A short (2-6 word) phrase lifted verbatim from the narration (see
+    longform_llm._extract_punch_phrase), flashed on screen for the moment
+    it is actually being said. Returns [rule, text] — two Dialogue lines,
+    since ASS has no way to layer two effects in one event.
 
-    The old animation was a flat fade-and-grow, which the owner called out
-    on a real render as too plain for what should be the video's biggest
-    graphic beat. This is a fast "detail snapping into focus" reveal
-    instead: the value starts small, blurred and transparent, sharpens and
-    punches past full size, then settles back — under 300ms total, so it
-    reads as impact rather than a wobble, and still holds clearly for the
-    remaining ~3.2s of STAT_HOLD. \\be (edge blur) and a couple of degrees
-    of \\frz rotation do the "coming into focus" and "landing" work; there
-    is no colour flash or spin, which would read as a lower-tier social
-    template rather than this channel's restrained, forensic look.
+    Replaces the old "value \\N label" number callout: a real render
+    showed the model can correctly pick a true, striking figure that it
+    never actually states in the narration, so nothing could ever
+    reliably sync a NUMBER to speech. A verbatim phrase can't have that
+    problem — it IS the words being spoken, so the callout's timing comes
+    directly from where those words fall in the scene's own word timings,
+    not from a separate value hunted for afterward.
 
-    The rule draws in from its left edge over the same window (reusing the
-    \\p1 vector-rectangle technique _pivot_events already uses for its own
-    accent rule), so the video's two "big graphic moment" beats — the
-    pivot card and this — share one visual language instead of two.
+    Same "detail snapping into focus" reveal as the callout this replaces
+    (small, blurred and transparent, punches past full size, settles back
+    — under 300ms, reads as impact not wobble) and the same drawn accent
+    rule underneath, reusing _pivot_events' \\p1 vector-rectangle
+    technique — this and the pivot card are the video's two "big graphic
+    moment" beats, and share one visual language on purpose.
     """
-    end = start + STAT_HOLD
+    hold = max(PUNCH_HOLD, (end_spoken - start) + PUNCH_TAIL)
+    end = start + hold
     # Two non-overlapping \t() stages per tag — libass's handling of two
     # \t() blocks racing the SAME tag over overlapping windows is undefined,
     # which an earlier draft of this did with \be (blur cleared by both a
@@ -231,118 +236,51 @@ def _stat_event(start: float, value: str, label: str):
     # blur and the overshoot scale/rotation together; stage 2 (180-260ms)
     # settles scale and rotation back to rest.
     punch = (
-        r"{\an8\q2\alpha&HFF&\be8\fscx55\fscy55\frz-3"
+        r"{\an8\alpha&HFF&\be8\fscx55\fscy55\frz-3"
         r"\t(0,180,\alpha&H00&\fscx116\fscy116\frz2\be0)"
         r"\t(180,260,\fscx100\fscy100\frz0)}"
     )
-    body = value.replace("{", "").replace("}", "")
-    text = f"{punch}{body}"
-    if label:
-        clean = label.replace("{", "").replace("}", "").upper()
-        text += r"\N{\fs46\c&HE8E8E8&\bord3}" + clean
-    stat_line = f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Stat,,0,0,0,,{text}"
+    body = phrase.replace("{", "").replace("}", "").upper()
+    text_line = f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Punch,,0,0,0,,{punch}{body}"
 
-    rule_x = W // 2 - STAT_RULE_WIDTH // 2
+    rule_x = W // 2 - PUNCH_RULE_WIDTH // 2
     rule = (
-        f"{{\\an4\\pos({rule_x},{STAT_RULE_Y})\\1c{ACCENT_ASS}\\1a&H30&"
+        f"{{\\an4\\pos({rule_x},{PUNCH_RULE_Y})\\1c{ACCENT_ASS}\\1a&H30&"
         f"\\bord0\\shad0\\fscx0\\fad(0,300)\\t(60,260,\\fscx100)\\p1}}"
-        f"m 0 0 l {STAT_RULE_WIDTH} 0 l {STAT_RULE_WIDTH} 5 l 0 5{{\\p0}}"
+        f"m 0 0 l {PUNCH_RULE_WIDTH} 0 l {PUNCH_RULE_WIDTH} 5 l 0 5{{\\p0}}"
     )
     rule_line = f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Scrim,,0,0,0,,{rule}"
-    return [rule_line, stat_line]
+    return [rule_line, text_line]
 
 
-_ONES_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven",
-              "eight", "nine", "ten", "eleven", "twelve", "thirteen",
-              "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-              "nineteen"]
-_TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty",
-              "seventy", "eighty", "ninety"]
+def _find_phrase_time(scene, phrase: str):
+    """(start, end) local to this ONE scene for the exact run of words
+    matching phrase, found in the scene's own word timings (real or
+    estimated — see audio_engine.py's _estimate_word_timings).
 
+    Replaces the old key_stat design, which asked the model for a separate
+    number+label and then had to search the whole chapter afterward hoping
+    it was actually said — including handling spelled-out vs numeral forms,
+    since it often was not said as written. That entire search is gone: the
+    phrase is now a verbatim quote extracted directly from this scene's own
+    narration (see longform_llm._extract_punch_phrase), so it is guaranteed
+    to appear in this scene's words in exactly this form — this only needs
+    to find WHERE, not guess whether.
 
-def _spelled_out_forms(n: int):
-    """Every plausible spelled-out word sequence a narrator might use for a
-    number under 1000 — real render evidence (a "83" key_stat landing over
-    an unrelated sentence, since the prose actually said "eighty-three")
-    showed this is a real, common gap, not a hypothetical one: small counts
-    read more naturally spelled out in flowing prose than as bare digits,
-    unlike a large casualty figure, which this channel's narration already
-    tends to keep as digits (see the "13,000" example in _find_stat_value_
-    time's docstring) — so this is deliberately scoped to under 1000 rather
-    than built out to arbitrary precision.
+    Returns None only if word timings are missing entirely for this scene
+    (should not happen post the Kokoro/gTTS estimated-timing fix, but a
+    caller must never crash for want of a callout).
     """
-    if not (0 <= n < 1000):
-        return []
-    if n < 20:
-        return [[_ONES_WORDS[n]]]
-    if n < 100:
-        tens, ones = divmod(n, 10)
-        if ones == 0:
-            return [[_TENS_WORDS[tens]]]
-        return [[_TENS_WORDS[tens], _ONES_WORDS[ones]],
-                [f"{_TENS_WORDS[tens]}-{_ONES_WORDS[ones]}"]]
-    hundreds, rest = divmod(n, 100)
-    prefix = [_ONES_WORDS[hundreds], "hundred"]
-    if rest == 0:
-        return [prefix]
-    return [prefix + ["and"] + t for t in _spelled_out_forms(rest)] + \
-           [prefix + t for t in _spelled_out_forms(rest)]
-
-
-def _normalize_word(w: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", (w or "").lower())
-
-
-# "one hundred and eighty-three" is 4 tokens if "eighty-three" splits into
-# two; nothing spelled out under 1000 needs more than that.
-_MAX_SPELLED_TOKENS = 4
-
-
-def _find_stat_value_time(group, offs, value):
-    """Chapter-local second at which this chapter's key_stat value is
-    actually spoken, found from the scene word timings (real or estimated —
-    see audio_engine.py's _estimate_word_timings) rather than guessed from
-    chapter position. The old placement ("1s after the first scene, or 35%
-    into the chapter") had no relation to the narration at all — the owner's
-    complaint on a real render was exactly this: a number appearing on
-    screen with no sync to when it was actually said.
-
-    Tries the numeral form first (exact or digit-normalised, e.g. "13,000"
-    vs "13000"), then a spelled-out English form (e.g. "83" matching
-    "eighty-three" or "eighty three" in the prose) for values under 1000 —
-    added after a real render showed key_stat's numeral ("83") never
-    appearing verbatim because the narration spelled the count out in
-    words, silently falling back to the position guess this function
-    exists to replace.
-
-    Returns None when neither form is found anywhere in the chapter's
-    words, so the caller can fall back to the old percentage-of-chapter
-    placement rather than show nothing at all.
-    """
-    target = str(value).strip()
-    target_digits = re.sub(r"\D", "", target)
-
-    flat = []
-    for scene, local_start in zip(group, offs):
-        for w in scene.get("words") or []:
-            token = (w.get("word") or "").strip().strip("\"'.,!?;:—")
-            flat.append((token, local_start + float(w.get("start", 0.0))))
-
-    for token, t in flat:
-        if token == target or (target_digits and
-                               re.sub(r"\D", "", token) == target_digits):
-            return t
-
-    if target_digits.isdigit():
-        wanted = {"".join(_normalize_word(w) for w in form)
-                  for form in _spelled_out_forms(int(target_digits))}
-        if wanted:
-            for i in range(len(flat)):
-                joined = ""
-                for j in range(i, min(i + _MAX_SPELLED_TOKENS, len(flat))):
-                    joined += _normalize_word(flat[j][0])
-                    if joined in wanted:
-                        return flat[i][1]
+    words = scene.get("words") or []
+    if not words:
+        return None
+    targets = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in phrase.split()]
+    tokens = [re.sub(r"[^a-z0-9]", "", (w.get("word") or "").lower())
+             for w in words]
+    n = len(targets)
+    for i in range(len(tokens) - n + 1):
+        if tokens[i:i + n] == targets:
+            return float(words[i]["start"]), float(words[i + n - 1]["end"])
     return None
 
 
@@ -419,10 +357,11 @@ def _pivot_events(start: float, duration: float, number: int, heading: str):
     return [scrim, rule, card]
 
 
-def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
+def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
                        chapter_titles=None, total_duration=0.0):
     """offsets[i] is the global start time of scene i on the final timeline.
-    stat_cues is [(start_seconds, value, label), ...] for the number callouts.
+    punch_cues is [(start_seconds, end_spoken_seconds, phrase), ...] for the
+    punch-phrase callouts.
     chapter_titles is [(start_seconds, scene_duration, number, heading), ...].
     total_duration places the end card, and is 0 when there is no room for one."""
     print("📝 Building long-form captions...")
@@ -451,10 +390,11 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
 
         events.extend(_credit_events(scene, offset))
 
-    # Number callouts, top of frame. _stat_event returns [rule, text] — two
-    # events, since the accent rule and the value/label are separate layers.
-    for start, value, label in (stat_cues or []):
-        events.extend(_stat_event(start, str(value), str(label or "")))
+    # Punch-phrase callouts, top of frame. _punch_phrase_event returns
+    # [rule, text] — two events, since the accent rule and the phrase are
+    # separate layers.
+    for start, end_spoken, phrase in (punch_cues or []):
+        events.extend(_punch_phrase_event(start, end_spoken, phrase))
 
     for cue in (chapter_titles or []):
         # (start, duration, number, heading[, is_pivot])
@@ -477,7 +417,7 @@ def generate_subtitles(scenes, output_ass, offsets, stat_cues=None,
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))
     print(f"✅ Captions: {len(events)} events "
-          f"({len(stat_cues or [])} number callouts, "
+          f"({len(punch_cues or [])} punch-phrase callouts, "
           f"{len(chapter_titles or [])} chapter titles)")
 
 
@@ -1018,7 +958,7 @@ def generate_longform_video(scenes, build_dir="build"):
         chapters.append((current_idx, current))
 
     reels, global_offsets, chapter_marks, cursor, cuts = [], [], [], 0.0, 0
-    stat_cues, chapter_titles = [], []
+    punch_cues, chapter_titles = [], []
     # Where the music ducks and the sound design fires.
     card_starts, pivot_start = [], None
     for c_idx, group in chapters:
@@ -1046,31 +986,33 @@ def generate_longform_video(scenes, build_dir="build"):
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
 
-        # A chapter's headline number, held over whatever frame is on screen.
-        # Synced to the moment it is actually spoken (numeral or spelled-out
-        # English form — see _find_stat_value_time); otherwise falls back to
-        # the old position guess (after the first scene, so it never lands
-        # on top of the chapter title that opens the chapter) rather than
-        # showing nothing. The fallback is logged because it means an
-        # unsynced callout is about to ship — a real render hit this
-        # silently once (see _find_stat_value_time's docstring) and there
-        # was no line in the log saying so.
-        stat = group[0].get("key_stat") or {}
-        spoken_at = (_find_stat_value_time(group, offs, stat["value"])
-                    if stat.get("value") else None)
-        if spoken_at is not None:
-            stat_start = cursor + spoken_at
-        else:
-            if stat.get("value"):
-                print(f"⚠️ Stat '{stat['value']}' not found spoken in "
-                      f"chapter {c_idx + 1}'s narration (numeral or spelled "
-                      f"out) — falling back to the position guess, which "
-                      f"will not be synced to the narration.")
-            stat_start = cursor + max(group[0]["duration"] + 1.0, total * 0.35)
-        if (stat.get("value") and total > STAT_HOLD + 4
-                and stat_start + STAT_HOLD < cursor + total - 1.5):
-            stat_cues.append((stat_start, str(stat["value"]),
-                              str(stat.get("label", ""))))
+        # A chapter's punch phrase, flashed over whatever frame is on screen
+        # at the exact moment it is spoken. The phrase is attached to the
+        # ONE scene that actually contains it (longform_llm.py tracks which
+        # segment it was marked in), so this only has to search that scene's
+        # own word timings — the phrase is a verbatim quote of them, so it
+        # is expected to be found, not guessed at.
+        phrase_scene = next((g for g in group if g.get("punch_phrase")), None)
+        if phrase_scene:
+            phrase = phrase_scene["punch_phrase"]
+            scene_local = offs[group.index(phrase_scene)]
+            found = _find_phrase_time(phrase_scene, phrase)
+            if found:
+                phrase_start, phrase_end = found
+                punch_start = cursor + scene_local + phrase_start
+                end_spoken = cursor + scene_local + phrase_end
+                hold = max(PUNCH_HOLD, (end_spoken - punch_start) + PUNCH_TAIL)
+                if (total > hold + 4
+                        and punch_start + hold < cursor + total - 1.5):
+                    punch_cues.append((punch_start, end_spoken, phrase))
+            else:
+                # Should not happen — the phrase is a verbatim quote of this
+                # scene's own narration — but a TTS engine can occasionally
+                # split or merge a word unexpectedly. No callout beats a
+                # guessed one: that guess is exactly the bug this replaced.
+                print(f"⚠️ Punch phrase {phrase!r} not found in its own "
+                      f"scene's word timings (chapter {c_idx + 1}) — "
+                      f"skipping the callout rather than guess its timing.")
 
         cursor += total
         reels.append(reel)
@@ -1092,7 +1034,7 @@ def generate_longform_video(scenes, build_dir="build"):
 
     # ---- Phase 4: single quality pass — grade, captions, music, fades ----
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
-    generate_subtitles(usable, ass_path, global_offsets, stat_cues=stat_cues,
+    generate_subtitles(usable, ass_path, global_offsets, punch_cues=punch_cues,
                        chapter_titles=chapter_titles,
                        total_duration=total_duration)
 
@@ -1117,13 +1059,13 @@ def generate_longform_video(scenes, build_dir="build"):
 
     # Rendered to one track so the mix below stays a three-input graph however
     # many cues there are.
-    # Number callouts only. There was a riser under every chapter card too; the
-    # channel owner's verdict on the first published cut was that a swoosh under
-    # sliding text reads as silly, and he is right — it is the one piece of
-    # sound design that announces itself, on a channel whose whole voice is
-    # that it does not. The impacts stay: they sit under a figure, they are
-    # felt rather than heard, and nothing was wrong with them.
-    sfx_cues = [("impact", start) for start, _, _ in stat_cues]
+    # Punch-phrase callouts only. There was a riser under every chapter card
+    # too; the channel owner's verdict on the first published cut was that a
+    # swoosh under sliding text reads as silly, and he is right — it is the
+    # one piece of sound design that announces itself, on a channel whose
+    # whole voice is that it does not. The impacts stay: they sit under a
+    # phrase, they are felt rather than heard, and nothing was wrong with them.
+    sfx_cues = [("impact", start) for start, _, _ in punch_cues]
     sfx = build_sfx_bed(sfx_cues, total_duration,
                         os.path.join(build_dir, "lf_sfx.wav"))
 
