@@ -252,6 +252,52 @@ def _stat_event(start: float, value: str, label: str):
     return [rule_line, stat_line]
 
 
+_ONES_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven",
+              "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+              "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+              "nineteen"]
+_TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty",
+              "seventy", "eighty", "ninety"]
+
+
+def _spelled_out_forms(n: int):
+    """Every plausible spelled-out word sequence a narrator might use for a
+    number under 1000 — real render evidence (a "83" key_stat landing over
+    an unrelated sentence, since the prose actually said "eighty-three")
+    showed this is a real, common gap, not a hypothetical one: small counts
+    read more naturally spelled out in flowing prose than as bare digits,
+    unlike a large casualty figure, which this channel's narration already
+    tends to keep as digits (see the "13,000" example in _find_stat_value_
+    time's docstring) — so this is deliberately scoped to under 1000 rather
+    than built out to arbitrary precision.
+    """
+    if not (0 <= n < 1000):
+        return []
+    if n < 20:
+        return [[_ONES_WORDS[n]]]
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        if ones == 0:
+            return [[_TENS_WORDS[tens]]]
+        return [[_TENS_WORDS[tens], _ONES_WORDS[ones]],
+                [f"{_TENS_WORDS[tens]}-{_ONES_WORDS[ones]}"]]
+    hundreds, rest = divmod(n, 100)
+    prefix = [_ONES_WORDS[hundreds], "hundred"]
+    if rest == 0:
+        return [prefix]
+    return [prefix + ["and"] + t for t in _spelled_out_forms(rest)] + \
+           [prefix + t for t in _spelled_out_forms(rest)]
+
+
+def _normalize_word(w: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (w or "").lower())
+
+
+# "one hundred and eighty-three" is 4 tokens if "eighty-three" splits into
+# two; nothing spelled out under 1000 needs more than that.
+_MAX_SPELLED_TOKENS = 4
+
+
 def _find_stat_value_time(group, offs, value):
     """Chapter-local second at which this chapter's key_stat value is
     actually spoken, found from the scene word timings (real or estimated —
@@ -261,19 +307,42 @@ def _find_stat_value_time(group, offs, value):
     complaint on a real render was exactly this: a number appearing on
     screen with no sync to when it was actually said.
 
-    Returns None when no scene's words literally contain the value (the
-    script phrased it differently, e.g. narrating "thirteen thousand" for a
-    key_stat of "13,000"), so the caller can fall back to the old
-    percentage-of-chapter placement rather than show nothing at all.
+    Tries the numeral form first (exact or digit-normalised, e.g. "13,000"
+    vs "13000"), then a spelled-out English form (e.g. "83" matching
+    "eighty-three" or "eighty three" in the prose) for values under 1000 —
+    added after a real render showed key_stat's numeral ("83") never
+    appearing verbatim because the narration spelled the count out in
+    words, silently falling back to the position guess this function
+    exists to replace.
+
+    Returns None when neither form is found anywhere in the chapter's
+    words, so the caller can fall back to the old percentage-of-chapter
+    placement rather than show nothing at all.
     """
     target = str(value).strip()
     target_digits = re.sub(r"\D", "", target)
+
+    flat = []
     for scene, local_start in zip(group, offs):
         for w in scene.get("words") or []:
             token = (w.get("word") or "").strip().strip("\"'.,!?;:—")
-            if token == target or (target_digits and
-                                   re.sub(r"\D", "", token) == target_digits):
-                return local_start + float(w.get("start", 0.0))
+            flat.append((token, local_start + float(w.get("start", 0.0))))
+
+    for token, t in flat:
+        if token == target or (target_digits and
+                               re.sub(r"\D", "", token) == target_digits):
+            return t
+
+    if target_digits.isdigit():
+        wanted = {"".join(_normalize_word(w) for w in form)
+                  for form in _spelled_out_forms(int(target_digits))}
+        if wanted:
+            for i in range(len(flat)):
+                joined = ""
+                for j in range(i, min(i + _MAX_SPELLED_TOKENS, len(flat))):
+                    joined += _normalize_word(flat[j][0])
+                    if joined in wanted:
+                        return flat[i][1]
     return None
 
 
@@ -978,17 +1047,25 @@ def generate_longform_video(scenes, build_dir="build"):
             global_offsets.append(cursor + o)
 
         # A chapter's headline number, held over whatever frame is on screen.
-        # Synced to the moment it is actually spoken when the narration
-        # contains it in numeral form; otherwise falls back to the old
-        # position guess (after the first scene, so it never lands on top of
-        # the chapter title that opens the chapter) rather than showing
-        # nothing.
+        # Synced to the moment it is actually spoken (numeral or spelled-out
+        # English form — see _find_stat_value_time); otherwise falls back to
+        # the old position guess (after the first scene, so it never lands
+        # on top of the chapter title that opens the chapter) rather than
+        # showing nothing. The fallback is logged because it means an
+        # unsynced callout is about to ship — a real render hit this
+        # silently once (see _find_stat_value_time's docstring) and there
+        # was no line in the log saying so.
         stat = group[0].get("key_stat") or {}
         spoken_at = (_find_stat_value_time(group, offs, stat["value"])
                     if stat.get("value") else None)
         if spoken_at is not None:
             stat_start = cursor + spoken_at
         else:
+            if stat.get("value"):
+                print(f"⚠️ Stat '{stat['value']}' not found spoken in "
+                      f"chapter {c_idx + 1}'s narration (numeral or spelled "
+                      f"out) — falling back to the position guess, which "
+                      f"will not be synced to the narration.")
             stat_start = cursor + max(group[0]["duration"] + 1.0, total * 0.35)
         if (stat.get("value") and total > STAT_HOLD + 4
                 and stat_start + STAT_HOLD < cursor + total - 1.5):
