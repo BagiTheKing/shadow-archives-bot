@@ -45,6 +45,26 @@ FPS = 30
 XFADE = 0.5              # crossfade within a chapter
 PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
+# The Far Cry 6 style cold-open card: black screen, one original unattributed
+# line fades in red then settles white, holds, then everything but its marked
+# keyword fades away while the keyword itself turns red and lingers alone.
+# Silent — the score only starts once the real video does. Every stage here
+# is in seconds from the card's own start (0.0):
+#   0.0 -  1.5   red -> white fade-in
+#   1.5 - 10.5   full white hold                      (9.0s)
+#  10.5 - 11.5   body fades to nothing, keyword -> red (1.0s, concurrent)
+#  11.5 - 13.5   keyword alone, red                    (2.0s)
+#  13.5 - 14.5   keyword fades out                      (1.0s)
+#  14.5 - 15.0   black buffer, so the total is exactly 15.0s
+INTRO_DURATION = 15.0
+INTRO_RED_IN = 1.5
+INTRO_WHITE_HOLD_END = 10.5
+INTRO_FADE_TO_KEYWORD_END = 11.5
+INTRO_KEYWORD_HOLD_END = 13.5
+INTRO_KEYWORD_FADE_END = 14.5
+RED_ASS = r"&H0000FF&"
+WHITE_ASS = r"&HFFFFFF&"
+
 FONT_NAME = "Anton"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS_DIR = os.path.join(BASE_DIR, "fonts")
@@ -66,6 +86,7 @@ Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0
 Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
 Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
 Style: Scrim,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Epigraph,{FONT_NAME},66,&H00FFFFFF,&H0000E8FF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,0,5,220,220,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -929,11 +950,89 @@ def build_sfx_bed(cues, total: float, out: str):
         return None
 
 
-def generate_longform_video(scenes, build_dir="build"):
+def _intro_card_ass(epigraph: dict, out_path: str):
+    """Writes the standalone ASS script for the 15s cold-open card.
+
+    One Dialogue line, not three: the keyword has to stay exactly where it
+    sits inside the sentence once the rest of the text fades around it, and
+    splitting it into a separate event would mean re-positioning it — a
+    visible jump instead of the rest simply disappearing. Each of the three
+    runs (before the keyword, the keyword, after the keyword) carries its
+    own inline override block, so one line can animate three spans on three
+    different timelines while still wrapping as one paragraph.
+    """
+    text = (epigraph.get("text") or "").strip()
+    keyword = (epigraph.get("keyword") or "").strip()
+    idx = text.lower().find(keyword.lower()) if keyword else -1
+    if idx < 0:
+        # Should not happen — _epigraph_ok already checked the keyword is a
+        # substring of the text — but never let a render crash over it.
+        pre, kw, post = "", text, ""
+    else:
+        pre = text[:idx].strip()
+        kw = text[idx:idx + len(keyword)]
+        post = text[idx + len(keyword):].strip()
+
+    def ms(t):
+        return int(round(t * 1000))
+
+    body_fx = (
+        f"\\c{RED_ASS}\\alpha&H00&"
+        f"\\t(0,{ms(INTRO_RED_IN)},\\c{WHITE_ASS})"
+        f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\alpha&HFF&)"
+    )
+    keyword_fx = (
+        f"\\c{RED_ASS}\\alpha&H00&"
+        f"\\t(0,{ms(INTRO_RED_IN)},\\c{WHITE_ASS})"
+        f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\c{RED_ASS})"
+        f"\\t({ms(INTRO_KEYWORD_HOLD_END)},{ms(INTRO_KEYWORD_FADE_END)},\\alpha&HFF&)"
+    )
+
+    chunks = []
+    if pre:
+        chunks.append(f"{{{body_fx}}}{pre} ")
+    chunks.append(f"{{{keyword_fx}}}{kw}")
+    if post:
+        chunks.append(f" {{{body_fx}}}{post}")
+    line = "".join(chunks)
+
+    event = (f"Dialogue: 0,{_ass_time(0)},{_ass_time(INTRO_KEYWORD_FADE_END)},"
+             f"Epigraph,,0,0,0,,{line}")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(ASS_HEADER + event + "\n")
+
+
+def _build_intro_card(epigraph: dict, build_dir: str) -> str:
+    """Renders the 15s cold-open card as its own silent clip, encoded to
+    match the chapter reels exactly so it concatenates into the same
+    stream-copy join as everything else (see Phase 3 below)."""
+    ass_path = os.path.join(build_dir, "lf_intro.ass")
+    _intro_card_ass(epigraph, ass_path)
+    out_path = os.path.join(build_dir, "lf_intro.mp4")
+
+    safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
+    safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
+    vf = f"ass='{safe_ass}':fontsdir='{safe_fonts}'"
+
+    _run(["ffmpeg", "-y",
+          "-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r={FPS}",
+          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+          "-vf", vf,
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+          "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
+          "-pix_fmt", "yuv420p", "-t", f"{INTRO_DURATION:.3f}", out_path])
+    return out_path
+
+
+def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks,
     music_attribution) where chapter_marks is [(heading, start_seconds), ...]
     for the description, and music_attribution is the required credit text
-    for any Creative Commons track used in the score, or "" if none."""
+    for any Creative Commons track used in the score, or "" if none.
+
+    intro_epigraph, when given, is the {"text", "keyword"} dict from
+    longform_llm's _generate_intro_epigraph — a 15s silent title card is
+    inserted after "The Cost" chapter and before the rest of the video."""
     print("🎬 Long-form video engine starting...")
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
@@ -961,6 +1060,9 @@ def generate_longform_video(scenes, build_dir="build"):
     punch_cues, chapter_titles = [], []
     # Where the music ducks and the sound design fires.
     card_starts, pivot_start = [], None
+    # (start, end) of the cold-open card, if one was built — muted out of the
+    # final mix in Phase 4 so the score only starts once the real video does.
+    intro_range = None
     for c_idx, group in chapters:
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
@@ -1016,6 +1118,24 @@ def generate_longform_video(scenes, build_dir="build"):
 
         cursor += total
         reels.append(reel)
+
+        # The cold-open card belongs right after "The Cost" — arc_index 0 —
+        # and before "The Claim" names anyone. The Cost can never be dropped
+        # (generate_longform_script returns None outright if it fails), so
+        # c_idx == 0 is always the real first chapter here.
+        if c_idx == 0 and intro_epigraph:
+            try:
+                intro_clip = _build_intro_card(intro_epigraph, build_dir)
+                reels.append(intro_clip)
+                intro_start = cursor
+                cursor += INTRO_DURATION
+                intro_range = (intro_start, cursor)
+                print(f"🖤 Intro card inserted at {intro_start:.1f}s "
+                      f"({INTRO_DURATION:.0f}s, silent): "
+                      f"{intro_epigraph['text'][:70]!r}")
+            except Exception as e:
+                print(f"⚠️ Intro card render failed "
+                      f"({type(e).__name__}: {e}) — continuing without it.")
 
     total_duration = cursor
 
@@ -1108,10 +1228,21 @@ def generate_longform_video(scenes, build_dir="build"):
         mix_labels.append(f"[{idx}:a]")
 
     if len(mix_labels) > 1:
+        # The score covers the whole timeline (see plan_chapter_score, which
+        # scores "The Cost" from t=0), but the intro card sits inside that
+        # same act and must stay silent — the soundtrack only starts once
+        # the real video does. Gating the finished mix is simpler and more
+        # certain than trying to carve the card's window out of the score
+        # and sfx beds individually.
+        premix_label = "[premute]" if intro_range else "[aout]"
         mix_parts.append(
             f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:"
             f"duration=first:normalize=0,"
-            f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2[aout]")
+            f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2{premix_label}")
+        if intro_range:
+            s, e = intro_range
+            mix_parts.append(
+                f"[premute]volume=0:enable='between(t,{s:.3f},{e:.3f})'[aout]")
         cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(mix_parts),
                "-map", "0:v", "-map", "[aout]", "-vf", vf,
                "-c:v", "libx264", "-preset", "medium", "-crf", "21",

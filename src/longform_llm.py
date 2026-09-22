@@ -1409,6 +1409,100 @@ def _joke_ok(text: str) -> bool:
     return not any(re.search(p, low) for p in _JOKE_FORBIDDEN)
 
 
+# Case-insensitive tells that the model wrote a real quote's framing instead
+# of an original line.
+_EPIGRAPH_FORBIDDEN = (
+    r"\bsaid\b", r"\bwrote\b", r"\bonce said\b", r"\bquote(?:d)?\b",
+    r"\battributed\b",
+)
+
+# Checked against the ORIGINAL text, not the lowercased copy: an em/en dash
+# before a capitalised word is the exact shape of a "— Person" attribution
+# line, and the capital is the only signal that makes it one.
+_EPIGRAPH_ATTRIBUTION_DASH = re.compile(r"[—–]\s*[A-Z]")
+
+MIN_EPIGRAPH_WORDS = 10
+MAX_EPIGRAPH_WORDS = 22
+MIN_KEYWORD_WORDS = 1
+MAX_KEYWORD_WORDS = 3
+
+
+def _epigraph_ok(text: str, keyword: str) -> bool:
+    """Whether a generated intro-card line is safe to publish: an original
+    editorial line, never dressed up as a real person's recorded words."""
+    if not text or not keyword:
+        return False
+    n_words = len(text.split())
+    if not (MIN_EPIGRAPH_WORDS <= n_words <= MAX_EPIGRAPH_WORDS):
+        return False
+    n_keyword = len(keyword.split())
+    if not (MIN_KEYWORD_WORDS <= n_keyword <= MAX_KEYWORD_WORDS):
+        return False
+    if keyword.lower() not in text.lower():
+        return False
+    if _EPIGRAPH_ATTRIBUTION_DASH.search(text):
+        return False
+    low = text.lower()
+    return not any(re.search(p, low) for p in _EPIGRAPH_FORBIDDEN)
+
+
+def _generate_intro_epigraph(pool, topic, cost_text, era_year=None):
+    """One original, unattributed line for the 15-second black-screen card
+    that opens the video, before "The Claim" — the Far Cry 6 style cold
+    open: a poetic, morally-loaded line about the KIND of failure this
+    story is, with one short phrase marked to linger alone in red after the
+    rest fades.
+
+    Deliberately never a real historical quote: a free model asked to
+    "recall" one will confidently invent a plausible-sounding fake and
+    misattribute it to a real person, and this pipeline publishes without
+    anyone reading the script first. An original line carries the same
+    weight without ever claiming to be someone's real recorded words.
+    Returns None if nothing clean was written within the attempt budget —
+    losing this card costs one intro, not the video.
+    """
+    prompt = (
+        f"Story: {topic}\n\n"
+        f"The video's opening chapter just established this:\n{cost_text[-700:]}\n\n"
+        "Write ONE original, unattributed line for a black-screen title "
+        "card that plays before the story properly begins — a poetic, "
+        "morally-loaded sentence about the KIND of failure this story is "
+        "(blind confidence, a warning ignored, power without "
+        "accountability, the gap between a plan and what it cost) — not a "
+        "summary of what happened and not a specific fact, name, date or "
+        "number from the story.\n"
+        "HARD RULES:\n"
+        "- This is NOT a real quote and must never be dressed up as one: "
+        "no attribution, no name, no dash-and-name, no \"as they said\", "
+        "nothing implying a real historical figure spoke these words. It "
+        "is an original editorial line, full stop.\n"
+        "- 12 to 20 words, one sentence, no quotation marks around it.\n"
+        "- Mark the single most striking 1-3 word phrase in it — the "
+        "words that should linger alone on screen, turned red, after the "
+        "rest fades — by wrapping it in double square brackets, e.g. "
+        "\"Power forgets [[the warning]] it was given.\" The brackets are "
+        "removed before display, so the sentence must read naturally "
+        "without them.\n\n"
+        'Output ONLY JSON: {"text": "...with [[phrase]] marked..."}'
+    )
+    for attempt in range(2):
+        data = _call(pool,
+                     "You write one original, unattributed epigraph line "
+                     "for a title card. Never a real quote. Output only "
+                     "JSON.",
+                     prompt, max_tokens=400)
+        raw = (data or {}).get("text", "").strip()
+        matches = _PUNCH_RE.findall(raw)
+        keyword = matches[0].strip() if matches else ""
+        text = _PUNCH_RE.sub(lambda m: m.group(1), raw).strip()
+        if _epigraph_ok(text, keyword):
+            return {"text": text, "keyword": keyword}
+        print(f"   ⚠️ Intro card rejected (attempt {attempt + 1}/2)"
+              f"{': ' + raw[:60] if raw else ''}")
+    print("   ↩️  Skipping the intro card this run.")
+    return None
+
+
 def _generate_joke_beat(pool, topic, decision_text, era_year=None):
     """One dry, ironic aside about the decision just made. Returns a segment
     dict ready to append to a chapter's scenes, or None if it could not be
@@ -1497,6 +1591,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
     opening_heading = arc[0][0]
     chapters, tail, short_chapters, dropped = [], "", 0, []
+    intro_epigraph = None
     # Everything already narrated, as normalised sentences and as plain lines.
     # The first feeds the repetition gate, the second is handed to the model so
     # it knows what not to say again.
@@ -1672,6 +1767,16 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
 
+        # The 15-second cold-open card, generated the moment "The Cost" is
+        # in hand: it sets the moral weight of the story before "The Claim"
+        # names anyone in it, so it has to be written from The Cost's text,
+        # not guessed from the bare topic string.
+        if heading == opening_heading:
+            intro_epigraph = _generate_intro_epigraph(pool, topic, chapter_text,
+                                                       era_year=era_year)
+            if intro_epigraph:
+                print(f"   🖤 Intro card: {intro_epigraph['text'][:70]!r}")
+
         # The one joke, right after the fatal call — see _generate_joke_beat.
         # Appended to segs directly (not folded into chapter_text/said_lines
         # above) so it never counts as narrated fact a later chapter must
@@ -1750,6 +1855,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         "word_count": words,
         "era_year": era_year,
         "format": episode_format,
+        "intro_epigraph": intro_epigraph,
     }
     normalize_thumbnail_fields(script)
 
