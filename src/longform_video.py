@@ -37,6 +37,8 @@ import random
 import re
 import subprocess
 
+from PIL import ImageFont
+
 from caption_track import write_srt
 from music_attribution import attribution_for
 
@@ -73,6 +75,12 @@ BLACK_BUFFER = 0.5
 ATTRIBUTION_FONT_SIZE = 40  # smaller than the quote's own 66pt Epigraph style
 RED_ASS = r"&H0000FF&"
 WHITE_ASS = r"&HFFFFFF&"
+
+# Must match the Epigraph style's own Fontsize/MarginL/MarginR below — the
+# width real sentences are wrapped against is only correct if it does.
+EPIGRAPH_FONT_SIZE = 66
+EPIGRAPH_MARGIN = 220
+EPIGRAPH_MAX_WIDTH = W - 2 * EPIGRAPH_MARGIN
 
 FONT_NAME = "Anton"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -963,19 +971,36 @@ def _norm_word(w: str) -> str:
     return re.sub(r"[^a-z0-9]", "", w.lower())
 
 
-def _wrap_epigraph_lines(text: str, keyword: str, max_words: int = 4):
-    """Breaks one sentence into short phrase lines that will cascade in one
-    after another, the marked keyword (if it falls in this sentence) always
-    landing on a line of its own — it is the one word or two that survives
-    after the rest fades, so it reads clearest alone rather than sharing a
-    line it would have to be cut out of later. Returns (lines,
-    keyword_line_index); the index is None if the keyword is not in this
-    sentence (falls back to no isolated-keyword phase rather than guessing
-    where it is).
+_EPIGRAPH_FONT_CACHE = None
+
+
+def _epigraph_font():
+    """The real Anton font at the Epigraph style's own size, cached — used
+    to measure actual pixel width for natural line-wrapping rather than
+    guessing at a word count."""
+    global _EPIGRAPH_FONT_CACHE
+    if _EPIGRAPH_FONT_CACHE is None:
+        path = os.path.join(FONTS_DIR, "Anton-Regular.ttf")
+        _EPIGRAPH_FONT_CACHE = ImageFont.truetype(path, EPIGRAPH_FONT_SIZE)
+    return _EPIGRAPH_FONT_CACHE
+
+
+def _text_width(text: str) -> int:
+    box = _epigraph_font().getbbox(text)
+    return box[2] - box[0]
+
+
+def _wrap_sentence_chunks(text: str, keyword: str, max_words: int = 4):
+    """The short single-line epigraph's look: forces a line break every
+    max_words words (or at clause punctuation) regardless of how much room
+    is actually left, so a short poetic line cascades in as a staccato of
+    short phrases. The marked keyword always lands on a dedicated line —
+    it is the one word or two that survives after the rest fades. Returns
+    line_spans: one [(text, is_keyword)] list per physical line.
     """
     words = text.split()
     if not words:
-        return [text], None
+        return [[(text, False)]]
 
     norm = [_norm_word(w) for w in words]
     kw_words = [_norm_word(w) for w in keyword.split()] if keyword else []
@@ -991,40 +1016,113 @@ def _wrap_epigraph_lines(text: str, keyword: str, max_words: int = 4):
     while i < len(words):
         if kw_span and i == kw_span[0]:
             if current:
-                lines.append(" ".join(current))
+                lines.append([(" ".join(current), False)])
                 current = []
-            lines.append(" ".join(words[kw_span[0]:kw_span[1]]))
+            lines.append([(" ".join(words[kw_span[0]:kw_span[1]]), True)])
             i = kw_span[1]
             continue
         current.append(words[i])
         ends_clause = words[i].rstrip().endswith((",", ";", ":"))
         i += 1
         if len(current) >= max_words or ends_clause:
-            lines.append(" ".join(current))
+            lines.append([(" ".join(current), False)])
             current = []
     if current:
-        lines.append(" ".join(current))
-
-    keyword_line = None
-    if kw_span:
-        target = " ".join(words[kw_span[0]:kw_span[1]])
-        keyword_line = next((li for li, ln in enumerate(lines) if ln == target), None)
-    return lines, keyword_line
+        lines.append([(" ".join(current), False)])
+    return lines
 
 
-def _wrap_quote_lines(sentences, keyword, max_words=4):
+def _wrap_sentence_width(text: str, keyword: str):
+    """A real quote sentence's look: wraps only where the line would
+    actually overflow the card, measured against the real font — a short
+    sentence stays on one line instead of being chopped into forced
+    fragments. The marked keyword is isolated inline within whichever
+    natural line it falls on (never pulled onto a line of its own — a real
+    quote's own sentence shape is what should read on screen). Returns
+    line_spans: one [(text, is_keyword)] list per physical line.
+    """
+    words = text.split()
+    if not words:
+        return [[(text, False)]]
+
+    norm = [_norm_word(w) for w in words]
+    kw_words = [_norm_word(w) for w in keyword.split()] if keyword else []
+    kw_span = None
+    if kw_words:
+        n = len(kw_words)
+        for i in range(len(norm) - n + 1):
+            if norm[i:i + n] == kw_words:
+                kw_span = (i, i + n)
+                break
+
+    # The keyword's own words are packed as one atomic token, never a
+    # bare word — otherwise width-wrapping could split it across two
+    # lines (as it silently did before this), losing the isolation
+    # entirely without any error to say so.
+    tokens, i = [], 0
+    while i < len(words):
+        if kw_span and i == kw_span[0]:
+            tokens.append((" ".join(words[kw_span[0]:kw_span[1]]), True))
+            i = kw_span[1]
+        else:
+            tokens.append((words[i], False))
+            i += 1
+
+    lines, current = [], []
+    for tok, is_kw in tokens:
+        trial = " ".join(t for t, _ in current + [(tok, is_kw)])
+        if current and _text_width(trial) > EPIGRAPH_MAX_WIDTH:
+            lines.append(current)
+            current = [(tok, is_kw)]
+        else:
+            current.append((tok, is_kw))
+    if current:
+        lines.append(current)
+
+    line_spans = []
+    for line in lines:
+        spans, buf = [], []
+        for tok, is_kw in line:
+            if is_kw:
+                if buf:
+                    spans.append((" ".join(buf), False))
+                    buf = []
+                spans.append((tok, True))
+            else:
+                buf.append(tok)
+        if buf:
+            spans.append((" ".join(buf), False))
+        # Spans were joined by a single space in the original line; bake
+        # that spacing back in now that they are separate override runs.
+        spaced = [(t if idx == 0 else f" {t}", kw)
+                  for idx, (t, kw) in enumerate(spans)]
+        line_spans.append(spaced)
+    return line_spans
+
+
+def _wrap_quote_lines(sentences, keyword):
     """Wraps every sentence of a (possibly multi-sentence) quote, scanning
     them in order for the marked keyword and isolating only its first
-    occurrence. Returns (groups, keyword_group) — groups is one
-    line-list per sentence (see _wrap_epigraph_lines); keyword_group is
-    (sentence_index, line_index) or None."""
+    occurrence. A single sentence keeps the cascading-poem chunk style
+    (confirmed to read well for the short original epigraph); two or more
+    real sentences wrap naturally by width instead — forcing every
+    sentence of an actual quote into 4-word fragments reads as clutter,
+    not style. Returns (groups, keyword_group) — groups is one
+    line_spans list per sentence (see _wrap_sentence_chunks /
+    _wrap_sentence_width); keyword_group is (sentence_index, line_index)
+    or None.
+    """
+    chunked = len(sentences) <= 1
     groups, keyword_group = [], None
     for s_idx, sentence in enumerate(sentences):
         kw_here = keyword if keyword_group is None else ""
-        lines, kwl = _wrap_epigraph_lines(sentence, kw_here, max_words=max_words)
-        if kwl is not None:
-            keyword_group = (s_idx, kwl)
-        groups.append(lines)
+        line_spans = (_wrap_sentence_chunks(sentence, kw_here) if chunked
+                      else _wrap_sentence_width(sentence, kw_here))
+        for li, spans in enumerate(line_spans):
+            if any(is_kw for _, is_kw in spans):
+                keyword_group = (s_idx, li)
+                break
+        groups.append(line_spans)
     return groups, keyword_group
 
 
@@ -1052,12 +1150,15 @@ def _intro_card_schedule(epigraph: dict):
     another with a pause between each — see SENTENCE_FADE /
     INTER_SENTENCE_WAIT above) or the older single-line "text"; "keyword"
     marks the phrase that survives the exit, and an optional "attribution"
-    is shown as one more, smaller, unmarked beat after the quote.
+    (plus "attribution_title", e.g. a role — used when the name alone
+    would mean nothing to most viewers) is shown as one more, smaller,
+    unmarked beat after the quote.
     """
     sentences = epigraph.get("sentences") or [epigraph.get("text") or ""]
     sentences = [s.strip() for s in sentences if s and s.strip()]
     keyword = (epigraph.get("keyword") or "").strip()
     attribution = (epigraph.get("attribution") or "").strip()
+    attribution_title = (epigraph.get("attribution_title") or "").strip()
 
     groups, keyword_group = _wrap_quote_lines(sentences, keyword)
 
@@ -1084,6 +1185,7 @@ def _intro_card_schedule(epigraph: dict):
     return {
         "groups": groups, "keyword_group": keyword_group,
         "group_starts": group_starts, "attribution": attribution,
+        "attribution_title": attribution_title,
         "attribution_start": attribution_start,
         "hold_end": hold_end, "fade_to_kw_end": fade_to_kw_end,
         "kw_hold_end": kw_hold_end, "kw_fade_end": kw_fade_end,
@@ -1108,30 +1210,38 @@ def _intro_card_ass(epigraph: dict, out_path: str) -> float:
     def ms(t):
         return int(round(t * 1000))
 
+    def span_fx(start_ms, fade_ms, is_keyword, prefix=""):
+        entry = (f"{prefix}\\c{RED_ASS}\\alpha&HFF&"
+                 f"\\t({start_ms},{start_ms + fade_ms},\\alpha&H00&\\c{WHITE_ASS})")
+        if is_keyword:
+            return (f"{entry}"
+                    f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\c{RED_ASS})"
+                    f"\\t({ms(sched['kw_hold_end'])},{ms(sched['kw_fade_end'])},\\alpha&HFF&)")
+        return (f"{entry}"
+                f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\alpha&HFF&)")
+
     runs = []
-    for g_idx, lines in enumerate(sched["groups"]):
-        starts, fade = _cascade_starts(len(lines), SENTENCE_FADE)
+    for g_idx, line_spans in enumerate(sched["groups"]):
+        starts, fade = _cascade_starts(len(line_spans), SENTENCE_FADE)
         base = sched["group_starts"][g_idx]
-        for li, ln in enumerate(lines):
+        for li, spans in enumerate(line_spans):
             start = ms(base + starts[li])
-            entry = (f"\\c{RED_ASS}\\alpha&HFF&"
-                     f"\\t({start},{start + ms(fade)},\\alpha&H00&\\c{WHITE_ASS})")
-            if sched["keyword_group"] == (g_idx, li):
-                fx = (f"{entry}"
-                      f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\c{RED_ASS})"
-                      f"\\t({ms(sched['kw_hold_end'])},{ms(sched['kw_fade_end'])},\\alpha&HFF&)")
-            else:
-                fx = (f"{entry}"
-                      f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\alpha&HFF&)")
-            runs.append(f"{{{fx}}}{ln}")
+            # Every span on this physical line shares the same entrance —
+            # they are one line appearing together; only the exit (which
+            # span is the keyword) can differ between them.
+            run_text = "".join(
+                f"{{{span_fx(start, ms(fade), is_kw)}}}{span_text}"
+                for span_text, is_kw in spans)
+            runs.append(run_text)
 
     if sched["attribution"]:
         start = ms(sched["attribution_start"])
-        entry = (f"\\fs{ATTRIBUTION_FONT_SIZE}\\i1\\c{RED_ASS}\\alpha&HFF&"
-                 f"\\t({start},{start + ms(SENTENCE_FADE)},\\alpha&H00&\\c{WHITE_ASS})")
-        fx = (f"{entry}"
-              f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\alpha&HFF&)")
-        runs.append(f"{{{fx}}}— {sched['attribution']}")
+        fx = span_fx(start, ms(SENTENCE_FADE), False,
+                     prefix=f"\\fs{ATTRIBUTION_FONT_SIZE}\\i1")
+        label = f"— {sched['attribution']}"
+        if sched["attribution_title"]:
+            label += f", {sched['attribution_title']}"
+        runs.append(f"{{{fx}}}{label}")
 
     text_block = r"\N".join(runs)
     event = (f"Dialogue: 0,{_ass_time(0)},{_ass_time(sched['kw_fade_end'])},"
