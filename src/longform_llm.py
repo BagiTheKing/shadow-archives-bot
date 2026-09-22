@@ -28,6 +28,7 @@ from llm_provider import get_pool, describe_provider, gemini_available
 from visual_engine import (CANONICAL_STYLE, build_generation_prompt,
                            era_from_text)
 from topics import pick_topic, format_of
+from quote_search import search_quotes
 
 import formats
 
@@ -1446,6 +1447,140 @@ def _epigraph_ok(text: str, keyword: str) -> bool:
     return not any(re.search(p, low) for p in _EPIGRAPH_FORBIDDEN)
 
 
+def _norm_tokens(text: str):
+    return [re.sub(r"[^a-z0-9]", "", w.lower()) for w in text.split()]
+
+
+def _select_real_quote(pool, topic, candidates, era_year=None):
+    """Asks the model to pick ONE of these real, sourced Wikiquote
+    candidates for the cold-open card and mark a keyword in it — never to
+    write new words. Returns {"sentences", "keyword", "attribution",
+    "attribution_title"} or None if nothing fit, the model picked nothing,
+    or its answer failed the grounding check.
+
+    The grounding check is the whole point of building this instead of
+    just asking a model to "recall a quote": the model's job here is
+    selection and light formatting (splitting into sentences, marking a
+    phrase), and its output is verified word-for-word against the actual
+    candidate text before anything downstream trusts it. A model that
+    quietly reworded or embellished the quote fails this check exactly
+    like one that invented it outright — the result is dropped, not
+    corrected, because a "close enough" quote is still not what the real
+    person said.
+    """
+    if not candidates:
+        return None
+
+    listing = "\n".join(
+        f"{i + 1}. \"{c['text']}\" — {c['attribution']}"
+        for i, c in enumerate(candidates))
+    prompt = (
+        f"Story: {topic}\n\n"
+        f"Real, sourced quotes found for this story:\n{listing}\n\n"
+        "Pick the ONE that best sets the moral or emotional weight of "
+        "this story for a black-screen title card that plays before it "
+        "begins — poetic, disturbing, or piercingly on-point. If none of "
+        "them actually fit or would make sense read alone out of "
+        "context, say so instead of forcing one.\n"
+        "HARD RULES:\n"
+        "- Copy the chosen quote's wording EXACTLY, word for word — do "
+        "not paraphrase, trim, modernise or correct it in any way. Split "
+        "it into its individual sentences as a list, exactly as written.\n"
+        "- Mark the single most striking 1-3 word phrase in it — the "
+        "words that should linger on screen, turned red, after the rest "
+        "fades — by wrapping it in double square brackets, e.g. \"...whose "
+        "[[face is marred]] by dust and sweat.\" The brackets are removed "
+        "before display, so the sentence must read naturally without "
+        "them.\n"
+        "- attribution_title: a brief role or era (e.g. \"Roman Emperor\", "
+        "\"14th-century historian\") ONLY if the speaker's name alone "
+        "would mean nothing to most viewers; otherwise an empty string.\n\n"
+        'Output ONLY JSON: {"chosen": <number, or 0 if none fit>, '
+        '"sentences": ["...with [[phrase]] marked..."], '
+        '"attribution_title": "..."}'
+    )
+    try:
+        data = _call(pool,
+                     "You select and lightly format one real quote from a "
+                     "given list. You never invent or alter quote text. "
+                     "Output only JSON.",
+                     prompt, max_tokens=600)
+    except QuotaExhausted:
+        raise
+    if not data:
+        return None
+
+    chosen = data.get("chosen")
+    if not isinstance(chosen, int) or not (1 <= chosen <= len(candidates)):
+        return None
+    candidate = candidates[chosen - 1]
+
+    raw_sentences = data.get("sentences")
+    if not isinstance(raw_sentences, list) or not raw_sentences:
+        return None
+    sentences, keyword = [], ""
+    for s in raw_sentences:
+        if not isinstance(s, str):
+            return None
+        matches = _PUNCH_RE.findall(s)
+        if matches:
+            keyword = matches[0].strip()
+        sentences.append(_PUNCH_RE.sub(lambda m: m.group(1), s).strip())
+
+    # The grounding check: the returned sentences, brackets stripped, must
+    # be the EXACT same word sequence as the real candidate text — not
+    # "close", not "equivalent", identical. Anything else means the model
+    # altered the quote, and an altered quote is not what that person said.
+    if _norm_tokens(" ".join(sentences)) != _norm_tokens(candidate["text"]):
+        print(f"   ⚠️ Model's version of the chosen quote didn't match the "
+              f"sourced text verbatim — discarding rather than trust it.")
+        return None
+    joined = " ".join(sentences)
+    if (not keyword or keyword.lower() not in joined.lower()
+            or not (MIN_KEYWORD_WORDS <= len(keyword.split()) <= MAX_KEYWORD_WORDS)):
+        # A missing or oversized keyword costs the exit its isolated-word
+        # moment, not the whole quote — the renderer already skips that
+        # phase cleanly when no keyword is given.
+        keyword = ""
+
+    return {
+        "sentences": sentences,
+        "keyword": keyword,
+        "attribution": candidate["attribution"],
+        "attribution_title": str(data.get("attribution_title") or "").strip(),
+    }
+
+
+def _source_intro_quote(pool, topic, cost_text, era_year=None):
+    """The cold-open card's content: a real, sourced quote when Wikiquote
+    has one that fits, an original unattributed line (see
+    _generate_intro_epigraph) otherwise. Search first, not the model's own
+    memory — see quote_search.py for why."""
+    try:
+        candidates = search_quotes(topic)
+    except Exception as e:
+        print(f"⚠️ Quote search failed ({type(e).__name__}: {e}).")
+        candidates = []
+
+    if candidates:
+        print(f"🔍 {len(candidates)} sourced quote candidate(s) found for "
+              f"{topic!r}.")
+        try:
+            selected = _select_real_quote(pool, topic, candidates,
+                                          era_year=era_year)
+        except QuotaExhausted:
+            raise
+        if selected:
+            preview = " ".join(selected["sentences"])[:70]
+            print(f"   📜 Using a real quote — {selected['attribution']}: "
+                  f"{preview!r}")
+            return selected
+        print("   ↩️  None of the sourced quotes fit — falling back to an "
+              "original line.")
+
+    return _generate_intro_epigraph(pool, topic, cost_text, era_year=era_year)
+
+
 def _generate_intro_epigraph(pool, topic, cost_text, era_year=None):
     """One original, unattributed line for the 15-second black-screen card
     that opens the video, before "The Claim" — the Far Cry 6 style cold
@@ -1453,13 +1588,15 @@ def _generate_intro_epigraph(pool, topic, cost_text, era_year=None):
     story is, with one short phrase marked to linger alone in red after the
     rest fades.
 
-    Deliberately never a real historical quote: a free model asked to
-    "recall" one will confidently invent a plausible-sounding fake and
-    misattribute it to a real person, and this pipeline publishes without
-    anyone reading the script first. An original line carries the same
-    weight without ever claiming to be someone's real recorded words.
-    Returns None if nothing clean was written within the attempt budget —
-    losing this card costs one intro, not the video.
+    This is the fallback when quote_search finds nothing usable (see
+    _source_intro_quote, which every caller should use instead of this
+    directly). Deliberately never a real historical quote itself: a free
+    model asked to "recall" one will confidently invent a plausible-
+    sounding fake and misattribute it to a real person, and this pipeline
+    publishes without anyone reading the script first. An original line
+    carries the same weight without ever claiming to be someone's real
+    recorded words. Returns None if nothing clean was written within the
+    attempt budget — losing this card costs one intro, not the video.
     """
     prompt = (
         f"Story: {topic}\n\n"
@@ -1767,15 +1904,17 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
 
-        # The 15-second cold-open card, generated the moment "The Cost" is
-        # in hand: it sets the moral weight of the story before "The Claim"
-        # names anyone in it, so it has to be written from The Cost's text,
-        # not guessed from the bare topic string.
+        # The cold-open card, sourced the moment "The Cost" is in hand: it
+        # sets the moral weight of the story before "The Claim" names
+        # anyone in it, so a fallback original line has to be written from
+        # The Cost's own text, not guessed from the bare topic string.
         if heading == opening_heading:
-            intro_epigraph = _generate_intro_epigraph(pool, topic, chapter_text,
-                                                       era_year=era_year)
+            intro_epigraph = _source_intro_quote(pool, topic, chapter_text,
+                                                 era_year=era_year)
             if intro_epigraph:
-                print(f"   🖤 Intro card: {intro_epigraph['text'][:70]!r}")
+                preview = " ".join(intro_epigraph.get("sentences")
+                                    or [intro_epigraph.get("text") or ""])
+                print(f"   🖤 Intro card: {preview[:70]!r}")
 
         # The one joke, right after the fatal call — see _generate_joke_beat.
         # Appended to segs directly (not folded into chapter_text/said_lines
