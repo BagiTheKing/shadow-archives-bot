@@ -53,12 +53,13 @@ PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 # turns red and lingers alone. Silent — the score only starts once the real
 # video does.
 #
-# Each sentence gets its own SENTENCE_FADE window, its lines cascading in
-# one after another inside it (see _wrap_epigraph_lines / _line_starts); the
-# next sentence does not begin until INTER_SENTENCE_WAIT after the previous
-# one has fully settled to white. So the card's total length is not fixed —
-# a longer quote takes longer to read in — but everything after the last
-# sentence settles follows the same fixed shape every time:
+# Each sentence fades in as ONE simultaneous unit (all its lines together,
+# whether it wrapped to one physical line or, rarely, two — never staggered
+# line by line); the next sentence does not begin until INTER_SENTENCE_WAIT
+# after the previous one has fully settled to white. So the card's total
+# length is not fixed — a longer quote takes longer to read in — but
+# everything after the last sentence settles follows the same fixed shape
+# every time:
 #   settle -> INTRO_HOLD (hold) -> BODY_FADE (body fades, keyword -> red)
 #   -> KEYWORD_HOLD (keyword alone) -> KEYWORD_FADE (keyword fades)
 #   -> BLACK_BUFFER (black)
@@ -66,7 +67,6 @@ PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 # original fixed 15.0s card (1.5 + 9.0 + 1.0 + 2.0 + 1.0 + 0.5).
 SENTENCE_FADE = 1.5
 INTER_SENTENCE_WAIT = 1.5
-INTRO_LINE_FADE = 0.7        # one line's own cascade step inside its sentence
 INTRO_HOLD = 9.0
 BODY_FADE = 1.0
 KEYWORD_HOLD = 2.0
@@ -77,9 +77,12 @@ RED_ASS = r"&H0000FF&"
 WHITE_ASS = r"&HFFFFFF&"
 
 # Must match the Epigraph style's own Fontsize/MarginL/MarginR below — the
-# width real sentences are wrapped against is only correct if it does.
+# width real sentences are wrapped against is only correct if it does. Wide
+# enough that a normal sentence (a dozen-odd words) reads as one line, the
+# way an actual Far Cry 6 card runs text nearly edge to edge — only a
+# genuinely long sentence should ever spill to a second line.
 EPIGRAPH_FONT_SIZE = 66
-EPIGRAPH_MARGIN = 220
+EPIGRAPH_MARGIN = 100
 EPIGRAPH_MAX_WIDTH = W - 2 * EPIGRAPH_MARGIN
 
 FONT_NAME = "Anton"
@@ -103,7 +106,7 @@ Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0
 Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
 Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
 Style: Scrim,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
-Style: Epigraph,{FONT_NAME},66,&H00FFFFFF,&H0000E8FF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,0,5,220,220,0,1
+Style: Epigraph,{FONT_NAME},{EPIGRAPH_FONT_SIZE},&H00FFFFFF,&H0000E8FF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,0,5,{EPIGRAPH_MARGIN},{EPIGRAPH_MARGIN},0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -990,56 +993,14 @@ def _text_width(text: str) -> int:
     return box[2] - box[0]
 
 
-def _wrap_sentence_chunks(text: str, keyword: str, max_words: int = 4):
-    """The short single-line epigraph's look: forces a line break every
-    max_words words (or at clause punctuation) regardless of how much room
-    is actually left, so a short poetic line cascades in as a staccato of
-    short phrases. The marked keyword always lands on a dedicated line —
-    it is the one word or two that survives after the rest fades. Returns
-    line_spans: one [(text, is_keyword)] list per physical line.
-    """
-    words = text.split()
-    if not words:
-        return [[(text, False)]]
-
-    norm = [_norm_word(w) for w in words]
-    kw_words = [_norm_word(w) for w in keyword.split()] if keyword else []
-    kw_span = None
-    if kw_words:
-        n = len(kw_words)
-        for i in range(len(norm) - n + 1):
-            if norm[i:i + n] == kw_words:
-                kw_span = (i, i + n)
-                break
-
-    lines, current, i = [], [], 0
-    while i < len(words):
-        if kw_span and i == kw_span[0]:
-            if current:
-                lines.append([(" ".join(current), False)])
-                current = []
-            lines.append([(" ".join(words[kw_span[0]:kw_span[1]]), True)])
-            i = kw_span[1]
-            continue
-        current.append(words[i])
-        ends_clause = words[i].rstrip().endswith((",", ";", ":"))
-        i += 1
-        if len(current) >= max_words or ends_clause:
-            lines.append([(" ".join(current), False)])
-            current = []
-    if current:
-        lines.append([(" ".join(current), False)])
-    return lines
-
-
-def _wrap_sentence_width(text: str, keyword: str):
-    """A real quote sentence's look: wraps only where the line would
-    actually overflow the card, measured against the real font — a short
-    sentence stays on one line instead of being chopped into forced
-    fragments. The marked keyword is isolated inline within whichever
-    natural line it falls on (never pulled onto a line of its own — a real
-    quote's own sentence shape is what should read on screen). Returns
-    line_spans: one [(text, is_keyword)] list per physical line.
+def _wrap_sentence(text: str, keyword: str):
+    """Wraps one sentence only where a line would actually overflow the
+    card, measured against the real font — a sentence stays on one line
+    whenever it fits (which is most of the time; the margin is wide
+    enough for a normal sentence), and only spills to a second line when
+    it truly does not. The marked keyword is isolated inline within
+    whichever natural line it falls on. Returns line_spans: one
+    [(text, is_keyword)] list per physical line.
     """
     words = text.split()
     if not words:
@@ -1103,40 +1064,20 @@ def _wrap_sentence_width(text: str, keyword: str):
 def _wrap_quote_lines(sentences, keyword):
     """Wraps every sentence of a (possibly multi-sentence) quote, scanning
     them in order for the marked keyword and isolating only its first
-    occurrence. A single sentence keeps the cascading-poem chunk style
-    (confirmed to read well for the short original epigraph); two or more
-    real sentences wrap naturally by width instead — forcing every
-    sentence of an actual quote into 4-word fragments reads as clutter,
-    not style. Returns (groups, keyword_group) — groups is one
-    line_spans list per sentence (see _wrap_sentence_chunks /
-    _wrap_sentence_width); keyword_group is (sentence_index, line_index)
-    or None.
+    occurrence. Returns (groups, keyword_group) — groups is one
+    line_spans list per sentence (see _wrap_sentence); keyword_group is
+    (sentence_index, line_index) or None.
     """
-    chunked = len(sentences) <= 1
     groups, keyword_group = [], None
     for s_idx, sentence in enumerate(sentences):
         kw_here = keyword if keyword_group is None else ""
-        line_spans = (_wrap_sentence_chunks(sentence, kw_here) if chunked
-                      else _wrap_sentence_width(sentence, kw_here))
+        line_spans = _wrap_sentence(sentence, kw_here)
         for li, spans in enumerate(line_spans):
             if any(is_kw for _, is_kw in spans):
                 keyword_group = (s_idx, li)
                 break
         groups.append(line_spans)
     return groups, keyword_group
-
-
-def _cascade_starts(n: int, window: float):
-    """Local start times (seconds, from the group's own t=0) for n lines
-    cascading into view one after another, the last one finishing exactly
-    at `window` regardless of n. Single line uses the whole window as its
-    own fade duration; more than one staggers INTRO_LINE_FADE-long fades
-    inside it."""
-    if n <= 1:
-        return [0.0], window
-    fade = INTRO_LINE_FADE
-    stagger = (window - fade) / (n - 1)
-    return [round(i * stagger, 4) for i in range(n)], fade
 
 
 def _intro_card_schedule(epigraph: dict):
@@ -1201,9 +1142,9 @@ def _intro_card_ass(epigraph: dict, out_path: str) -> float:
     it sits once other lines around it fade, and separate events would mean
     re-positioning it — a visible jump instead of a clean disappearance.
     Every phrase line (and the attribution, if any) carries its own inline
-    override block instead, so one event can stagger many lines on their
-    own timelines while still stacking as one paragraph (\\N is a hard
-    break, not a wrap).
+    override block instead, so one event can give each sentence (and the
+    keyword within it) its own timeline while still stacking as one
+    paragraph (\\N is a hard break, not a wrap).
     """
     sched = _intro_card_schedule(epigraph)
 
@@ -1222,15 +1163,14 @@ def _intro_card_ass(epigraph: dict, out_path: str) -> float:
 
     runs = []
     for g_idx, line_spans in enumerate(sched["groups"]):
-        starts, fade = _cascade_starts(len(line_spans), SENTENCE_FADE)
-        base = sched["group_starts"][g_idx]
-        for li, spans in enumerate(line_spans):
-            start = ms(base + starts[li])
-            # Every span on this physical line shares the same entrance —
-            # they are one line appearing together; only the exit (which
-            # span is the keyword) can differ between them.
+        # Every line of this sentence shares the same entrance — a
+        # sentence appears as one simultaneous unit, whether it wrapped to
+        # one physical line or (rarely, for a long one) two; only the exit
+        # (which span is the keyword) can differ within it.
+        start = ms(sched["group_starts"][g_idx])
+        for spans in line_spans:
             run_text = "".join(
-                f"{{{span_fx(start, ms(fade), is_kw)}}}{span_text}"
+                f"{{{span_fx(start, ms(SENTENCE_FADE), is_kw)}}}{span_text}"
                 for span_text, is_kw in spans)
             runs.append(run_text)
 
