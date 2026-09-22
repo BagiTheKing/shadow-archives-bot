@@ -839,6 +839,83 @@ def _entities(text: str):
     return [w for w in words if w not in skip]
 
 
+_STAT_ONES_WORDS = ["zero", "one", "two", "three", "four", "five", "six",
+                   "seven", "eight", "nine", "ten", "eleven", "twelve",
+                   "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+                   "eighteen", "nineteen"]
+_STAT_TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty",
+                   "seventy", "eighty", "ninety"]
+
+
+def _stat_spelled_out_forms(n: int):
+    """Every plausible spelled-out English phrasing for n, for n < 1000 —
+    mirrors longform_video.py's _spelled_out_forms (same reasoning: large
+    figures stay as digits in this channel's narration, small counts get
+    spelled out in flowing prose). Duplicated rather than imported: this
+    module generates the script, longform_video.py renders it, and a script
+    module reaching into the renderer for a plain number-to-words helper is
+    the wrong direction for that dependency.
+    """
+    if not (0 <= n < 1000):
+        return []
+    if n < 20:
+        return [[_STAT_ONES_WORDS[n]]]
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        if ones == 0:
+            return [[_STAT_TENS_WORDS[tens]]]
+        return [[_STAT_TENS_WORDS[tens], _STAT_ONES_WORDS[ones]],
+                [f"{_STAT_TENS_WORDS[tens]}-{_STAT_ONES_WORDS[ones]}"]]
+    hundreds, rest = divmod(n, 100)
+    prefix = [_STAT_ONES_WORDS[hundreds], "hundred"]
+    if rest == 0:
+        return [prefix]
+    return [prefix + ["and"] + t for t in _stat_spelled_out_forms(rest)] + \
+           [prefix + t for t in _stat_spelled_out_forms(rest)]
+
+
+def _stat_value_in_text(value, text: str) -> bool:
+    """Whether a key_stat's value is actually stated in this chapter's own
+    narration — numeral form (exact or comma/digit-normalised, e.g. "13,000"
+    matches "13000") or spelled-out English form (e.g. "83" matches
+    "eighty-three" text). Real evidence (a "83 / RECOGNIZED ETHNIC GROUPS"
+    callout appearing over an unrelated sentence) showed the model can pick
+    a true, on-topic figure as key_stat without ever actually saying it —
+    the narration used a different, related number instead ("eighty
+    competing nationalities") — which nothing downstream can ever sync to,
+    because there is nothing to sync to. Checked here, at generation time,
+    so an ungrounded stat gets dropped before it ever reaches the renderer.
+    """
+    target = str(value).strip()
+    target_digits = re.sub(r"\D", "", target)
+    # Whitespace-only split, not a punctuation-aware regex: "13,000" must
+    # stay one token, the same way audio_engine._estimate_word_timings and
+    # longform_video._find_stat_value_time already tokenize narration (both
+    # just call text.split()). A regex that treats "," as a separator would
+    # break "13,000" into "13" and "000", neither of which digit-normalises
+    # back to "13000" — caught by testing this exact value before shipping.
+    words = text.split()
+    normalized = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in words]
+
+    for w in words:
+        clean = w.strip().strip("\"'.,!?;:—")
+        if clean == target or (target_digits and
+                               re.sub(r"\D", "", clean) == target_digits):
+            return True
+
+    if target_digits.isdigit():
+        wanted = {"".join(re.sub(r"[^a-z0-9]", "", tok.lower()) for tok in form)
+                  for form in _stat_spelled_out_forms(int(target_digits))}
+        if wanted:
+            for i in range(len(normalized)):
+                joined = ""
+                for j in range(i, min(i + 4, len(normalized))):
+                    joined += normalized[j]
+                    if joined in wanted:
+                        return True
+    return False
+
+
 def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
     """The anchor must explain the headline, not merely share a country with it.
 
@@ -1622,6 +1699,22 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             stat = {"value": str(stat["value"])[:14],
                     "label": str(stat.get("label", ""))[:34]}
         else:
+            stat = {}
+
+        # A real render showed a "83 / RECOGNIZED ETHNIC GROUPS" callout
+        # landing over an unrelated sentence — not a sync bug, a grounding
+        # one: the narration never actually said "83" in any form, only a
+        # different, related figure ("eighty competing nationalities").
+        # Nothing downstream can sync a callout to a number that was never
+        # spoken, so it has to be caught here, at the source, not patched at
+        # render time. _stat_value_in_text checks both the numeral and
+        # spelled-out English forms (the same two forms longform_video.py's
+        # _find_stat_value_time looks for when it places the callout).
+        if stat.get("value") and not _stat_value_in_text(stat["value"], chapter_text):
+            print(f"   ⚠️ key_stat {stat['value']!r} does not appear in "
+                  f"{heading!r}'s own narration (checked numeral and "
+                  f"spelled-out forms) — dropping it rather than show a "
+                  f"number the video can never sync to what's being said.")
             stat = {}
 
         # arc_index, not the position in this list: a chapter that failed to
