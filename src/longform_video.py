@@ -950,54 +950,107 @@ def build_sfx_bed(cues, total: float, out: str):
         return None
 
 
+# Each phrase line's own entrance: alpha AND colour animate together, from
+# invisible red to solid white — a real fade-in, not a colour shift on text
+# that is already fully opaque.
+INTRO_LINE_FADE_MS = 700
+
+
+def _norm_word(w: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", w.lower())
+
+
+def _wrap_epigraph_lines(text: str, keyword: str, max_words: int = 4):
+    """Breaks the epigraph into short phrase lines that will cascade in one
+    after another, the marked keyword always landing on a line of its own —
+    it is the one word or two that survives after the rest fades, so it
+    reads clearest alone rather than sharing a line it would have to be cut
+    out of later. Returns (lines, keyword_line_index); the index is None if
+    the keyword could not be located by its own words (falls back to no
+    isolated-keyword phase rather than guessing where it is).
+    """
+    words = text.split()
+    if not words:
+        return [text], None
+
+    norm = [_norm_word(w) for w in words]
+    kw_words = [_norm_word(w) for w in keyword.split()] if keyword else []
+    kw_span = None
+    if kw_words:
+        n = len(kw_words)
+        for i in range(len(norm) - n + 1):
+            if norm[i:i + n] == kw_words:
+                kw_span = (i, i + n)
+                break
+
+    lines, current, i = [], [], 0
+    while i < len(words):
+        if kw_span and i == kw_span[0]:
+            if current:
+                lines.append(" ".join(current))
+                current = []
+            lines.append(" ".join(words[kw_span[0]:kw_span[1]]))
+            i = kw_span[1]
+            continue
+        current.append(words[i])
+        ends_clause = words[i].rstrip().endswith((",", ";", ":"))
+        i += 1
+        if len(current) >= max_words or ends_clause:
+            lines.append(" ".join(current))
+            current = []
+    if current:
+        lines.append(" ".join(current))
+
+    keyword_line = None
+    if kw_span:
+        target = " ".join(words[kw_span[0]:kw_span[1]])
+        keyword_line = next((li for li, ln in enumerate(lines) if ln == target), None)
+    return lines, keyword_line
+
+
 def _intro_card_ass(epigraph: dict, out_path: str):
     """Writes the standalone ASS script for the 15s cold-open card.
 
-    One Dialogue line, not three: the keyword has to stay exactly where it
-    sits inside the sentence once the rest of the text fades around it, and
-    splitting it into a separate event would mean re-positioning it — a
-    visible jump instead of the rest simply disappearing. Each of the three
-    runs (before the keyword, the keyword, after the keyword) carries its
-    own inline override block, so one line can animate three spans on three
-    different timelines while still wrapping as one paragraph.
+    One Dialogue event, not one per line: a line has to stay exactly where
+    it sits once other lines around it fade, and separate events would mean
+    re-positioning it — a visible jump instead of a clean disappearance.
+    Every phrase line carries its own inline override block instead, so one
+    event can stagger several lines on their own timelines while still
+    stacking as one paragraph (\\N is a hard break, not a wrap).
     """
     text = (epigraph.get("text") or "").strip()
     keyword = (epigraph.get("keyword") or "").strip()
-    idx = text.lower().find(keyword.lower()) if keyword else -1
-    if idx < 0:
-        # Should not happen — _epigraph_ok already checked the keyword is a
-        # substring of the text — but never let a render crash over it.
-        pre, kw, post = "", text, ""
-    else:
-        pre = text[:idx].strip()
-        kw = text[idx:idx + len(keyword)]
-        post = text[idx + len(keyword):].strip()
+    lines, keyword_line = _wrap_epigraph_lines(text, keyword)
 
     def ms(t):
         return int(round(t * 1000))
 
-    body_fx = (
-        f"\\c{RED_ASS}\\alpha&H00&"
-        f"\\t(0,{ms(INTRO_RED_IN)},\\c{WHITE_ASS})"
-        f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\alpha&HFF&)"
-    )
-    keyword_fx = (
-        f"\\c{RED_ASS}\\alpha&H00&"
-        f"\\t(0,{ms(INTRO_RED_IN)},\\c{WHITE_ASS})"
-        f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\c{RED_ASS})"
-        f"\\t({ms(INTRO_KEYWORD_HOLD_END)},{ms(INTRO_KEYWORD_FADE_END)},\\alpha&HFF&)"
-    )
+    n = len(lines)
+    if n <= 1:
+        starts = [0]
+        fade_dur = ms(INTRO_RED_IN)
+    else:
+        fade_dur = INTRO_LINE_FADE_MS
+        stagger = (ms(INTRO_RED_IN) - fade_dur) / (n - 1)
+        starts = [round(i * stagger) for i in range(n)]
 
-    chunks = []
-    if pre:
-        chunks.append(f"{{{body_fx}}}{pre} ")
-    chunks.append(f"{{{keyword_fx}}}{kw}")
-    if post:
-        chunks.append(f" {{{body_fx}}}{post}")
-    line = "".join(chunks)
+    runs = []
+    for i, ln in enumerate(lines):
+        start = starts[i]
+        entry = (f"\\c{RED_ASS}\\alpha&HFF&"
+                 f"\\t({start},{start + fade_dur},\\alpha&H00&\\c{WHITE_ASS})")
+        if i == keyword_line:
+            fx = (f"{entry}"
+                  f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\c{RED_ASS})"
+                  f"\\t({ms(INTRO_KEYWORD_HOLD_END)},{ms(INTRO_KEYWORD_FADE_END)},\\alpha&HFF&)")
+        else:
+            fx = (f"{entry}"
+                  f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\alpha&HFF&)")
+        runs.append(f"{{{fx}}}{ln}")
 
+    text_block = r"\N".join(runs)
     event = (f"Dialogue: 0,{_ass_time(0)},{_ass_time(INTRO_KEYWORD_FADE_END)},"
-             f"Epigraph,,0,0,0,,{line}")
+             f"Epigraph,,0,0,0,,{text_block}")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + event + "\n")
 
