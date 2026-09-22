@@ -50,8 +50,11 @@ PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 # The Far Cry 6 style cold-open card: black screen, an original line (or a
 # short quote of a few sentences) fades in red then settles white, holds,
 # then everything but its marked keyword fades away while the keyword itself
-# turns red and lingers alone. Silent — the score only starts once the real
-# video does.
+# turns red and lingers alone. No narration plays under it — nothing is
+# actually being narrated at this point in the video anyway — but "The
+# Claim"'s own score starts right here rather than waiting for the card to
+# end: the card is scored as the opening of "The Claim", not the tail of
+# "The Cost" (see the chapter-marks override in generate_longform_video).
 #
 # Each sentence fades in as ONE simultaneous unit (all its lines together,
 # whether it wrapped to one physical line or, rarely, two — never staggered
@@ -64,10 +67,10 @@ PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 #   -> KEYWORD_HOLD (keyword alone) -> KEYWORD_FADE (keyword fades)
 #   -> BLACK_BUFFER (black)
 # A single short sentence with no attribution reduces to exactly the
-# original fixed 15.0s card (1.5 + 9.0 + 1.0 + 2.0 + 1.0 + 0.5).
+# fixed 10.0s card (1.5 + 4.0 + 1.0 + 2.0 + 1.0 + 0.5).
 SENTENCE_FADE = 1.5
 INTER_SENTENCE_WAIT = 1.5
-INTRO_HOLD = 9.0
+INTRO_HOLD = 4.0
 BODY_FADE = 1.0
 KEYWORD_HOLD = 2.0
 KEYWORD_FADE = 1.0
@@ -1221,9 +1224,10 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
     for the description, and music_attribution is the required credit text
     for any Creative Commons track used in the score, or "" if none.
 
-    intro_epigraph, when given, is the {"text", "keyword"} dict from
-    longform_llm's _generate_intro_epigraph — a 15s silent title card is
-    inserted after "The Cost" chapter and before the rest of the video."""
+    intro_epigraph, when given, is the {"text"/"sentences", "keyword", ...}
+    dict from longform_llm's _source_intro_quote — a narration-free title
+    card is inserted after "The Cost" chapter and before "The Claim,"
+    scored as that chapter's own opening rather than a silent gap."""
     print("🎬 Long-form video engine starting...")
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
@@ -1251,9 +1255,13 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
     punch_cues, chapter_titles = [], []
     # Where the music ducks and the sound design fires.
     card_starts, pivot_start = [], None
-    # (start, end) of the cold-open card, if one was built — muted out of the
-    # final mix in Phase 4 so the score only starts once the real video does.
-    intro_range = None
+    # Set by the intro-card block below: overrides the NEXT chapter's own
+    # chapter_marks start so its musical act (see plan_chapter_score) opens
+    # under the card instead of under the tail of the previous chapter.
+    # The on-screen chapter title and the music's "card lift" still land on
+    # the real cursor once the card ends — only which act owns that stretch
+    # of music changes.
+    next_chapter_mark_start = None
     for c_idx, group in chapters:
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
@@ -1262,7 +1270,9 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
                                      reel, cut_index=cuts)
         cuts += max(0, len(group) - 1)
         heading = group[0].get("chapter_heading", f"Part {c_idx + 1}")
-        chapter_marks.append((heading, cursor))
+        mark_start = cursor if next_chapter_mark_start is None else next_chapter_mark_start
+        chapter_marks.append((heading, mark_start))
+        next_chapter_mark_start = None
         # Every chapter is announced on screen except the first. The opening
         # card used to slide in at 0.3s and sit over the hook for four seconds,
         # so the first thing a viewer read was a filing label rather than the
@@ -1313,18 +1323,23 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
         # The cold-open card belongs right after "The Cost" — arc_index 0 —
         # and before "The Claim" names anyone. The Cost can never be dropped
         # (generate_longform_script returns None outright if it fails), so
-        # c_idx == 0 is always the real first chapter here.
+        # c_idx == 0 is always the real first chapter here. Musically the
+        # card opens "The Claim" rather than closing "The Cost": its score
+        # should be playing under the card already, not waiting for the
+        # card to end, so "The Claim"'s chapter_marks entry is pinned to
+        # right here instead of the cursor once the card has played out.
         if c_idx == 0 and intro_epigraph:
             try:
                 intro_clip, intro_duration = _build_intro_card(intro_epigraph, build_dir)
                 reels.append(intro_clip)
                 intro_start = cursor
+                next_chapter_mark_start = intro_start
                 cursor += intro_duration
-                intro_range = (intro_start, cursor)
                 preview = " ".join(intro_epigraph.get("sentences")
                                     or [intro_epigraph.get("text") or ""])
                 print(f"🖤 Intro card inserted at {intro_start:.1f}s "
-                      f"({intro_duration:.1f}s, silent): {preview[:70]!r}")
+                      f"({intro_duration:.1f}s, no narration — The Claim's "
+                      f"score starts here): {preview[:70]!r}")
             except Exception as e:
                 print(f"⚠️ Intro card render failed "
                       f"({type(e).__name__}: {e}) — continuing without it.")
@@ -1420,21 +1435,16 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
         mix_labels.append(f"[{idx}:a]")
 
     if len(mix_labels) > 1:
-        # The score covers the whole timeline (see plan_chapter_score, which
-        # scores "The Cost" from t=0), but the intro card sits inside that
-        # same act and must stay silent — the soundtrack only starts once
-        # the real video does. Gating the finished mix is simpler and more
-        # certain than trying to carve the card's window out of the score
-        # and sfx beds individually.
-        premix_label = "[premute]" if intro_range else "[aout]"
+        # No separate muting needed for the intro card: the merged track's
+        # own audio is already silent there (the card's clip carries a
+        # silent stream — see _build_intro_card), and the score is meant
+        # to be playing under it now (see the chapter_marks override
+        # above, which puts the card inside "The Claim"'s act rather than
+        # "The Cost"'s), not gated out.
         mix_parts.append(
             f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:"
             f"duration=first:normalize=0,"
-            f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2{premix_label}")
-        if intro_range:
-            s, e = intro_range
-            mix_parts.append(
-                f"[premute]volume=0:enable='between(t,{s:.3f},{e:.3f})'[aout]")
+            f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2[aout]")
         cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(mix_parts),
                "-map", "0:v", "-map", "[aout]", "-vf", vf,
                "-c:v", "libx264", "-preset", "medium", "-crf", "21",
