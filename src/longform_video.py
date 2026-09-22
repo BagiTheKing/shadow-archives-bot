@@ -45,23 +45,32 @@ FPS = 30
 XFADE = 0.5              # crossfade within a chapter
 PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
-# The Far Cry 6 style cold-open card: black screen, one original unattributed
-# line fades in red then settles white, holds, then everything but its marked
-# keyword fades away while the keyword itself turns red and lingers alone.
-# Silent — the score only starts once the real video does. Every stage here
-# is in seconds from the card's own start (0.0):
-#   0.0 -  1.5   red -> white fade-in
-#   1.5 - 10.5   full white hold                      (9.0s)
-#  10.5 - 11.5   body fades to nothing, keyword -> red (1.0s, concurrent)
-#  11.5 - 13.5   keyword alone, red                    (2.0s)
-#  13.5 - 14.5   keyword fades out                      (1.0s)
-#  14.5 - 15.0   black buffer, so the total is exactly 15.0s
-INTRO_DURATION = 15.0
-INTRO_RED_IN = 1.5
-INTRO_WHITE_HOLD_END = 10.5
-INTRO_FADE_TO_KEYWORD_END = 11.5
-INTRO_KEYWORD_HOLD_END = 13.5
-INTRO_KEYWORD_FADE_END = 14.5
+# The Far Cry 6 style cold-open card: black screen, an original line (or a
+# short quote of a few sentences) fades in red then settles white, holds,
+# then everything but its marked keyword fades away while the keyword itself
+# turns red and lingers alone. Silent — the score only starts once the real
+# video does.
+#
+# Each sentence gets its own SENTENCE_FADE window, its lines cascading in
+# one after another inside it (see _wrap_epigraph_lines / _line_starts); the
+# next sentence does not begin until INTER_SENTENCE_WAIT after the previous
+# one has fully settled to white. So the card's total length is not fixed —
+# a longer quote takes longer to read in — but everything after the last
+# sentence settles follows the same fixed shape every time:
+#   settle -> INTRO_HOLD (hold) -> BODY_FADE (body fades, keyword -> red)
+#   -> KEYWORD_HOLD (keyword alone) -> KEYWORD_FADE (keyword fades)
+#   -> BLACK_BUFFER (black)
+# A single short sentence with no attribution reduces to exactly the
+# original fixed 15.0s card (1.5 + 9.0 + 1.0 + 2.0 + 1.0 + 0.5).
+SENTENCE_FADE = 1.5
+INTER_SENTENCE_WAIT = 1.5
+INTRO_LINE_FADE = 0.7        # one line's own cascade step inside its sentence
+INTRO_HOLD = 9.0
+BODY_FADE = 1.0
+KEYWORD_HOLD = 2.0
+KEYWORD_FADE = 1.0
+BLACK_BUFFER = 0.5
+ATTRIBUTION_FONT_SIZE = 40  # smaller than the quote's own 66pt Epigraph style
 RED_ASS = r"&H0000FF&"
 WHITE_ASS = r"&HFFFFFF&"
 
@@ -950,24 +959,19 @@ def build_sfx_bed(cues, total: float, out: str):
         return None
 
 
-# Each phrase line's own entrance: alpha AND colour animate together, from
-# invisible red to solid white — a real fade-in, not a colour shift on text
-# that is already fully opaque.
-INTRO_LINE_FADE_MS = 700
-
-
 def _norm_word(w: str) -> str:
     return re.sub(r"[^a-z0-9]", "", w.lower())
 
 
 def _wrap_epigraph_lines(text: str, keyword: str, max_words: int = 4):
-    """Breaks the epigraph into short phrase lines that will cascade in one
-    after another, the marked keyword always landing on a line of its own —
-    it is the one word or two that survives after the rest fades, so it
-    reads clearest alone rather than sharing a line it would have to be cut
-    out of later. Returns (lines, keyword_line_index); the index is None if
-    the keyword could not be located by its own words (falls back to no
-    isolated-keyword phase rather than guessing where it is).
+    """Breaks one sentence into short phrase lines that will cascade in one
+    after another, the marked keyword (if it falls in this sentence) always
+    landing on a line of its own — it is the one word or two that survives
+    after the rest fades, so it reads clearest alone rather than sharing a
+    line it would have to be cut out of later. Returns (lines,
+    keyword_line_index); the index is None if the keyword is not in this
+    sentence (falls back to no isolated-keyword phase rather than guessing
+    where it is).
     """
     words = text.split()
     if not words:
@@ -1008,59 +1012,143 @@ def _wrap_epigraph_lines(text: str, keyword: str, max_words: int = 4):
     return lines, keyword_line
 
 
-def _intro_card_ass(epigraph: dict, out_path: str):
-    """Writes the standalone ASS script for the 15s cold-open card.
+def _wrap_quote_lines(sentences, keyword, max_words=4):
+    """Wraps every sentence of a (possibly multi-sentence) quote, scanning
+    them in order for the marked keyword and isolating only its first
+    occurrence. Returns (groups, keyword_group) — groups is one
+    line-list per sentence (see _wrap_epigraph_lines); keyword_group is
+    (sentence_index, line_index) or None."""
+    groups, keyword_group = [], None
+    for s_idx, sentence in enumerate(sentences):
+        kw_here = keyword if keyword_group is None else ""
+        lines, kwl = _wrap_epigraph_lines(sentence, kw_here, max_words=max_words)
+        if kwl is not None:
+            keyword_group = (s_idx, kwl)
+        groups.append(lines)
+    return groups, keyword_group
+
+
+def _cascade_starts(n: int, window: float):
+    """Local start times (seconds, from the group's own t=0) for n lines
+    cascading into view one after another, the last one finishing exactly
+    at `window` regardless of n. Single line uses the whole window as its
+    own fade duration; more than one staggers INTRO_LINE_FADE-long fades
+    inside it."""
+    if n <= 1:
+        return [0.0], window
+    fade = INTRO_LINE_FADE
+    stagger = (window - fade) / (n - 1)
+    return [round(i * stagger, 4) for i in range(n)], fade
+
+
+def _intro_card_schedule(epigraph: dict):
+    """Works out the full timing for a cold-open card without writing
+    anything: (groups, keyword_group, group_starts, attribution_start,
+    total_duration). One source of truth shared by the ASS writer and the
+    clip renderer, so the file on disk and the reported clip length can
+    never drift apart.
+
+    epigraph may carry either "sentences" (a list, cascading in one after
+    another with a pause between each — see SENTENCE_FADE /
+    INTER_SENTENCE_WAIT above) or the older single-line "text"; "keyword"
+    marks the phrase that survives the exit, and an optional "attribution"
+    is shown as one more, smaller, unmarked beat after the quote.
+    """
+    sentences = epigraph.get("sentences") or [epigraph.get("text") or ""]
+    sentences = [s.strip() for s in sentences if s and s.strip()]
+    keyword = (epigraph.get("keyword") or "").strip()
+    attribution = (epigraph.get("attribution") or "").strip()
+
+    groups, keyword_group = _wrap_quote_lines(sentences, keyword)
+
+    group_starts, t = [], 0.0
+    for _ in groups:
+        group_starts.append(t)
+        t += SENTENCE_FADE + INTER_SENTENCE_WAIT
+    # group_starts[-1] is when the last sentence itself begins fading in —
+    # the trailing wait the loop just added is only there to seed a group
+    # that may not exist, and is never folded into settle.
+    settle = group_starts[-1] + SENTENCE_FADE if group_starts else 0.0
+
+    attribution_start = None
+    if attribution:
+        attribution_start = settle + INTER_SENTENCE_WAIT
+        settle = attribution_start + SENTENCE_FADE
+
+    hold_end = settle + INTRO_HOLD
+    fade_to_kw_end = hold_end + BODY_FADE
+    kw_hold_end = fade_to_kw_end + KEYWORD_HOLD
+    kw_fade_end = kw_hold_end + KEYWORD_FADE
+    total = kw_fade_end + BLACK_BUFFER
+
+    return {
+        "groups": groups, "keyword_group": keyword_group,
+        "group_starts": group_starts, "attribution": attribution,
+        "attribution_start": attribution_start,
+        "hold_end": hold_end, "fade_to_kw_end": fade_to_kw_end,
+        "kw_hold_end": kw_hold_end, "kw_fade_end": kw_fade_end,
+        "total": total,
+    }
+
+
+def _intro_card_ass(epigraph: dict, out_path: str) -> float:
+    """Writes the standalone ASS script for the cold-open card and returns
+    its total duration in seconds.
 
     One Dialogue event, not one per line: a line has to stay exactly where
     it sits once other lines around it fade, and separate events would mean
     re-positioning it — a visible jump instead of a clean disappearance.
-    Every phrase line carries its own inline override block instead, so one
-    event can stagger several lines on their own timelines while still
-    stacking as one paragraph (\\N is a hard break, not a wrap).
+    Every phrase line (and the attribution, if any) carries its own inline
+    override block instead, so one event can stagger many lines on their
+    own timelines while still stacking as one paragraph (\\N is a hard
+    break, not a wrap).
     """
-    text = (epigraph.get("text") or "").strip()
-    keyword = (epigraph.get("keyword") or "").strip()
-    lines, keyword_line = _wrap_epigraph_lines(text, keyword)
+    sched = _intro_card_schedule(epigraph)
 
     def ms(t):
         return int(round(t * 1000))
 
-    n = len(lines)
-    if n <= 1:
-        starts = [0]
-        fade_dur = ms(INTRO_RED_IN)
-    else:
-        fade_dur = INTRO_LINE_FADE_MS
-        stagger = (ms(INTRO_RED_IN) - fade_dur) / (n - 1)
-        starts = [round(i * stagger) for i in range(n)]
-
     runs = []
-    for i, ln in enumerate(lines):
-        start = starts[i]
-        entry = (f"\\c{RED_ASS}\\alpha&HFF&"
-                 f"\\t({start},{start + fade_dur},\\alpha&H00&\\c{WHITE_ASS})")
-        if i == keyword_line:
-            fx = (f"{entry}"
-                  f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\c{RED_ASS})"
-                  f"\\t({ms(INTRO_KEYWORD_HOLD_END)},{ms(INTRO_KEYWORD_FADE_END)},\\alpha&HFF&)")
-        else:
-            fx = (f"{entry}"
-                  f"\\t({ms(INTRO_WHITE_HOLD_END)},{ms(INTRO_FADE_TO_KEYWORD_END)},\\alpha&HFF&)")
-        runs.append(f"{{{fx}}}{ln}")
+    for g_idx, lines in enumerate(sched["groups"]):
+        starts, fade = _cascade_starts(len(lines), SENTENCE_FADE)
+        base = sched["group_starts"][g_idx]
+        for li, ln in enumerate(lines):
+            start = ms(base + starts[li])
+            entry = (f"\\c{RED_ASS}\\alpha&HFF&"
+                     f"\\t({start},{start + ms(fade)},\\alpha&H00&\\c{WHITE_ASS})")
+            if sched["keyword_group"] == (g_idx, li):
+                fx = (f"{entry}"
+                      f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\c{RED_ASS})"
+                      f"\\t({ms(sched['kw_hold_end'])},{ms(sched['kw_fade_end'])},\\alpha&HFF&)")
+            else:
+                fx = (f"{entry}"
+                      f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\alpha&HFF&)")
+            runs.append(f"{{{fx}}}{ln}")
+
+    if sched["attribution"]:
+        start = ms(sched["attribution_start"])
+        entry = (f"\\fs{ATTRIBUTION_FONT_SIZE}\\i1\\c{RED_ASS}\\alpha&HFF&"
+                 f"\\t({start},{start + ms(SENTENCE_FADE)},\\alpha&H00&\\c{WHITE_ASS})")
+        fx = (f"{entry}"
+              f"\\t({ms(sched['hold_end'])},{ms(sched['fade_to_kw_end'])},\\alpha&HFF&)")
+        runs.append(f"{{{fx}}}— {sched['attribution']}")
 
     text_block = r"\N".join(runs)
-    event = (f"Dialogue: 0,{_ass_time(0)},{_ass_time(INTRO_KEYWORD_FADE_END)},"
+    event = (f"Dialogue: 0,{_ass_time(0)},{_ass_time(sched['kw_fade_end'])},"
              f"Epigraph,,0,0,0,,{text_block}")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + event + "\n")
+    return sched["total"]
 
 
-def _build_intro_card(epigraph: dict, build_dir: str) -> str:
-    """Renders the 15s cold-open card as its own silent clip, encoded to
-    match the chapter reels exactly so it concatenates into the same
-    stream-copy join as everything else (see Phase 3 below)."""
+def _build_intro_card(epigraph: dict, build_dir: str):
+    """Renders the cold-open card as its own silent clip, encoded to match
+    the chapter reels exactly so it concatenates into the same stream-copy
+    join as everything else (see Phase 3 below). Returns (path,
+    duration_seconds) — the card's length depends on how much it has to
+    say, so the caller needs the real number, not an assumed constant."""
     ass_path = os.path.join(build_dir, "lf_intro.ass")
-    _intro_card_ass(epigraph, ass_path)
+    duration = _intro_card_ass(epigraph, ass_path)
     out_path = os.path.join(build_dir, "lf_intro.mp4")
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
@@ -1073,8 +1161,8 @@ def _build_intro_card(epigraph: dict, build_dir: str) -> str:
           "-vf", vf,
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
           "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
-          "-pix_fmt", "yuv420p", "-t", f"{INTRO_DURATION:.3f}", out_path])
-    return out_path
+          "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out_path])
+    return out_path, duration
 
 
 def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
@@ -1178,14 +1266,15 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
         # c_idx == 0 is always the real first chapter here.
         if c_idx == 0 and intro_epigraph:
             try:
-                intro_clip = _build_intro_card(intro_epigraph, build_dir)
+                intro_clip, intro_duration = _build_intro_card(intro_epigraph, build_dir)
                 reels.append(intro_clip)
                 intro_start = cursor
-                cursor += INTRO_DURATION
+                cursor += intro_duration
                 intro_range = (intro_start, cursor)
+                preview = " ".join(intro_epigraph.get("sentences")
+                                    or [intro_epigraph.get("text") or ""])
                 print(f"🖤 Intro card inserted at {intro_start:.1f}s "
-                      f"({INTRO_DURATION:.0f}s, silent): "
-                      f"{intro_epigraph['text'][:70]!r}")
+                      f"({intro_duration:.1f}s, silent): {preview[:70]!r}")
             except Exception as e:
                 print(f"⚠️ Intro card render failed "
                       f"({type(e).__name__}: {e}) — continuing without it.")
