@@ -13,10 +13,6 @@ on:
         description: 'Render only, do not upload (dry run)'
         type: boolean
         default: false
-      force_publish:
-        description: 'Publish even if something was uploaded in the last 20h'
-        type: boolean
-        default: false
 
 # Two runs writing to the same channel on the same day is never wanted.
 #
@@ -26,8 +22,14 @@ on:
 # topic, and publishing a reworded copy two hours later. That happened three
 # times (Light Brigade, Ariane 5, the Great Fire). The real guard is in
 # src/published_history.py, which reads the channel back and stands the run
-# down if anything went out inside the last 20 hours. Manual triggers are safe
-# now; use force_publish only when you mean it.
+# down if anything went out inside the last 20 hours.
+#
+# A manual run always overrides that guard now (FORCE_PUBLISH below) — a
+# person triggering this by hand already knows what they're doing, and
+# re-checking a box every time was pure friction. The guard itself is not
+# gone: it still protects the case that actually caused the three repeats
+# above, because the SCHEDULED run keeps checking it regardless of what a
+# manual run did earlier that day.
 concurrency:
   group: daily-publish
   cancel-in-progress: false
@@ -144,9 +146,10 @@ jobs:
           # test; set to 7 to bring the experiment lane back (see src/topics.py
           # for the numbers on both sides of that call).
           EXPERIMENT_EVERY: '5'
-          # Overrides the duplicate guard. Only ever set from the dispatch
-          # input, never on the schedule.
-          FORCE_PUBLISH: ${{ inputs.force_publish && '1' || '0' }}
+          # Overrides the duplicate guard for every manual run, never for
+          # the schedule — see the concurrency comment above for why the
+          # scheduled side still needs to check it.
+          FORCE_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           # Checks the live catalogue before committing to a topic: how many
           # Shorts on the same subject already cleared 100k views this year.
           # Costs ~101 Data API units per candidate (search.list is 100) and is
