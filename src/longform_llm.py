@@ -462,15 +462,46 @@ def _usable_models(models):
     return live or list(models)
 
 
-def _order_models(models):
-    """Preferred model first, then the rest, capped so one call cannot walk the
-    entire list."""
-    models = _usable_models(models)
+def _interleave_by_provider(models, pool):
+    """Groups models by provider, in first-seen order, and interleaves them
+    round-robin (one from each provider in turn) rather than leaving them
+    grouped. Gemini alone contributes several model variants and is always
+    first in pool.models, so a flat walk down the list spends the entire
+    MAX_MODELS_PER_CALL budget inside Gemini whenever all of it is briefly
+    down at once (a real run hit exactly this: four straight Gemini 503s,
+    "high demand", while groq/cerebras/zhipu sat fully untried and working)
+    — one provider's outage should never be able to cost a call every slot
+    it has.
+    """
+    groups, order = {}, []
+    for m in models:
+        p = pool.provider_for(m)
+        if p not in groups:
+            groups[p] = []
+            order.append(p)
+        groups[p].append(m)
+
+    result, idx, empty_streak = [], 0, 0
+    while len(result) < len(models) and empty_streak < len(order):
+        p = order[idx % len(order)]
+        if groups[p]:
+            result.append(groups[p].pop(0))
+            empty_streak = 0
+        else:
+            empty_streak += 1
+        idx += 1
+    return result
+
+
+def _order_models(pool):
+    """Preferred model first, then the rest round-robined across providers,
+    capped so one call cannot walk the entire list."""
+    models = _usable_models(pool.models)
     if _preferred_model and _preferred_model in models:
         rest = [m for m in models if m != _preferred_model]
-        ordered = [_preferred_model] + rest
+        ordered = [_preferred_model] + _interleave_by_provider(rest, pool)
     else:
-        ordered = list(models)
+        ordered = _interleave_by_provider(models, pool)
     return ordered[:MAX_MODELS_PER_CALL]
 
 
@@ -542,7 +573,7 @@ def _call(pool, system, user, max_tokens):
     # paid the same 429 before moving on.
     exhausted = set()
 
-    for model in _order_models(pool.models):
+    for model in _order_models(pool):
         if model in exhausted:
             continue
         client = pool.client_for(model)
@@ -1024,8 +1055,17 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
                      "You choose historical documentary topics. Output only JSON.",
                      prompt + feedback, max_tokens=3000)
         if not data or not data.get("topic"):
-            print("⚠️ No usable anchor returned.")
-            return None
+            # A total non-answer (every model this call tried came back
+            # empty or erroring) is exactly the transient case worth using
+            # the remaining attempt budget on — the previous version gave
+            # up immediately here, so a single bad round of provider
+            # errors early in a run (before _order_models had a reason to
+            # spread across providers) could silently drop a channel-watch
+            # match that a second attempt would have recovered.
+            print(f"⚠️ No usable anchor returned (attempt {attempt}/{attempts}).")
+            if attempt >= attempts:
+                return None
+            continue
 
         try:
             year = int(data.get("anchor_year", 9999))
