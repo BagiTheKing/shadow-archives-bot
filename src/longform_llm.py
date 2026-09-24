@@ -1551,20 +1551,71 @@ def _select_real_quote(pool, topic, candidates, era_year=None):
     }
 
 
+def _extract_search_terms(pool, topic):
+    """A few short, clean search phrases pulled from the topic — a
+    person's name, a place, an event title. Wikiquote's search does much
+    worse on a full descriptive sentence (the topic strings this pipeline
+    generates run 30-40 words, e.g. "Woodrow Wilson's signing of the 1917
+    Espionage Act and the aggressive prosecution of anti-war publisher
+    Charles Schenck, which established...") than on the name it's
+    actually about, and the punctuation inside a sentence-length query
+    (apostrophes, embedded quote marks) can confuse a wiki search outright.
+    Falls back to the raw topic on any failure, so a bad extraction never
+    blocks the search entirely — it just searches worse.
+    """
+    prompt = (
+        f"Topic: {topic}\n\n"
+        "List up to 3 short search phrases from this topic that would "
+        "make good queries on a quotations website — a named person "
+        "first if the topic has one, then a specific place or event "
+        "name. Each phrase should be 1-4 words, exactly as it would "
+        "appear as a real name or title — no extra description, no "
+        "surrounding sentence.\n"
+        'Output ONLY JSON: {"queries": ["...", "..."]}'
+    )
+    try:
+        data = _call(pool, "You extract short, clean search phrases from "
+                     "a topic sentence. Output only JSON.",
+                     prompt, max_tokens=150)
+    except QuotaExhausted:
+        raise
+    except Exception as e:
+        print(f"⚠️ Search-term extraction failed ({type(e).__name__}: {e}) "
+              f"— searching the raw topic instead.")
+        return [topic]
+
+    queries = [q.strip() for q in (data or {}).get("queries") or []
+               if isinstance(q, str) and q.strip()]
+    return queries[:3] or [topic]
+
+
 def _source_intro_quote(pool, topic, cost_text, era_year=None):
     """The cold-open card's content: a real, sourced quote when Wikiquote
     has one that fits, an original unattributed line (see
     _generate_intro_epigraph) otherwise. Search first, not the model's own
     memory — see quote_search.py for why."""
     try:
-        candidates = search_quotes(topic)
-    except Exception as e:
-        print(f"⚠️ Quote search failed ({type(e).__name__}: {e}).")
-        candidates = []
+        search_terms = _extract_search_terms(pool, topic)
+    except QuotaExhausted:
+        raise
+
+    candidates, seen = [], set()
+    for term in search_terms:
+        try:
+            found = search_quotes(term)
+        except Exception as e:
+            print(f"⚠️ Quote search failed for {term!r} "
+                  f"({type(e).__name__}: {e}).")
+            continue
+        for c in found:
+            key = c["text"].lower()
+            if key not in seen:
+                seen.add(key)
+                candidates.append(c)
 
     if candidates:
         print(f"🔍 {len(candidates)} sourced quote candidate(s) found for "
-              f"{topic!r}.")
+              f"{topic!r} (searched {search_terms!r}).")
         try:
             selected = _select_real_quote(pool, topic, candidates,
                                           era_year=era_year)
@@ -1577,6 +1628,9 @@ def _source_intro_quote(pool, topic, cost_text, era_year=None):
             return selected
         print("   ↩️  None of the sourced quotes fit — falling back to an "
               "original line.")
+    else:
+        print(f"   🔍 No sourced quote candidates found (searched "
+              f"{search_terms!r}) — falling back to an original line.")
 
     return _generate_intro_epigraph(pool, topic, cost_text, era_year=era_year)
 
