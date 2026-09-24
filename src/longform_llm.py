@@ -1451,12 +1451,20 @@ def _norm_tokens(text: str):
     return [re.sub(r"[^a-z0-9]", "", w.lower()) for w in text.split()]
 
 
-def _select_real_quote(pool, topic, candidates, era_year=None):
+def _select_real_quote(pool, topic, candidates, tone, context_before,
+                       context_after, era_year=None):
     """Asks the model to pick ONE of these real, sourced Wikiquote
-    candidates for the cold-open card and mark a keyword in it — never to
-    write new words. Returns {"sentences", "keyword", "attribution",
-    "attribution_title"} or None if nothing fit, the model picked nothing,
-    or its answer failed the grounding check.
+    candidates for a black-screen title card and mark a keyword in it —
+    never to write new words. Returns {"sentences", "keyword",
+    "attribution", "attribution_title"} or None if nothing fit, the model
+    picked nothing, or its answer failed the grounding check.
+
+    tone describes the emotional register this particular card needs to
+    hit (the opening card and the pre-verdict card want very different
+    things from the same candidate pool); context_before/context_after
+    are what the video actually says right before and after this card, so
+    the pick is judged against the real moment it sits in rather than
+    just the bare topic.
 
     The grounding check is the whole point of building this instead of
     just asking a model to "recall a quote": the model's job here is
@@ -1476,12 +1484,17 @@ def _select_real_quote(pool, topic, candidates, era_year=None):
         for i, c in enumerate(candidates))
     prompt = (
         f"Story: {topic}\n\n"
+        f"What the video just said, right before this card appears:\n"
+        f"...{context_before}\n\n"
+        f"What the video says right after this card ends:\n"
+        f"{context_after}...\n\n"
         f"Real, sourced quotes found for this story:\n{listing}\n\n"
-        "Pick the ONE that best sets the moral or emotional weight of "
-        "this story for a black-screen title card that plays before it "
-        "begins — poetic, disturbing, or piercingly on-point. If none of "
-        "them actually fit or would make sense read alone out of "
-        "context, say so instead of forcing one.\n"
+        f"Pick the ONE that reads best RIGHT HERE, in this exact spot "
+        f"between those two moments — {tone}. It has to feel like it "
+        f"belongs at this specific point in the video, not just "
+        f"generically related to the topic. If none of them actually fit "
+        f"or would make sense read alone out of context, say so instead "
+        f"of forcing one.\n"
         "HARD RULES:\n"
         "- Copy the chosen quote's wording EXACTLY, word for word — do "
         "not paraphrase, trim, modernise or correct it in any way. Split "
@@ -1589,11 +1602,11 @@ def _extract_search_terms(pool, topic):
     return queries[:3] or [topic]
 
 
-def _source_intro_quote(pool, topic, cost_text, era_year=None):
-    """The cold-open card's content: a real, sourced quote when Wikiquote
-    has one that fits, an original unattributed line (see
-    _generate_intro_epigraph) otherwise. Search first, not the model's own
-    memory — see quote_search.py for why."""
+def _gather_quote_candidates(pool, topic):
+    """Every real, sourced quote candidate Wikiquote has for this topic —
+    searched once and shared by every card this video needs (the opening
+    card and the pre-verdict card draw from the same pool, since they're
+    about the same story), rather than re-querying per card."""
     try:
         search_terms = _extract_search_terms(pool, topic)
     except QuotaExhausted:
@@ -1616,8 +1629,30 @@ def _source_intro_quote(pool, topic, cost_text, era_year=None):
     if candidates:
         print(f"🔍 {len(candidates)} sourced quote candidate(s) found for "
               f"{topic!r} (searched {search_terms!r}).")
+    else:
+        print(f"🔍 No sourced quote candidates found (searched "
+              f"{search_terms!r}).")
+    return candidates
+
+
+def _source_intro_quote(pool, topic, tone, context_before, context_after,
+                        candidates, era_year=None, exclude_texts=None):
+    """One black-screen title card's content: a real, sourced quote from
+    `candidates` when one actually fits this spot, an original
+    unattributed line (see _generate_intro_epigraph) otherwise. Search
+    first, not the model's own memory — see quote_search.py for why.
+
+    candidates comes from _gather_quote_candidates, shared across every
+    card in this video; exclude_texts (lower-cased quote text) keeps a
+    second card from picking the same quote the first one already used.
+    """
+    usable = [c for c in candidates
+             if not exclude_texts or c["text"].lower() not in exclude_texts]
+
+    if usable:
         try:
-            selected = _select_real_quote(pool, topic, candidates,
+            selected = _select_real_quote(pool, topic, usable, tone,
+                                          context_before, context_after,
                                           era_year=era_year)
         except QuotaExhausted:
             raise
@@ -1628,18 +1663,15 @@ def _source_intro_quote(pool, topic, cost_text, era_year=None):
             return selected
         print("   ↩️  None of the sourced quotes fit — falling back to an "
               "original line.")
-    else:
-        print(f"   🔍 No sourced quote candidates found (searched "
-              f"{search_terms!r}) — falling back to an original line.")
 
-    return _generate_intro_epigraph(pool, topic, cost_text, era_year=era_year)
+    return _generate_intro_epigraph(pool, topic, tone, context_before,
+                                    era_year=era_year)
 
 
-def _generate_intro_epigraph(pool, topic, cost_text, era_year=None):
-    """One original, unattributed line for the 15-second black-screen card
-    that opens the video, before "The Claim" — the Far Cry 6 style cold
-    open: a poetic, morally-loaded line about the KIND of failure this
-    story is, with one short phrase marked to linger alone in red after the
+def _generate_intro_epigraph(pool, topic, tone, context_before, era_year=None):
+    """One original, unattributed line for a black-screen title card — the
+    Far Cry 6 style cold open: a poetic line in the register `tone` asks
+    for, with one short phrase marked to linger alone in red after the
     rest fades.
 
     This is the fallback when quote_search finds nothing usable (see
@@ -1654,14 +1686,12 @@ def _generate_intro_epigraph(pool, topic, cost_text, era_year=None):
     """
     prompt = (
         f"Story: {topic}\n\n"
-        f"The video's opening chapter just established this:\n{cost_text[-700:]}\n\n"
-        "Write ONE original, unattributed line for a black-screen title "
-        "card that plays before the story properly begins — a poetic, "
-        "morally-loaded sentence about the KIND of failure this story is "
-        "(blind confidence, a warning ignored, power without "
-        "accountability, the gap between a plan and what it cost) — not a "
-        "summary of what happened and not a specific fact, name, date or "
-        "number from the story.\n"
+        f"What the video just said, right before this card appears:\n"
+        f"...{context_before}\n\n"
+        f"Write ONE original, unattributed line for a black-screen title "
+        f"card at this exact point in the video — {tone}. Not a summary "
+        f"of what happened and not a specific fact, name, date or number "
+        f"from the story.\n"
         "HARD RULES:\n"
         "- This is NOT a real quote and must never be dressed up as one: "
         "no attribution, no name, no dash-and-name, no \"as they said\", "
@@ -1782,7 +1812,6 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
     opening_heading = arc[0][0]
     chapters, tail, short_chapters, dropped = [], "", 0, []
-    intro_epigraph = None
     # Everything already narrated, as normalised sentences and as plain lines.
     # The first feeds the repetition gate, the second is handed to the model so
     # it knows what not to say again.
@@ -1958,18 +1987,6 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
 
-        # The cold-open card, sourced the moment "The Cost" is in hand: it
-        # sets the moral weight of the story before "The Claim" names
-        # anyone in it, so a fallback original line has to be written from
-        # The Cost's own text, not guessed from the bare topic string.
-        if heading == opening_heading:
-            intro_epigraph = _source_intro_quote(pool, topic, chapter_text,
-                                                 era_year=era_year)
-            if intro_epigraph:
-                preview = " ".join(intro_epigraph.get("sentences")
-                                    or [intro_epigraph.get("text") or ""])
-                print(f"   🖤 Intro card: {preview[:70]!r}")
-
         # The one joke, right after the fatal call — see _generate_joke_beat.
         # Appended to segs directly (not folded into chapter_text/said_lines
         # above) so it never counts as narrated fact a later chapter must
@@ -1988,6 +2005,60 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     if dropped:
         print(f"⚠️ Publishing without {len(dropped)} chapter(s): "
               f"{', '.join(dropped)}.")
+
+    # Two black-screen title cards, sourced from the same real-quote search
+    # when Wikiquote has something that fits: one right after the opening
+    # chapter, one right before the closing chapter — a sad, weary beat
+    # that resets the viewer's attention before the verdict lands. Built
+    # only now, once every chapter's real text exists, so each card is
+    # judged (or written) against what the video actually says immediately
+    # before and after it, not just the bare topic string. All six
+    # chapters are already paid for by this point, so a quota wall here
+    # costs the run its cards, never the video already in hand.
+    intro_epigraph = verdict_epigraph = None
+    try:
+        def _chapter_text(chapter):
+            return " ".join(s["narration"] for s in chapter["scenes"])
+
+        quote_candidates = _gather_quote_candidates(pool, topic)
+
+        opening_tone = (
+            "poetic, disturbing — it sets the moral weight of what the "
+            "video is about to claim, the KIND of failure this story is"
+        )
+        intro_epigraph = _source_intro_quote(
+            pool, topic, opening_tone,
+            context_before=_chapter_text(chapters[0])[-700:],
+            context_after=_chapter_text(chapters[1])[:500],
+            candidates=quote_candidates, era_year=era_year)
+        if intro_epigraph:
+            preview = " ".join(intro_epigraph.get("sentences")
+                               or [intro_epigraph.get("text") or ""])
+            print(f"🖤 Opening card: {preview[:70]!r}")
+
+        if len(chapters) >= 3:
+            used = set()
+            if intro_epigraph and intro_epigraph.get("sentences"):
+                used.add(" ".join(intro_epigraph["sentences"]).lower())
+            verdict_tone = (
+                "defeating, sad, weary — the cost has already been paid "
+                "and nothing reverses it now; a quiet gut-punch that "
+                "resets the viewer's attention right before the verdict, "
+                "not a cliffhanger"
+            )
+            verdict_epigraph = _source_intro_quote(
+                pool, topic, verdict_tone,
+                context_before=_chapter_text(chapters[-2])[-700:],
+                context_after=_chapter_text(chapters[-1])[:500],
+                candidates=quote_candidates, era_year=era_year,
+                exclude_texts=used)
+            if verdict_epigraph:
+                preview = " ".join(verdict_epigraph.get("sentences")
+                                   or [verdict_epigraph.get("text") or ""])
+                print(f"🖤 Pre-verdict card: {preview[:70]!r}")
+    except QuotaExhausted:
+        print("🛑 Quota gone before the title cards; publishing without "
+              "them rather than losing a finished script over a decoration.")
 
     full_text = " ".join(s["narration"] for c in chapters for s in c["scenes"])
 
@@ -2049,6 +2120,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         "era_year": era_year,
         "format": episode_format,
         "intro_epigraph": intro_epigraph,
+        "verdict_epigraph": verdict_epigraph,
     }
     normalize_thumbnail_fields(script)
 

@@ -376,7 +376,8 @@ def main():
 
     # Phase 3: render
     video_path, total, chapter_marks, music_attribution = generate_longform_video(
-        scenes, BUILD_DIR, intro_epigraph=script.get("intro_epigraph"))
+        scenes, BUILD_DIR, intro_epigraph=script.get("intro_epigraph"),
+        verdict_epigraph=script.get("verdict_epigraph"))
 
     minutes = total / 60
     if minutes < 4:

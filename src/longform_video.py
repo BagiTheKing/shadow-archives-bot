@@ -1218,16 +1218,22 @@ def _build_intro_card(epigraph: dict, build_dir: str):
     return out_path, duration
 
 
-def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
+def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
+                            verdict_epigraph=None):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks,
     music_attribution) where chapter_marks is [(heading, start_seconds), ...]
     for the description, and music_attribution is the required credit text
     for any Creative Commons track used in the score, or "" if none.
 
-    intro_epigraph, when given, is the {"text"/"sentences", "keyword", ...}
-    dict from longform_llm's _source_intro_quote — a narration-free title
-    card is inserted after "The Cost" chapter and before "The Claim,"
-    scored as that chapter's own opening rather than a silent gap."""
+    intro_epigraph and verdict_epigraph, when given, are
+    {"text"/"sentences", "keyword", ...} dicts from longform_llm's
+    _source_intro_quote — narration-free title cards. intro_epigraph is
+    inserted after the first chapter and before the second, scored as the
+    second chapter's own opening rather than a silent gap; verdict_epigraph
+    is inserted the same way immediately before the LAST chapter (a sad,
+    weary pattern-interrupt ahead of the verdict), scored as that closing
+    chapter's opening. Needs at least 3 chapters so the two insertion
+    points cannot collide."""
     print("🎬 Long-form video engine starting...")
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
@@ -1262,7 +1268,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
     # the real cursor once the card ends — only which act owns that stretch
     # of music changes.
     next_chapter_mark_start = None
-    for c_idx, group in chapters:
+    n_chapters = len(chapters)
+    for pos, (c_idx, group) in enumerate(chapters):
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
         offs, total = _xfade_chapter([g["_clip"] for g in group],
@@ -1320,15 +1327,16 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
         cursor += total
         reels.append(reel)
 
-        # The cold-open card belongs right after "The Cost" — arc_index 0 —
-        # and before "The Claim" names anyone. The Cost can never be dropped
-        # (generate_longform_script returns None outright if it fails), so
-        # c_idx == 0 is always the real first chapter here. Musically the
-        # card opens "The Claim" rather than closing "The Cost": its score
-        # should be playing under the card already, not waiting for the
-        # card to end, so "The Claim"'s chapter_marks entry is pinned to
-        # right here instead of the cursor once the card has played out.
-        if c_idx == 0 and intro_epigraph:
+        # The cold-open card belongs right after the first chapter and
+        # before the second names anyone. The first chapter can never be
+        # dropped (generate_longform_script returns None outright if it
+        # fails), so pos == 0 is always the real first chapter here.
+        # Musically the card opens the next chapter rather than closing
+        # this one: its score should be playing under the card already,
+        # not waiting for the card to end, so the next chapter's
+        # chapter_marks entry is pinned to right here instead of the
+        # cursor once the card has played out.
+        if pos == 0 and intro_epigraph:
             try:
                 intro_clip, intro_duration = _build_intro_card(intro_epigraph, build_dir)
                 reels.append(intro_clip)
@@ -1338,10 +1346,34 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None):
                 preview = " ".join(intro_epigraph.get("sentences")
                                     or [intro_epigraph.get("text") or ""])
                 print(f"🖤 Intro card inserted at {intro_start:.1f}s "
-                      f"({intro_duration:.1f}s, no narration — The Claim's "
-                      f"score starts here): {preview[:70]!r}")
+                      f"({intro_duration:.1f}s, no narration — the next "
+                      f"chapter's score starts here): {preview[:70]!r}")
             except Exception as e:
                 print(f"⚠️ Intro card render failed "
+                      f"({type(e).__name__}: {e}) — continuing without it.")
+
+        # The pre-verdict card sits right before the LAST chapter — a
+        # sad, weary pattern-interrupt after everything else has played
+        # out. Same act-boundary trick as the opening card: pinned to the
+        # closing chapter's own opening, not the tail of the chapter
+        # before it. n_chapters >= 3 keeps this position distinct from
+        # the opening card's (pos == 0); with exactly 2 chapters they
+        # would be the same spot, so the card is skipped rather than
+        # doubled up there.
+        if pos == n_chapters - 2 and n_chapters >= 3 and verdict_epigraph:
+            try:
+                verdict_clip, verdict_duration = _build_intro_card(verdict_epigraph, build_dir)
+                reels.append(verdict_clip)
+                verdict_start = cursor
+                next_chapter_mark_start = verdict_start
+                cursor += verdict_duration
+                preview = " ".join(verdict_epigraph.get("sentences")
+                                    or [verdict_epigraph.get("text") or ""])
+                print(f"🖤 Pre-verdict card inserted at {verdict_start:.1f}s "
+                      f"({verdict_duration:.1f}s, no narration — the "
+                      f"closing chapter's score starts here): {preview[:70]!r}")
+            except Exception as e:
+                print(f"⚠️ Pre-verdict card render failed "
                       f"({type(e).__name__}: {e}) — continuing without it.")
 
     total_duration = cursor

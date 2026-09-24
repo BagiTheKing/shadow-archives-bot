@@ -26,7 +26,10 @@ WIDTH, HEIGHT = 1080, 1920
 CANONICAL_STYLE = ("dramatic chiaroscuro lighting, dark moody cinematic oil "
                    "painting, visible expressive brushwork, rich texture, "
                    "muted color palette with one accent color, highly "
-                   "detailed, no text, no watermark")
+                   "detailed, completely free of any text, letters, words, "
+                   "writing, numbers, captions, signage or watermarks — any "
+                   "page, book, document, sign or screen in frame is blank "
+                   "or angled away so no text is visible")
 
 # Style directions that fight the painterly look. Any comma-clause containing
 # one of these is dropped from the prompt before CANONICAL_STYLE is applied —
