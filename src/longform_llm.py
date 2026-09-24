@@ -1425,7 +1425,10 @@ _EPIGRAPH_ATTRIBUTION_DASH = re.compile(r"[—–]\s*[A-Z]")
 MIN_EPIGRAPH_WORDS = 10
 MAX_EPIGRAPH_WORDS = 22
 MIN_KEYWORD_WORDS = 1
-MAX_KEYWORD_WORDS = 3
+# Wide enough for a short but complete, quotable clause ("a man is a fool") —
+# not just one or two words. What earns the isolated red hold is how
+# unsettling or memorable the phrase is, not brevity for its own sake.
+MAX_KEYWORD_WORDS = 6
 
 
 def _epigraph_ok(text: str, keyword: str) -> bool:
@@ -1499,12 +1502,16 @@ def _select_real_quote(pool, topic, candidates, tone, context_before,
         "- Copy the chosen quote's wording EXACTLY, word for word — do "
         "not paraphrase, trim, modernise or correct it in any way. Split "
         "it into its individual sentences as a list, exactly as written.\n"
-        "- Mark the single most striking 1-3 word phrase in it — the "
-        "words that should linger on screen, turned red, after the rest "
-        "fades — by wrapping it in double square brackets, e.g. \"...whose "
-        "[[face is marred]] by dust and sweat.\" The brackets are removed "
-        "before display, so the sentence must read naturally without "
-        "them.\n"
+        "- Mark the single most striking phrase in it (1-6 words) — the "
+        "words that should linger alone on screen, turned red, after the "
+        "rest fades. Pick for impact, not brevity: the phrase that would "
+        "leave someone thinking, unsettled, or a little afraid of what "
+        "this person chose to say — not just the phrase closest to the "
+        "topic. A short, complete, quotable clause (\"a man is a fool\") "
+        "beats a single safe word. Mark it by wrapping it in double "
+        "square brackets, e.g. \"...whose [[face is marred]] by dust and "
+        "sweat.\" The brackets are removed before display, so the "
+        "sentence must read naturally without them.\n"
         "- attribution_title: a brief role or era (e.g. \"Roman Emperor\", "
         "\"14th-century historian\") ONLY if the speaker's name alone "
         "would mean nothing to most viewers; otherwise an empty string.\n\n"
@@ -1698,12 +1705,14 @@ def _generate_intro_epigraph(pool, topic, tone, context_before, era_year=None):
         "nothing implying a real historical figure spoke these words. It "
         "is an original editorial line, full stop.\n"
         "- 12 to 20 words, one sentence, no quotation marks around it.\n"
-        "- Mark the single most striking 1-3 word phrase in it — the "
+        "- Mark the single most striking phrase in it (1-6 words) — the "
         "words that should linger alone on screen, turned red, after the "
-        "rest fades — by wrapping it in double square brackets, e.g. "
-        "\"Power forgets [[the warning]] it was given.\" The brackets are "
-        "removed before display, so the sentence must read naturally "
-        "without them.\n\n"
+        "rest fades. Pick for impact, not brevity: the phrase that would "
+        "leave someone thinking, unsettled, or a little afraid — a short, "
+        "complete clause beats one safe word. Mark it by wrapping it in "
+        "double square brackets, e.g. \"Power forgets [[the warning]] it "
+        "was given.\" The brackets are removed before display, so the "
+        "sentence must read naturally without them.\n\n"
         'Output ONLY JSON: {"text": "...with [[phrase]] marked..."}'
     )
     for attempt in range(2):
