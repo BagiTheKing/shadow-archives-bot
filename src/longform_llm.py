@@ -494,6 +494,9 @@ def _interleave_by_provider(models, pool):
     return result
 
 
+_last_model = None
+
+
 def _order_models(pool):
     """Preferred model first, then the rest round-robined across providers,
     capped so one call cannot walk the entire list."""
@@ -553,7 +556,7 @@ def _max_tokens_for(provider: str, requested: int) -> int:
     return requested
 
 
-def _call(pool, system, user, max_tokens):
+def _call(pool, system, user, max_tokens, skip=()):
     """Runs a prompt down the model chain, one attempt per model.
 
     The chain spans providers: Gemini's models first, then OpenRouter's free
@@ -562,8 +565,13 @@ def _call(pool, system, user, max_tokens):
 
     Raises QuotaExhausted the moment a daily allowance is gone, instead of
     walking the remaining models to collect identical 429s.
+
+    skip: models not to ask this time, for a caller retrying because the
+    last model's (parseable) answer was unusable. _last_model records which
+    model produced the returned data, so the caller knows what to skip.
     """
-    global _preferred_model, _request_count
+    global _preferred_model, _request_count, _last_model
+    _last_model = None
 
     if not pool:
         raise RuntimeError("No LLM provider configured: set GEMINI_API_KEY "
@@ -575,7 +583,7 @@ def _call(pool, system, user, max_tokens):
     exhausted = set()
 
     for model in _order_models(pool):
-        if model in exhausted:
+        if model in exhausted or model in skip:
             continue
         client = pool.client_for(model)
         provider = pool.provider_for(model)
@@ -618,6 +626,7 @@ def _call(pool, system, user, max_tokens):
             if _preferred_model != model:
                 print(f"   📌 using {model} for the rest of this run")
                 _preferred_model = model
+            _last_model = model
             return data
         except Exception as e:
             err = str(e)
@@ -1751,9 +1760,13 @@ def _extract_search_terms(pool, topic):
     Charles Schenck, which established...") than on the name it's
     actually about, and the punctuation inside a sentence-length query
     (apostrophes, embedded quote marks) can confuse a wiki search outright.
-    Falls back to the raw topic on any failure, so a bad extraction never
-    blocks the search entirely — it just searches worse.
+    Falls back to the proper names in the topic on any failure (see
+    _names_in), and only to the raw topic when it has none. Searching the
+    raw sentence finds nothing: that is exactly how the 2026-09-25 Kinmen
+    video lost both title cards, after a 150-token ceiling cut off two
+    reasoning models' replies to this call.
     """
+    fallback = _names_in(topic) or [topic]
     prompt = (
         f"Topic: {topic}\n\n"
         "List up to 3 short search phrases from this topic that would "
@@ -1767,17 +1780,36 @@ def _extract_search_terms(pool, topic):
     try:
         data = _call(pool, "You extract short, clean search phrases from "
                      "a topic sentence. Output only JSON.",
-                     prompt, max_tokens=150)
+                     prompt, max_tokens=1000)
     except QuotaExhausted:
         raise
     except Exception as e:
         print(f"⚠️ Search-term extraction failed ({type(e).__name__}: {e}) "
-              f"— searching the raw topic instead.")
-        return [topic]
+              f"— searching {fallback!r} instead.")
+        return fallback
 
     queries = [q.strip() for q in (data or {}).get("queries") or []
                if isinstance(q, str) and q.strip()]
-    return queries[:3] or [topic]
+    return queries[:3] or fallback
+
+
+def _names_in(topic, limit=3):
+    """Proper names in a topic sentence, longest first: runs of capitalised
+    words ("Mao Zedong", "Second Taiwan Strait Crisis", "Kinmen"), with a
+    sentence-initial "The" dropped. No model involved, so it still works
+    when every model is truncating or out of quota."""
+    runs = re.findall(r"[A-Z][\w'-]*(?:\s+(?:of\s+|the\s+)?[A-Z][\w'-]*)*",
+                      topic or "")
+    names, seen = [], set()
+    for r in runs:
+        r = re.sub(r"^(The|A|An)\s+", "", r).strip()
+        r = re.sub(r"'s$", "", r)
+        if len(r) < 4 or r.lower() in seen or r in ("The", "A", "An"):
+            continue
+        seen.add(r.lower())
+        names.append(r)
+    names.sort(key=lambda n: -len(n.split()))
+    return names[:limit]
 
 
 def _gather_quote_candidates(pool, topic):
@@ -1884,21 +1916,29 @@ def _generate_intro_epigraph(pool, topic, tone, context_before, era_year=None):
         "double square brackets, e.g. \"Power forgets [[the warning]] it "
         "was given.\" The brackets are removed before display, so the "
         "sentence must read naturally without them.\n\n"
-        'Output ONLY JSON: {"text": "...with [[phrase]] marked..."}'
+        'Output ONLY JSON with one key, "text", holding your line.'
     )
-    for attempt in range(2):
+    # Each retry goes to a different model. On 2026-09-25 the run had fallen
+    # through to one weak free model that echoed the old output template
+    # ("...with [[phrase]] marked...") back verbatim on all four attempts,
+    # because every retry was handed straight back to the same pinned model.
+    tried = set()
+    for attempt in range(3):
         data = _call(pool,
                      "You write one original, unattributed epigraph line "
                      "for a title card. Never a real quote. Output only "
                      "JSON.",
-                     prompt, max_tokens=400)
+                     prompt, max_tokens=1000, skip=tried)
+        if _last_model:
+            tried.add(_last_model)
         raw = (data or {}).get("text", "").strip()
         matches = _PUNCH_RE.findall(raw)
         keyword = matches[0].strip() if matches else ""
         text = _PUNCH_RE.sub(lambda m: m.group(1), raw).strip()
         if _epigraph_ok(text, keyword):
             return {"text": text, "keyword": keyword}
-        print(f"   ⚠️ Intro card rejected (attempt {attempt + 1}/2)"
+        print(f"   ⚠️ Intro card rejected (attempt {attempt + 1}/3, "
+              f"{_last_model})"
               f"{': ' + raw[:60] if raw else ''}")
     print("   ↩️  Skipping the intro card this run.")
     return None
