@@ -963,6 +963,99 @@ def _anchor_fits_niche(topic: str, why: str = "") -> bool:
     return any(re.search(rf"\b{m}\b", text) for m in NICHE_MARKERS)
 
 
+def extract_channel_subjects(videos, pool=None, avoid_titles=()):
+    """Turns a watched channel's recent uploads into ranked, generic
+    documentary subjects. Returns [{"subject", "score", "source"}, ...],
+    most important first, or [] if nothing qualifies or the call fails.
+
+    This replaces a fixed keyword-bucket list that had two real problems: it
+    needed hand-curation for every new recurring story (no bucket at all for
+    Yemen/the Houthis, for instance), and ties between buckets that both
+    matched went to whichever bucket happened to be listed first — not
+    whichever was actually the segment's real subject. Reading the text
+    directly lets the model name the actual subject and weigh stories
+    against each other instead of guessing from isolated keywords.
+
+    That means this call reads raw titles and descriptions, which is exactly
+    what channel_watch.py's docstring warns is dangerous on a show that
+    mixes real geopolitical themes with a named living guest's personal
+    conduct in the same segment — so the prompt below carries the identical
+    "never a named living private individual's personal conduct" rule
+    select_historical_anchor enforces downstream, and is instructed to drop
+    those uploads entirely rather than label them even generically. This is
+    the first of two gates, not the only one: anything that slips through
+    still has to clear select_historical_anchor's own hard rules before it
+    can become a topic.
+    """
+    if not videos:
+        return []
+    pool = pool or get_pool()
+
+    avoid_block = ""
+    recent = [t for t in (avoid_titles or []) if t][:20]
+    if recent:
+        listed = "\n".join(f"- {t}" for t in recent)
+        avoid_block = ("\nALREADY COVERED ON THIS CHANNEL — do not surface a "
+                       f"subject any of these is about:\n{listed}\n")
+
+    lines = []
+    for i, v in enumerate(videos, 1):
+        views = v.get("view_count")
+        views_str = f" ({views:,} views)" if views else ""
+        desc = (v.get("description") or "")[:600]
+        lines.append(f"[{i}] TITLE: {v.get('title', '')}{views_str}\n"
+                     f"DESCRIPTION: {desc}")
+    listing = "\n\n".join(lines)
+
+    prompt = (
+        "Here are recent uploads from a political talk show:\n\n" + listing +
+        "\n\n"
+        "For EACH upload, decide whether it covers a genuine, settled-enough "
+        "geopolitical, policy or historical subject a documentary channel "
+        "could responsibly build an episode around — or whether it is "
+        "really about a named living person's personal conduct, health, "
+        "character, relationships, or an unverified/ongoing allegation "
+        "against them (an affair, an addiction, a defamation dispute, a "
+        "family feud, a lawsuit over a book, a health rumor). DROP every "
+        "upload of that second kind entirely — do not name the people "
+        "involved or describe the dispute, not even generically. This "
+        "applies no matter how newsworthy the dispute is.\n\n"
+        "For every upload that qualifies, write a SHORT, GENERIC subject "
+        "label naming the recurring real-world theme — not the show's "
+        "framing, not a guest's specific claim, not today's headline. Two "
+        "segments about the same underlying story should produce the SAME "
+        "label.\n"
+        "  GOOD: 'the Houthi campaign against Red Sea shipping'\n"
+        "  GOOD: 'Trump-Xi summitry and the Taiwan question'\n"
+        "  BAD:  'Piers grills Houthi spokesman on Mecca attack claim' (a "
+        "take on the segment, not the underlying subject)\n"
+        "  BAD:  any label built around a living private individual's "
+        "personal dispute — drop it instead, per the rule above\n\n"
+        "Then RANK the qualifying subjects by real-world importance and "
+        "consequence, most important first — not by which is safest or "
+        "most familiar. Weigh how many people or countries are materially "
+        "affected and how significant the immediate stakes are; use view "
+        "count only as a tiebreaker between otherwise comparable stories.\n"
+        f"{avoid_block}\n"
+        'Output ONLY JSON: {"subjects": [{"label": "...", "why_important": '
+        '"one sentence"}, ...]}, ranked most important first. Omit anything '
+        "that does not qualify. Use an empty list if nothing qualifies."
+    )
+
+    data = _call(pool,
+                "You find documentary-worthy subjects in the news. Output "
+                "only JSON.",
+                prompt, max_tokens=2000)
+    if not data or not data.get("subjects"):
+        return []
+
+    subjects = [s for s in data["subjects"] if (s.get("label") or "").strip()]
+    n = len(subjects)
+    return [{"subject": s["label"].strip(), "score": n - i,
+             "source": "channel_watch"}
+            for i, s in enumerate(subjects)]
+
+
 def select_historical_anchor(candidates, pool=None, avoid_titles=(),
                              attempts: int = 2):
     """Maps a trending subject onto a historical event old enough to be settled.

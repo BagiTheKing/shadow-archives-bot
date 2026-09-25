@@ -18,6 +18,7 @@ import formats
 from caption_track import SRT_NAME
 from longform_llm import (generate_longform_script, flatten_scenes,
                           select_historical_anchor, QuotaExhausted)
+from llm_provider import get_pool
 from longform_visual import generate_longform_visuals
 from longform_video import generate_longform_video, timestamp
 from thumbnail_engine import make_thumbnail, pick_source_scene
@@ -269,19 +270,29 @@ def resolve_topic(lane: str, history=None):
         return fallback(), False, False, None
 
     if lane == "timely":
+        # One pool for the whole lane: channel-watch's theme extraction and
+        # select_historical_anchor are both LLM calls, and building the
+        # pool twice would repeat provider-availability checks (and any
+        # network calls they make, like discovering Gemini's model list)
+        # for no benefit — _preferred_model is a separate global that
+        # already persists across calls regardless.
+        pool = get_pool()
+        avoid_titles = recent_titles(history, 20)
+
         # Checked first, ahead of the trend feeds below: a live political
         # talk show can have a heated, highly-searched debate up hours
         # before Trends or News RSS catch up to it. Off by default
         # (WATCH_CHANNEL_HANDLE unset) and, even enabled, only ever hands
-        # select_historical_anchor a fixed generic theme label — never a
-        # video's own title or description. See channel_watch.py's
-        # docstring for why that boundary is load-bearing, not stylistic.
+        # select_historical_anchor a generic theme label — never a video's
+        # own title or description. See channel_watch.py's docstring for
+        # why that boundary is load-bearing, not stylistic.
         try:
             from channel_watch import get_watch_candidates
-            watch_candidates = get_watch_candidates()
+            watch_candidates = get_watch_candidates(pool=pool,
+                                                     avoid_titles=avoid_titles)
             if watch_candidates:
                 anchor = select_historical_anchor(
-                    watch_candidates, avoid_titles=recent_titles(history, 20))
+                    watch_candidates, pool=pool, avoid_titles=avoid_titles)
                 if anchor:
                     print(f"📺 Anchored to a channel-watch theme: "
                           f"{anchor['topic'][:70]}")
@@ -295,7 +306,7 @@ def resolve_topic(lane: str, history=None):
             from trend_source import get_trending_subjects
             region, candidates = get_trending_subjects()
             anchor = select_historical_anchor(
-                candidates, avoid_titles=recent_titles(history, 20))
+                candidates, pool=pool, avoid_titles=avoid_titles)
             if anchor:
                 return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
