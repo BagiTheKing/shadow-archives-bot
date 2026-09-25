@@ -91,6 +91,12 @@ def covered_topics(videos, longform_only: bool = False):
     return found
 
 
+# Written under "Next file:" when the promised story came from current events
+# (channel watch, anchored to a settled historical event) instead of the pool.
+# It is what lets promised_topic accept a line that is not in ALL_TOPICS.
+LIVE_PROMISE_MARKER = "Next file origin: current events"
+
+
 def promised_topic(videos):
     """The pool topic the newest upload promised as its next episode, or None.
 
@@ -104,6 +110,9 @@ def promised_topic(videos):
 
     Returns the line only when it matches a pool topic exactly — a truncated or
     hand-edited description must not send an invented topic into the writer.
+    The one exception is a line this pipeline wrote from current events, which
+    carries LIVE_PROMISE_MARKER on the line after it and a year: it was already
+    anchored and vetted when it was promised, so it is kept as written.
     """
     from topics import ALL_TOPICS
     dated = [(t, v) for v in (videos or []) for t in [_published_at(v)] if t]
@@ -115,7 +124,13 @@ def promised_topic(videos):
     if not match:
         return None
     line = match.group(1).strip()
-    return line if line in ALL_TOPICS else None
+    if line in ALL_TOPICS:
+        return line
+    after = (newest.get("description") or "")[match.end():].lstrip("\n")
+    if (after.startswith(LIVE_PROMISE_MARKER)
+            and re.search(r"\(\d{3,4}\)", line) and 20 <= len(line) <= 400):
+        return line
+    return None
 
 
 def recent_titles(videos, limit: int = 30):

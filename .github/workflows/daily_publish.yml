@@ -156,6 +156,15 @@ jobs:
           # capped at 3 candidates a run, against a 10,000/day allowance shared
           # with the upload itself. Set to 0 to run on the static ratings alone.
           MEASURE_SATURATION: '1'
+          # Every other Short's next-file promise comes from current events:
+          # what this channel is covering this week, anchored to a settled
+          # historical event by the same gates as the timely long-form lane
+          # (see live_upcoming in src/main.py). alternate | always | off.
+          # A blank handle turns it off as well.
+          SHORTS_LIVE_MODE: alternate
+          WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
+          WATCH_LOOKBACK_HOURS: '48'
+          HISTORY_CUTOFF_YEAR: '2005'
           # The closing question is posted as the first comment only. Speaking
           # it too was tried for six episodes: it cost ~7 seconds per video,
           # produced zero comments, and talked over the script's designed last

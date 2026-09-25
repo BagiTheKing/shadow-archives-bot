@@ -1167,9 +1167,11 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         "- The topic must fit this channel: a decision, order or miscalculation "
         "and what it cost.\n\n"
         'Output ONLY JSON: {"subject": "the headline you chose", "topic": "one '
-        'specific sentence describing the historical event", "anchor_year": '
-        '1415, "why": "one sentence naming the countries or places involved and '
-        'how this event produced the situation in the headline"}'
+        'specific sentence describing the historical event", "name": "the '
+        'event\'s common name in 2-6 words, no year, e.g. The Capture of '
+        'Ceuta", "anchor_year": 1415, "why": "one sentence naming the '
+        'countries or places involved and how this event produced the '
+        'situation in the headline"}'
     )
 
     feedback = ""
@@ -1225,6 +1227,7 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
             print(f"🧭 Trending subject: {data.get('subject', '?')}")
             print(f"   Anchored to {year}: {data['topic'][:100]}")
             return {"subject": data.get("subject", ""), "topic": data["topic"],
+                    "name": (data.get("name") or "").strip(),
                     "anchor_year": year, "why": data.get("why", "")}
 
         if attempt >= attempts:

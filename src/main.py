@@ -10,13 +10,13 @@ from topics import format_of as topics_format_of
 from caption_track import SRT_NAME
 from llm_engine import generate_video_script
 from thumbnail_engine import make_thumbnail, pick_source_scene
-from topics import pick_topic
+from topics import ALL_TOPICS, pick_topic
 from channel_insights import _is_short
 from published_history import (FORCE, GUARD_HOURS, _published_at,
                                covered_topics, describe,
                                load_published, next_episode_number,
-                               promised_topic, published_within, recent_titles,
-                               series_suffix)
+                               LIVE_PROMISE_MARKER, promised_topic,
+                               published_within, recent_titles, series_suffix)
 from topic_reach import is_saturated, vet
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
@@ -148,6 +148,8 @@ def build_metadata(script_data: dict, episode=None):
     next_topic = (script_data.get("next_topic") or "").strip()
     if next_topic:
         description += f"\n\nNext file: {next_topic}"
+        if next_topic not in ALL_TOPICS:
+            description += f"\n{LIVE_PROMISE_MARKER}"
 
     # Exactly three: #shorts earns the format placement, and the two most
     # valuable from the episode format fill the rest. A fourth would never
@@ -427,6 +429,51 @@ def check_visual_quality(script_data: dict) -> None:
     raise SystemExit(1)
 
 
+# How often the next-file promise comes from current events instead of the
+# pool. "alternate" (default) makes every other Short a live one, "always"
+# makes every Short live when channel watch finds something, "off" disables
+# it. Alternating is deliberate, not caution for its own sake: the pool's
+# geopolitical-root Shorts (Iraq 1922, the Irish border, the hostage crisis)
+# were among the channel's weakest, and timeliness is the one thing they
+# lacked. Half and half gives a like-for-like comparison inside a few weeks.
+SHORTS_LIVE_MODE = os.getenv("SHORTS_LIVE_MODE", "alternate").strip().lower()
+
+
+def live_upcoming(avoid_titles):
+    """A next-file topic from current events, or None.
+
+    Channel watch picks what the watched channel is actually covering this
+    week, select_historical_anchor maps it onto a settled event through the
+    same gates the long-form timely lane uses (cutoff year, relevance, one
+    decision and its cost, no living private individual), and the result is
+    written in the pool's own "Name (year), detail" shape so the outro card,
+    era dating and format detection read it exactly like a pool line.
+
+    Never raises: a dead feed, a quota wall or an anchor that clears no gate
+    returns None and the promise comes from the pool as before.
+    """
+    if SHORTS_LIVE_MODE == "off" or not os.getenv("WATCH_CHANNEL_HANDLE"):
+        return None
+    try:
+        from channel_watch import get_watch_candidates
+        from llm_provider import get_pool
+        from longform_llm import select_historical_anchor
+        pool = get_pool()
+        candidates = get_watch_candidates(pool=pool, avoid_titles=avoid_titles)
+        anchor = select_historical_anchor(candidates, pool=pool,
+                                          avoid_titles=avoid_titles, ranked=True)
+    except Exception as e:
+        print(f"⚠️ Live next file unavailable ({type(e).__name__}: {e}).")
+        return None
+    if not anchor:
+        return None
+    name = " ".join((anchor.get("name") or "").split()[:6]).strip(" .,")
+    detail = " ".join(anchor["topic"].split()).rstrip(".")
+    if not name:
+        name = next_file_subject(detail)
+    return f"{name} ({anchor['anchor_year']}), {detail}"
+
+
 def plan_run():
     """Reads the channel back before writing anything.
 
@@ -518,15 +565,30 @@ def plan_run():
     # the card that the next run would then refuse to make. A smaller budget
     # than today's topic — it shares the same Data API allowance, and one
     # obviously-saturated candidate skipped is most of the value.
+    #
+    # A live topic (current events, see live_upcoming) is tried first when the
+    # mode calls for one. "alternate" skips it when today's own topic was
+    # already a live one, so the two kinds take turns.
     upcoming = None
-    if topic:
+    titles = recent_titles(history)
+    today_is_live = bool(topic) and topic not in ALL_TOPICS
+    want_live = (SHORTS_LIVE_MODE == "always"
+                 or (SHORTS_LIVE_MODE == "alternate" and not today_is_live))
+    if topic and want_live:
+        live = live_upcoming(titles)
+        if live and not is_saturated(live):
+            print(f"📺 Next file from current events: {live[:90]}")
+            upcoming = live
+        elif live:
+            print(f"   ↩︎ live next file saturated, using the pool: {live[:70]}")
+    if topic and not upcoming:
         upcoming, passed_over = vet(lambda excl: pick_topic(exclude=excl),
                                     set(used) | {topic}, max_checks=2)
         for r in passed_over:
             print(f"   ↩︎ not promised, saturated: {r[:70]}")
 
     episode = next_episode_number(history, SERIES_NAME)
-    return topic, recent_titles(history), episode, upcoming
+    return topic, titles, episode, upcoming
 
 
 def main():

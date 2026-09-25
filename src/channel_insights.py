@@ -109,7 +109,7 @@ def match_topic(title: str, description: str = ""):
         # not been published yet — matching it here would mark tomorrow's
         # topic as covered the day before it airs, exclude it from the
         # rotation, and silently break the promise the outro just spoke.
-        published_text = re.sub(r"^Next file: .*$", "", description,
+        published_text = re.sub(r"^Next file(?: origin)?: .*$", "", description,
                                 flags=re.MULTILINE)
         for topic in ALL_TOPICS:
             if topic.strip() and topic.strip() in published_text:
