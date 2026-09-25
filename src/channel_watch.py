@@ -9,7 +9,7 @@ wire headlines. A live political talk show like Piers Morgan Uncensored
 often has a heated, highly-searched debate up on YouTube hours before it
 shows up in either of those — Trends lags real interest, and News RSS
 favours wire copy over commentary shows. Checking a specific channel's
-last-24h uploads catches that gap. This is opt-in and off by default (see
+recent uploads (WATCH_LOOKBACK_HOURS, 48h by default) catches that gap. This is opt-in and off by default (see
 WATCH_CHANNEL_HANDLE); resolve_topic in longform_main.py tries it first
 for the "timely" lane and falls through to trend_source, then the static
 pool, exactly as it already did before this file existed.
@@ -59,12 +59,18 @@ import os
 # Uncensored was the channel that prompted this feature.
 WATCH_CHANNEL_HANDLE = os.getenv("WATCH_CHANNEL_HANDLE", "")
 WATCH_LOOKBACK_HOURS = int(os.getenv("WATCH_LOOKBACK_HOURS", "48"))
-WATCH_MAX_VIDEOS = int(os.getenv("WATCH_MAX_VIDEOS", "10"))
+# How many of the newest uploads to read before the time cutoff is applied.
+# This is the real limit on the window, not WATCH_LOOKBACK_HOURS: a clip-heavy
+# channel can post more than 10 videos in 48h, and at 10 the oldest part of
+# the window was silently cut off. One page costs 1 quota unit whatever its
+# size; the API caps a page at 50.
+WATCH_MAX_VIDEOS = min(50, int(os.getenv("WATCH_MAX_VIDEOS", "30")))
 
 
 def fetch_recent_uploads(handle=None, hours=None, youtube=None, max_results=None):
-    """Recent uploads from the watched channel, newest first, as
-    [{"title", "description", "published_at"}, ...].
+    """Recent uploads from the watched channel, in the API's playlist order, as
+    [{"title", "description", "published_at", "video_id", "view_count"}, ...].
+    view_count is absent when the stats call failed.
 
     Uses channels().list + playlistItems().list (1 quota unit each) rather
     than search.list (100 units) — see topic_reach.py's docstring for why

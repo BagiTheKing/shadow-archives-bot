@@ -34,6 +34,10 @@ on:
         description: 'Render only, do not upload (dry run)'
         type: boolean
         default: false
+      topic_only:
+        description: 'Only choose the topic and print it (no script, render or upload)'
+        type: boolean
+        default: false
       trend_geos:
         description: 'Override Trends regions, e.g. MA,ES (blank = weekly rotation)'
         type: string
@@ -155,12 +159,13 @@ jobs:
           EXPERIMENT_EVERY: '0'
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           LONGFORM_LANE: timely
+          TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
           TREND_GEOS: ${{ inputs.trend_geos }}
           TREND_EDITIONS: ${{ inputs.trend_editions }}
           # Checked first, ahead of the trend feeds above — see
-          # channel_watch.py for the safety boundary (only a fixed generic
-          # theme label ever reaches the anchor step, never the channel's
-          # own video description). Blank handle disables it; the pipeline
+          # channel_watch.py for the safety boundary (only a generic theme
+          # label ever reaches the anchor step, never the channel's own
+          # video title or description). Blank handle disables it; the pipeline
           # then behaves exactly as it did before this existed.
           WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
           # 48h per the owner (was 24h).

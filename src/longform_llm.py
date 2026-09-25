@@ -13,6 +13,7 @@ the chain, the cost, and what would have broken the chain. Letting the model
 choose its own structure every week is how a channel stops having a format.
 """
 
+import datetime
 import json
 import os
 import re
@@ -998,10 +999,21 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
         avoid_block = ("\nALREADY COVERED ON THIS CHANNEL — do not surface a "
                        f"subject any of these is about:\n{listed}\n")
 
+    # Raw view counts across uploads of different ages favour the oldest one,
+    # so each count carries its age and the model can compare like with like.
+    now = datetime.datetime.now(datetime.timezone.utc)
     lines = []
     for i, v in enumerate(videos, 1):
         views = v.get("view_count")
-        views_str = f" ({views:,} views)" if views else ""
+        age = ""
+        try:
+            posted = datetime.datetime.strptime(
+                v.get("published_at", ""), "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=datetime.timezone.utc)
+            age = f", {max(1, round((now - posted).total_seconds() / 3600))}h old"
+        except ValueError:
+            pass
+        views_str = f" ({views:,} views{age})" if views else ""
         desc = (v.get("description") or "")[:600]
         lines.append(f"[{i}] TITLE: {v.get('title', '')}{views_str}\n"
                      f"DESCRIPTION: {desc}")
@@ -1035,7 +1047,8 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
         "consequence, most important first — not by which is safest or "
         "most familiar. Weigh how many people or countries are materially "
         "affected and how significant the immediate stakes are; use view "
-        "count only as a tiebreaker between otherwise comparable stories.\n"
+        "count, relative to the upload's age, only as a tiebreaker between "
+        "otherwise comparable stories.\n"
         f"{avoid_block}\n"
         'Output ONLY JSON: {"subjects": [{"label": "...", "why_important": '
         '"one sentence"}, ...]}, ranked most important first. Omit anything '
@@ -1045,19 +1058,20 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
     data = _call(pool,
                 "You find documentary-worthy subjects in the news. Output "
                 "only JSON.",
-                prompt, max_tokens=2000)
+                prompt, max_tokens=3000)
     if not data or not data.get("subjects"):
         return []
 
     subjects = [s for s in data["subjects"] if (s.get("label") or "").strip()]
     n = len(subjects)
-    return [{"subject": s["label"].strip(), "score": n - i,
-             "source": "channel_watch"}
+    return [{"subject": s["label"].strip(),
+             "why": (s.get("why_important") or "").strip(),
+             "score": n - i, "source": "channel_watch"}
             for i, s in enumerate(subjects)]
 
 
 def select_historical_anchor(candidates, pool=None, avoid_titles=(),
-                             attempts: int = 2):
+                             attempts: int = 2, ranked: bool = False):
     """Maps a trending subject onto a historical event old enough to be settled.
 
     Returns {"subject", "topic", "anchor_year", "why"} or None. None is not a
@@ -1068,6 +1082,13 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
     is merely relevant history is rejected the same way one past the cutoff year
     is, and re-asked once with the reason, because dropping to the rotation
     throws away the only reason this lane exists.
+
+    ranked=True means the candidates arrive most important first (channel
+    watch ranks them by real-world consequence) and that order must decide
+    the pick: the model takes the first subject it can anchor and only moves
+    down the list when a higher one has no qualifying history. Without it,
+    the "richest documentary history" rule below silently overrode that
+    ranking and the extraction call's ordering had no effect at all.
     """
     if not candidates:
         return None
@@ -1081,12 +1102,26 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         avoid_block = ("\nALREADY COVERED ON THIS CHANNEL — do not choose an "
                        f"event any of these is about:\n{listed}\n")
 
-    listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
+    if ranked:
+        listing = "\n".join(
+            f"{i}. {c['subject']}" + (f" — {c['why']}" if c.get("why") else "")
+            for i, c in enumerate(candidates[:10], 1))
+        pick_rule = (
+            "These are RANKED, most important first. Take subject 1 unless no "
+            "historical event meeting the rules below explains it; only then "
+            "move to 2, and so on. Do not skip a higher subject because a lower "
+            "one has a more famous or more dramatic history. Name the "
+            "historical event that explains THE SPECIFIC SITUATION IN THAT "
+            "HEADLINE.\n\n")
+    else:
+        listing = "\n".join(f"- {c['subject']}" for c in candidates[:10])
+        pick_rule = (
+            "Pick the ONE with the richest documentary history behind it, then "
+            "name the historical event that explains THE SPECIFIC SITUATION IN "
+            "THAT HEADLINE.\n\n")
     prompt = (
         "Here are subjects currently in the news:\n\n" + listing + "\n\n"
-        "Pick the ONE with the richest documentary history behind it, then name "
-        "the historical event that explains THE SPECIFIC SITUATION IN THAT "
-        "HEADLINE.\n\n"
+        + pick_rule +
         "RELEVANCE IS THE POINT. The viewer arrives asking why this is "
         "happening. The event you choose must be the origin of that exact "
         "dispute, border, alliance or grievance — not a famous episode that "

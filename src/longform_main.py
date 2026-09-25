@@ -292,7 +292,8 @@ def resolve_topic(lane: str, history=None):
                                                      avoid_titles=avoid_titles)
             if watch_candidates:
                 anchor = select_historical_anchor(
-                    watch_candidates, pool=pool, avoid_titles=avoid_titles)
+                    watch_candidates, pool=pool, avoid_titles=avoid_titles,
+                    ranked=True)
                 if anchor:
                     print(f"📺 Anchored to a channel-watch theme: "
                           f"{anchor['topic'][:70]}")
@@ -339,6 +340,13 @@ def main():
             print("❌ Halted: every topic in the pool is already published. "
                   "Add new entries to CORE_TOPICS in src/topics.py.")
             raise SystemExit(1)
+        if os.getenv("TOPIC_ONLY", "0") == "1":
+            # Stops after the selection calls: tests channel watch and anchor
+            # choice against a real model and the real channel for two or
+            # three LLM requests, instead of a full render and upload.
+            print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
+            print(f"   enforce_history={enforce_history} era_year={era_year}")
+            return
         script = generate_longform_script(topic=topic,
                                           enforce_history=enforce_history,
                                           era_year=era_year)
