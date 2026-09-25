@@ -1,0 +1,65 @@
+name: Preview Assets
+
+# Manual only. Fetches real archive photos and narration for one story
+# (tools/fetch_preview_assets.py) and pushes them to the `preview-assets`
+# branch, so a rhythm/edit preview can be rendered and iterated without the
+# archives or the voice model. Never touches main and never uploads anything.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install FFmpeg and espeak-ng
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+
+      - name: Cache Kokoro model files
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+
+      - name: Fetch Kokoro model files (cache miss only)
+        run: |
+          mkdir -p models
+          if [ ! -f models/kokoro-v1.0.onnx ]; then
+            curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          fi
+          if [ ! -f models/voices-v1.0.bin ]; then
+            curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          fi
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch images and narration
+        env:
+          KOKORO_VOICE: am_onyx
+        run: python tools/fetch_preview_assets.py preview_out
+
+      - name: Push to the preview-assets branch
+        run: |
+          cd preview_out
+          git init -q -b preview-assets
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Preview assets (run ${{ github.run_number }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-assets
