@@ -1940,8 +1940,59 @@ def _generate_intro_epigraph(pool, topic, tone, context_before, era_year=None):
         print(f"   ⚠️ Intro card rejected (attempt {attempt + 1}/3, "
               f"{_last_model})"
               f"{': ' + raw[:60] if raw else ''}")
-    print("   ↩️  Skipping the intro card this run.")
+    print("   ↩️  No usable written line — the stock bank takes over.")
     return None
+
+
+# The last layer under both title cards, so a card is never skipped: when
+# no sourced quote fits AND no model writes a usable line (every provider out
+# of quota, or the only model left echoing the prompt back, as on the
+# 2026-09-25 Kinmen run), one of these is used. Original lines, written for
+# this channel, never attributed to anyone. Generic on purpose: no names,
+# dates or facts, so none can be wrong about any story. [[...]] marks the
+# phrase that lingers alone in red.
+STOCK_OPENING_LINES = (
+    "Every catastrophe begins as a quiet decision that [[nobody thought to question]].",
+    "The men who signed the order slept well that night. [[The dead did not]].",
+    "History does not forget the warning. It only remembers [[who chose to ignore it]].",
+    "It was never the storm that sank them. It was [[the certainty of the captain]].",
+    "Somewhere behind every disaster is a room, a signature, and [[a silence that agreed]].",
+    "The mistake was small enough to fit on one page, and [[large enough to bury thousands]].",
+    "They were not fools. They were sure, and [[certainty is far more dangerous]].",
+    "The warning arrived on time. It was simply filed [[where no one would look]].",
+    "Power rarely falls to its enemies. It falls to [[its own unexamined confidence]].",
+    "Nobody who made this choice believed they were writing [[the first line of a tragedy]].",
+)
+STOCK_VERDICT_LINES = (
+    "The bill always comes due, and it is never paid [[by the ones who ordered it]].",
+    "What was lost could not be counted, only [[carried by those who were left]].",
+    "Afterwards everyone remembered the warning. By then [[remembering was all that was left]].",
+    "No inquiry, no apology, no monument can [[undo a single hour of it]].",
+    "The decision took an afternoon. The consequences [[outlived everyone who made it]].",
+    "In the end the record is clear, and [[clarity came far too late]].",
+    "The ones who paid were never asked, and [[their silence is the verdict]].",
+    "It was not fate. It was a choice, and [[choices leave their names behind]].",
+    "Time buries the ruins, but it never quite [[buries the question of why]].",
+    "They called it an accident, because the truth [[had too many signatures on it]].",
+)
+
+
+def stock_epigraph(topic, verdict=False, exclude_texts=None):
+    """A title card that needs no model at all. Picked by the topic's hash so
+    each video gets a stable line and different videos get different ones;
+    skips anything in exclude_texts so the two cards never repeat."""
+    import hashlib
+    bank = STOCK_VERDICT_LINES if verdict else STOCK_OPENING_LINES
+    exclude = {t.lower() for t in (exclude_texts or ())}
+    start = int(hashlib.sha1((topic or "").encode()).hexdigest(), 16) % len(bank)
+    for i in range(len(bank)):
+        raw = bank[(start + i) % len(bank)]
+        text = _PUNCH_RE.sub(lambda m: m.group(1), raw)
+        if text.lower() not in exclude:
+            return {"text": text, "keyword": _PUNCH_RE.findall(raw)[0]}
+    raw = bank[start]
+    return {"text": _PUNCH_RE.sub(lambda m: m.group(1), raw),
+            "keyword": _PUNCH_RE.findall(raw)[0]}
 
 
 def _generate_joke_beat(pool, topic, decision_text, era_year=None):
@@ -2277,8 +2328,24 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                    or [verdict_epigraph.get("text") or ""])
                 print(f"🖤 Pre-verdict card: {preview[:70]!r}")
     except QuotaExhausted:
-        print("🛑 Quota gone before the title cards; publishing without "
-              "them rather than losing a finished script over a decoration.")
+        print("🛑 Quota gone before the title cards — using the channel's "
+              "own stock lines for them.")
+    except Exception as e:
+        print(f"⚠️ Title-card selection failed ({type(e).__name__}: {e}) — "
+              f"using the channel's own stock lines.")
+
+    # Never skip a card: whatever the layers above could not produce comes
+    # from the stock bank, which needs no model and cannot fail.
+    if not intro_epigraph:
+        intro_epigraph = stock_epigraph(topic)
+        print(f"🖤 Opening card (stock line): {intro_epigraph['text'][:70]!r}")
+    if len(chapters) >= 3 and not verdict_epigraph:
+        opening_text = " ".join(intro_epigraph.get("sentences")
+                                or [intro_epigraph.get("text") or ""])
+        verdict_epigraph = stock_epigraph(topic, verdict=True,
+                                          exclude_texts={opening_text})
+        print(f"🖤 Pre-verdict card (stock line): "
+              f"{verdict_epigraph['text'][:70]!r}")
 
     full_text = " ".join(s["narration"] for c in chapters for s in c["scenes"])
 
