@@ -1984,7 +1984,19 @@ def stock_epigraph(topic, verdict=False, exclude_texts=None):
     import hashlib
     bank = STOCK_VERDICT_LINES if verdict else STOCK_OPENING_LINES
     exclude = {t.lower() for t in (exclude_texts or ())}
+    # Two cards leaning on the same word ("the warning" ... "the warning")
+    # read as one idea said twice, so a line sharing any key word (5+
+    # letters) with a card already used is passed over.
+    used_words = {w for t in exclude for w in re.findall(r"[a-z]{5,}", t)}
     start = int(hashlib.sha1((topic or "").encode()).hexdigest(), 16) % len(bank)
+    for i in range(len(bank)):
+        raw = bank[(start + i) % len(bank)]
+        text = _PUNCH_RE.sub(lambda m: m.group(1), raw)
+        if text.lower() in exclude:
+            continue
+        if used_words & set(re.findall(r"[a-z]{5,}", text.lower())):
+            continue
+        return {"text": text, "keyword": _PUNCH_RE.findall(raw)[0]}
     for i in range(len(bank)):
         raw = bank[(start + i) % len(bank)]
         text = _PUNCH_RE.sub(lambda m: m.group(1), raw)
