@@ -1812,6 +1812,40 @@ def _names_in(topic, limit=3):
     return names[:limit]
 
 
+# Scripture on a title card reads as judgment from on high — on the
+# 2026-09-26 Six-Day War video, Ezekiel 29:10 ("I will make the land of
+# Egypt a ruin…") sat right before the verdict, which takes a side between
+# present-day states no matter how real the quote is. Holy texts never
+# reach the cards; the written line or the stock bank takes the slot.
+_SCRIPTURE_BOOKS = (
+    "genesis", "exodus", "leviticus", "numbers", "deuteronomy", "joshua",
+    "judges", "ruth", "samuel", "kings", "chronicles", "ezra", "nehemiah",
+    "esther", "job", "psalm", "psalms", "proverbs", "ecclesiastes",
+    "song of songs", "song of solomon", "isaiah", "jeremiah",
+    "lamentations", "ezekiel", "daniel", "hosea", "joel", "amos",
+    "obadiah", "jonah", "micah", "nahum", "habakkuk", "zephaniah",
+    "haggai", "zechariah", "malachi", "matthew", "mark", "luke", "john",
+    "acts", "romans", "corinthians", "galatians", "ephesians",
+    "philippians", "colossians", "thessalonians", "timothy", "titus",
+    "philemon", "hebrews", "james", "peter", "jude", "revelation",
+    "bible", "gospel", "torah", "talmud", "quran", "qur'an", "koran",
+    "surah", "sura", "hadith", "bhagavad", "vedas", "upanishad",
+)
+
+
+def _is_scripture(attribution, text=""):
+    """A book of a holy text cited by chapter and verse ("Ezekiel 29:10",
+    "Surah 2:191"), or a holy text named outright."""
+    a = (attribution or "").lower()
+    if re.search(r"\b(bible|gospel|torah|talmud|qur'?an|koran|surah?|hadith|"
+                 r"bhagavad|vedas?|upanishads?|psalms?)\b", a):
+        return True
+    if re.search(r"\d+\s*[:.,]\s*\d+", a) and any(
+            re.search(rf"\b{re.escape(b)}\b", a) for b in _SCRIPTURE_BOOKS):
+        return True
+    return False
+
+
 def _gather_quote_candidates(pool, topic):
     """Every real, sourced quote candidate Wikiquote has for this topic —
     searched once and shared by every card this video needs (the opening
@@ -1822,7 +1856,7 @@ def _gather_quote_candidates(pool, topic):
     except QuotaExhausted:
         raise
 
-    candidates, seen = [], set()
+    candidates, seen, scripture = [], set(), 0
     for term in search_terms:
         try:
             found = search_quotes(term)
@@ -1832,9 +1866,15 @@ def _gather_quote_candidates(pool, topic):
             continue
         for c in found:
             key = c["text"].lower()
-            if key not in seen:
-                seen.add(key)
-                candidates.append(c)
+            if key in seen:
+                continue
+            seen.add(key)
+            if _is_scripture(c.get("attribution"), c.get("text")):
+                scripture += 1
+                continue
+            candidates.append(c)
+    if scripture:
+        print(f"   ↩️  {scripture} scripture quote(s) excluded from the cards.")
 
     if candidates:
         print(f"🔍 {len(candidates)} sourced quote candidate(s) found for "

@@ -498,6 +498,10 @@ def build_spec(plan, words, duration, era_year=None):
 
     arrows = []
     action = plan.get("action") or "mark"
+    if origin_ll and _km(origin_ll, target_ll) < 25:
+        # A region whose edge is almost at the target (Egypt -> the Straits
+        # of Tiran) would draw a few-pixel stub: a ring alone says more.
+        action = "mark"
     if origin_ll and action in ("strike", "move"):
         spread = min(0.12, close_w * 0.06)
         arrows.append({"from": origin_ll, "to": target_ll, "kind": action,
