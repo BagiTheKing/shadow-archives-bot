@@ -2831,6 +2831,33 @@ def _place_chain(steps, chapters, topic):
     print(f"⛓️  Chain planned: {' → '.join(steps)}.")
 
 
+def _place_dossier(name, chapters):
+    """Attaches scene["dossier"] to the first scene, after the cold open and
+    up to the decision, that speaks the decision-maker's full name — a
+    later scene of a chapter preferred over its first, whose title card
+    sits middle-left where the photo print lands. Photo and description are
+    fetched later from Wikipedia (dossier_engine); here the name only has
+    to be real text in the narration."""
+    name = " ".join(str(name or "").split())
+    if not name or len(name) > 40 or len(name.split()) < 2:
+        return
+    pivot = next((i for i, c in enumerate(chapters)
+                  if (c.get("pacing") or {}).get("role") == "pivot"),
+                 len(chapters) - 1)
+    speaking = [(c, s) for c in chapters[1:pivot + 1] for s in c["scenes"]
+                if not s.get("map") and not s.get("chain")
+                and _named_in(name, s["narration"].lower())]
+    if not speaking:
+        print(f"   ↩️  No decision-maker card: {name!r} is never spoken "
+              f"before the decision.")
+        return
+    first_idx = chapters.index(speaking[0][0])
+    same = [cs for cs in speaking if chapters.index(cs[0]) == first_idx]
+    same.sort(key=lambda cs: cs[0]["scenes"][0] is cs[1])
+    same[0][1]["dossier"] = {"name": name}
+    print(f"🗂️  Decision-maker card planned: {name}.")
+
+
 def _chapter_stamps(pool, topic, chapters, era_year):
     """Writes chapter["stamp"] ("KINMEN · 23 AUGUST 1958") on the chapters in
     STAMP_ROLES whose narration states where and when they happen. One
@@ -2879,9 +2906,13 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         "strait\", \"Escorts broke the blockade\", \"Beijing called a "
         "ceasefire\"). "
         "No numbers, names or events the text does not state.\n\n"
+        "ALSO name the decision_maker: the one person who made the story's "
+        "decision, full name exactly as the text says it (e.g. \"Mao "
+        "Zedong\"). Empty if the text names no single person.\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
         '"date": "..."}], "maps": [{"target": "...", "origin": "...", '
-        '"action": "strike", "light": ["..."]}], "chain": ["...", "..."]}'
+        '"action": "strike", "light": ["..."]}], "chain": ["...", "..."], '
+        '"decision_maker": "..."}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
@@ -2896,6 +2927,10 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         _place_chain((data or {}).get("chain"), chapters, topic)
     except Exception as e:
         print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
+    try:
+        _place_dossier((data or {}).get("decision_maker"), chapters)
+    except Exception as e:
+        print(f"   ↩️  Decision-maker card skipped ({type(e).__name__}: {e}).")
     by_index = dict(wanted)
     placed = 0
     for st in (data or {}).get("stamps") or []:

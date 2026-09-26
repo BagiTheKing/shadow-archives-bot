@@ -1393,8 +1393,20 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                                     s["duration"] + XFADE)
             if cp:
                 s["video_path"], s["_is_map"], s["credit"] = cp, True, []
+        elif s.get("dossier"):
+            from dossier_engine import render_dossier_scene
+            got = render_dossier_scene(
+                s, os.path.join(build_dir, f"lf_dossier_{idx:03d}.mp4"),
+                s["duration"] + XFADE, build_dir)
+            if got:
+                # the portrait is the one picture on screen: its Commons
+                # credit spans the whole scene
+                s["video_path"], s["_is_map"] = got[0], True
+                s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]]
         shots = len(s.get("image_paths") or [1])
-        kind = ("map" if s.get("_is_map") else "b-roll") if s.get("video_path") \
+        kind = (("map" if s.get("map") else "chain" if s.get("chain")
+                 else "decision-maker card" if s.get("dossier") else "graphic")
+                if s.get("_is_map") else "b-roll") if s.get("video_path") \
             else f"{shots} shot(s)"
         print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
         _scene_clip(s, s["_clip"], idx % 8)
