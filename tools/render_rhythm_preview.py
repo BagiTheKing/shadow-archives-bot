@@ -29,9 +29,9 @@ GRADES = {
     "warm": ("colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131,"
              "eq=saturation=0.85:contrast=0.9:brightness=0.02,"
              "curves=all='0/0.08 1/0.93'"),
-    "red": ("eq=saturation=0.2:contrast=1.3:brightness=-0.02,"
-            "colorbalance=rs=.35:gs=-.10:bs=-.12:rm=.25:gm=-.06:bm=-.10,"
-            "vignette=PI/3.2"),
+    "red": ("eq=saturation=0.35:contrast=1.18:brightness=-0.02,"
+            "colorbalance=rs=.23:gs=-.06:bs=-.08:rm=.16:gm=-.04:bm=-.06,"
+            "vignette=PI/3.6"),
     "cold": ("colorbalance=rs=-.10:gs=-.02:bs=.14:rm=-.06:bm=.10,"
              "eq=saturation=0.4:contrast=1.15:brightness=-0.04,"
              "vignette=PI/4"),
@@ -40,6 +40,10 @@ GRADES = {
 GAP = 0.35          # breath between narration lines
 SILENCE = 1.0       # the black, silent beat before the decision
 TYPE_RATE = 0.055   # seconds per typed character
+KEYCLICK_GAIN = 0.08       # was 0.22: present, never in the way of the voice
+CLOCK_START_DB = -30       # the clock enters barely audible...
+CLOCK_PEAK_DB = -6         # ...and is clearly there by the silence
+MUSIC_UNDER_CLOCK = 0.3    # music slides down to 30% as the clock rises
 
 
 def run(cmd):
@@ -194,11 +198,18 @@ def build(assets, plan, work, out_mp4, tag):
         dur = end - start
         vol = 0.16
         gate = ""
-        for a, b in music_gaps + [(s, e) for s, e in tick_spans]:
+        for a, b in music_gaps:
             if b > start and a < end:
-                level = 0.0 if (a, b) in music_gaps else 0.35
                 gate += (f",volume=enable='between(t,{a - start:.2f},{b - start:.2f})'"
-                         f":volume={level}")
+                         f":volume=0")
+        for a, b in tick_spans:
+            if b > start and a < end:
+                # Linear slide from full to MUSIC_UNDER_CLOCK across the
+                # build-up, and held there to the end of the span.
+                a0, b0 = a - start, b - start
+                gate += (f",volume=eval=frame:volume='if(lt(t,{a0:.2f}),1,"
+                         f"if(gt(t,{b0:.2f}),{MUSIC_UNDER_CLOCK},"
+                         f"1-(1-{MUSIC_UNDER_CLOCK})*(t-{a0:.2f})/{b0 - a0:.2f}))'")
         filt.append(f"[{base + j}:a]atrim=0:{dur:.2f},asetpts=PTS-STARTPTS,"
                     f"afade=t=in:d=1.2,afade=t=out:st={max(0, dur - 1.0):.2f}:d=1.0,"
                     f"volume={vol}{gate},aformat=channel_layouts=stereo,"
@@ -206,11 +217,22 @@ def build(assets, plan, work, out_mp4, tag):
         mix.append(f"[m{j}]")
     k = 0
     for a, b in tick_spans:
-        # tick-tock: two pitches alternating once a second, sharp decay.
-        expr = ("(sin(2*PI*(1900-500*mod(floor(t),2))*t))"
-                "*exp(-70*mod(t,1))*0.55")
+        span = b - a
+        # A mechanical tick: a very short noise transient plus two quickly
+        # damped metallic partials, once a second.
+        expr = ("((random(0)*2-1)*exp(-900*mod(t,1))*0.9"
+                "+sin(2*PI*2750*t)*exp(-160*mod(t,1))*0.55"
+                "+sin(2*PI*5600*t)*exp(-260*mod(t,1))*0.25)")
+        ramp = (f"pow(10,({CLOCK_START_DB}+({CLOCK_PEAK_DB}-({CLOCK_START_DB}))"
+                f"*t/{span:.2f})/20)")
         d = int(a * 1000)
-        filt.append(f"aevalsrc='{expr}':s=44100:d={b - a:.2f},"
+        filt.append(f"aevalsrc='{expr}':s=44100:d={span + SILENCE / 2:.2f},"
+                    f"highpass=f=500,lowpass=f=8000,"
+                    f"aecho=0.8:0.88:170|340|560|820:0.5|0.34|0.22|0.12,"
+                    f"volume=eval=frame:volume='{ramp}',"
+                    # The last echo rings into the silence and is gone
+                    # by its midpoint, so the hit still lands on nothing.
+                    f"afade=t=out:st={span:.2f}:d={SILENCE / 2:.2f},"
                     f"aformat=channel_layouts=stereo,adelay={d}|{d}[s{k}]")
         mix.append(f"[s{k}]"); k += 1
     for a in hits:
@@ -221,7 +243,7 @@ def build(assets, plan, work, out_mp4, tag):
                     f"aformat=channel_layouts=stereo,adelay={d}|{d}[s{k}]")
         mix.append(f"[s{k}]"); k += 1
     for a, dur in keyclicks:
-        expr = f"(random(0)*2-1)*exp(-140*mod(t,{TYPE_RATE}))*0.22"
+        expr = f"(random(0)*2-1)*exp(-140*mod(t,{TYPE_RATE}))*{KEYCLICK_GAIN}"
         d = int(a * 1000)
         filt.append(f"aevalsrc='{expr}':s=44100:d={dur:.2f},highpass=f=1500,"
                     f"aformat=channel_layouts=stereo,adelay={d}|{d}[s{k}]")
