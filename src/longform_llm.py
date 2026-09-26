@@ -2921,7 +2921,59 @@ def _chain_words(text):
             if len(w) >= 4 and w not in _CHAIN_STOP]
 
 
-def _place_chain(steps, chapters, topic):
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july",
+           "august", "september", "october", "november", "december")
+_UNITS = ("", "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+          "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth",
+          "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
+          "nineteenth")
+
+
+def _chain_day_forms(n):
+    """How a narrator may say day n: "22", "22nd", "twenty-second"."""
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    words = (_UNITS[n] if n < 20 else
+             {20: "twentieth", 30: "thirtieth"}.get(n) or
+             f"{'twenty' if n < 30 else 'thirty'}-{_UNITS[n % 10]}")
+    return {str(n), f"{n}{suffix}", words, words.replace("-", " ")}
+
+
+def _chain_date(raw, narration, era_year):
+    """(label "22 MAY", ordinal day, year) for a date the narration really
+    says, or None. The month and the day must both be spoken, within a few
+    words of each other; a date the model supplied from memory, or moved to
+    another step, never reaches the screen."""
+    text = (raw or "").lower()
+    month = next((i for i, m in enumerate(_MONTHS) if m in text), None)
+    if month is None:
+        return None
+    day = None
+    m = re.search(r"\b(\d{1,2})(st|nd|rd|th)?\b", text)
+    if m:
+        day = int(m.group(1))
+    else:
+        for n in range(31, 0, -1):
+            if any(f in text for f in _chain_day_forms(n) - {str(n)} if not f.isdigit()):
+                day = n
+                break
+    if not day or day > 31:
+        return None
+    ym = re.search(r"\b(1\d{3}|20\d{2})\b", text)
+    year = int(ym.group(1)) if ym else era_year
+    forms = _chain_day_forms(day)
+    for mm in re.finditer(_MONTHS[month], narration):
+        window = narration[max(0, mm.start() - 22):mm.end() + 8]
+        if any(re.search(rf"(?<![a-z0-9-]){re.escape(f)}(?![a-z0-9-])", window) for f in forms):
+            import datetime
+            try:
+                ordinal = datetime.date(year or 2001, month + 1, day).toordinal()
+            except ValueError:
+                return None
+            return f"{day} {_MONTHS[month].upper()}", ordinal, year
+    return None
+
+
+def _place_chain(steps, chapters, topic, dates=None, era_year=None):
     """Attaches scene["chain"] to the scene in "The Chain" whose narration
     matches the steps best (not the chapter's first scene, which carries
     its title; not a map scene). Every meaningful word of every step must
@@ -2959,7 +3011,25 @@ def _place_chain(steps, chapters, topic):
     best = max(options, key=lambda s: len(step_words & {
         w[:5] for w in _chain_words(s["narration"])}))
     best["chain"] = steps
-    print(f"⛓️  Chain planned: {' → '.join(steps)}.")
+    # Dates for the timeline: only those the narration itself says, and
+    # only when at least two survive in order; otherwise the steps are
+    # numbered without dates.
+    narration = " ".join(s["narration"] for c in chapters for s in c["scenes"]).lower()
+    got = [(_chain_date(d, narration, era_year) if isinstance(d, str) else None)
+           for d in (list(dates or []) + [None] * len(steps))[:len(steps)]]
+    known = [g for g in got if g]
+    if len(known) >= 2 and all(a[1] <= b[1] for a, b in zip(known, known[1:])):
+        best["chain_dates"] = [{"label": g[0], "day": g[1]} if g else None for g in got]
+        years = sorted({g[2] for g in known if g[2]})
+        best["chain_year"] = (str(years[0]) if len(years) == 1 else
+                              f"{years[0]}–{years[-1]}" if years else "")
+    else:
+        dropped = [d for d, g in zip(dates or [], got) if d and not g]
+        if dropped:
+            print(f"   ↩️  Timeline dates left out (not spoken as given): {dropped}.")
+    print(f"⛓️  Chain planned: {' → '.join(steps)}"
+          + (f" ({', '.join(d['label'] if d else '—' for d in best['chain_dates'])})"
+             if best.get("chain_dates") else "") + ".")
 
 
 def _place_dossier(name, chapters, cast=None):
@@ -3129,13 +3199,16 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
         "(e.g. \"The shelling of Kinmen\", \"The Seventh Fleet in the "
         "strait\", \"Escorts broke the blockade\", \"Beijing called a "
         "ceasefire\"). "
-        "No numbers, names or events the text does not state.\n\n"
+        "No numbers, names or events the text does not state.\n"
+        "chain_dates: one entry per chain step, the date the text gives for "
+        "that step, copied as the text says it (e.g. \"22 May 1967\", "
+        "\"the fifth of June\"), or \"\" when the text gives no day for it.\n\n"
         "ALSO name the decision_maker: the one person who made the story's "
         "decision, full name exactly as the text says it (e.g. \"Mao "
         "Zedong\"). Empty if the text names no single person.\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
         '"date": "..."}], "maps": [{"target": "...", "origin": "...", '
-        '"action": "strike", "light": ["..."]}], "chain": ["...", "..."], '
+        '"action": "strike", "light": ["..."]}], "chain": ["...", "..."], "chain_dates": ["...", "..."], '
         '"decision_maker": "..."}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
@@ -3148,7 +3221,8 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
         except Exception as e:
             print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
     try:
-        _place_chain((data or {}).get("chain"), chapters, topic)
+        _place_chain((data or {}).get("chain"), chapters, topic,
+                     dates=(data or {}).get("chain_dates"), era_year=era_year)
     except Exception as e:
         print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
     try:
