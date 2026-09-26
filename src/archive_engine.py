@@ -628,8 +628,12 @@ def search_commons_video(query: str, era=None, limit: int = 12) -> list:
         url = _best_derivative(info)
         if not url:
             continue
+        about = " ".join([title.replace("_", " "),
+                          _strip_html((meta.get("ImageDescription") or {}).get("value", "")),
+                          _strip_html((meta.get("Categories") or {}).get("value", ""))])
         out.append({
             "url": url, "title": title.replace("_", " ")[:120],
+            "about": about.lower()[:3000],
             "artist": _strip_html((meta.get("Artist") or {}).get("value", ""))[:60],
             "license": _strip_html(
                 (meta.get("LicenseShortName") or {}).get("value", "")),
@@ -651,6 +655,25 @@ def _clip_seconds(path):
         return float(out.stdout.strip() or 0)
     except Exception:
         return 0.0
+
+
+_FOOTAGE_FILLER = {"footage", "film", "newsreel", "photo", "scene", "video",
+                   "archive", "archival", "historic", "historical"}
+
+
+def footage_matches(query: str, about: str) -> bool:
+    """Whether a clip is really OF the scene's subject: its title,
+    description and categories must carry the query's words (matched on
+    their first five letters, so "Egyptian" finds "Egypt"). All of them for
+    a one- or two-word query, all but one for a longer one. Years and
+    filler words do not count. The first live run put Nasser's resignation
+    speech under "Egyptian radar station": any 1967 clip passed."""
+    words = [w for w in re.findall(r"[a-z]+", (query or "").lower())
+             if len(w) >= 4 and w not in _FOOTAGE_FILLER]
+    if not words:
+        return False
+    hits = sum(1 for w in words if w[:5] in (about or ""))
+    return hits >= (len(words) if len(words) <= 2 else len(words) - 1)
 
 
 def fetch_commons_video(candidate: dict, output_path: str,

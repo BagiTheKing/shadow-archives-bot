@@ -2571,7 +2571,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print("🛑 Quota gone before packaging; deriving metadata from the topic.")
 
     try:
-        _chapter_stamps(pool, topic, chapters, era_year)
+        _chapter_stamps(pool, topic, chapters, era_year,
+                        cast=(story or {}).get("plan", {}).get("cast") if story else None)
     except QuotaExhausted:
         print("🛑 Quota gone before the date stamps; publishing without them.")
     except Exception as e:
@@ -2924,22 +2925,51 @@ def _place_chain(steps, chapters, topic):
     print(f"⛓️  Chain planned: {' → '.join(steps)}.")
 
 
-def _place_dossier(name, chapters):
+def _place_dossier(name, chapters, cast=None):
     """Attaches scene["dossier"] to the first scene, after the cold open and
-    up to the decision, that speaks the decision-maker's full name — a
-    later scene of a chapter preferred over its first, whose title card
-    sits middle-left where the photo print lands. Photo and description are
-    fetched later from Wikipedia (dossier_engine); here the name only has
-    to be real text in the narration."""
+    up to the decision, that speaks the decision-maker's name — a later
+    scene of a chapter preferred over its first, whose title card sits
+    middle-left where the photo print lands. Photo and description are
+    fetched later from Wikipedia (dossier_engine), so the card carries the
+    full name.
+
+    In story mode the cast settles the name: a bare surname ("Dayan") is
+    resolved to the cast's full name, and when the model names no single
+    person (a cabinet vote), the cast member spoken most up to the decision
+    gets the card. The first story-mode run lost its card to exactly that."""
     name = " ".join(str(name or "").split())
-    if not name or len(name) > 40 or len(name.split()) < 2:
-        return
     pivot = next((i for i, c in enumerate(chapters)
                   if (c.get("pacing") or {}).get("role") == "pivot"),
                  len(chapters) - 1)
+    window = [s for c in chapters[1:pivot + 1] for s in c["scenes"]]
+
+    def surname(n):
+        parts = re.findall(r"[a-z]+", (n or "").lower())
+        return parts[-1] if parts else ""
+
+    if cast:
+        full = next((c["name"] for c in cast
+                     if surname(c.get("name")) == surname(name)), None)
+        if not full:
+            spoken = sorted(
+                ((sum(len(re.findall(rf"\b{re.escape(surname(c['name']))}\b",
+                                     s["narration"].lower())) for s in window),
+                  c["name"]) for c in cast if surname(c.get("name"))),
+                reverse=True)
+            full = spoken[0][1] if spoken and spoken[0][0] else None
+            if full:
+                print(f"   🗂️  Decision-maker from the cast: {full} "
+                      f"(model named {name or 'nobody'!r}).")
+        name = full or name
+    if not name or len(name) > 40 or len(name.split()) < 2:
+        print(f"   ↩️  No decision-maker card: no full name ({name!r}).")
+        return
+    key = surname(name)
     speaking = [(c, s) for c in chapters[1:pivot + 1] for s in c["scenes"]
                 if not s.get("map") and not s.get("chain")
-                and _named_in(name, s["narration"].lower())]
+                and (_named_in(name, s["narration"].lower())
+                     or (cast and re.search(rf"\b{re.escape(key)}\b",
+                                            s["narration"].lower())))]
     if not speaking:
         print(f"   ↩️  No decision-maker card: {name!r} is never spoken "
               f"before the decision.")
@@ -2951,7 +2981,7 @@ def _place_dossier(name, chapters):
     print(f"🗂️  Decision-maker card planned: {name}.")
 
 
-def _chapter_stamps(pool, topic, chapters, era_year):
+def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
     """Writes chapter["stamp"] ("KINMEN · 23 AUGUST 1958") on the chapters in
     STAMP_ROLES whose narration states where and when they happen. One
     request for the whole video; anything the grounding check rejects is
@@ -3021,7 +3051,7 @@ def _chapter_stamps(pool, topic, chapters, era_year):
     except Exception as e:
         print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
     try:
-        _place_dossier((data or {}).get("decision_maker"), chapters)
+        _place_dossier((data or {}).get("decision_maker"), chapters, cast=cast)
     except Exception as e:
         print(f"   ↩️  Decision-maker card skipped ({type(e).__name__}: {e}).")
     by_index = dict(wanted)

@@ -50,7 +50,8 @@ from archive_engine import (search_archives, search_commons,
                             pexels_available, fetch_broll_video,
                             extract_poster_frame, search_archival_video,
                             fetch_archival_video, format_archival_video_credit,
-                            search_commons_video, fetch_commons_video)
+                            search_commons_video, fetch_commons_video,
+                            footage_matches)
 from visual_engine import download_image, make_fallback_image
 
 # Delivery resolution for the long-form video.
@@ -237,8 +238,10 @@ def _archival_footage(query, era, idx, output_dir, used_urls):
     if widened and widened != query:
         queries.append(widened)
     for q in queries:
-        for cand in search_commons_video(q, era=era)[:3]:
+        for cand in search_commons_video(q, era=era)[:6]:
             if cand["url"] in used_urls:
+                continue
+            if not footage_matches(query, cand.get("about", "")):
                 continue
             if not fetch_commons_video(cand, video_path):
                 continue
