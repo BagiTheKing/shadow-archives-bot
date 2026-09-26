@@ -26,7 +26,7 @@ PER_QUERY = 2
 PEOPLE = ["Gamal Abdel Nasser", "Hussein of Jordan", "Moshe Dayan",
           "Nureddin al-Atassi"]
 
-FOOTAGE = [("Gamal Abdel Nasser", 1967)]
+FOOTAGE = []
 FOOTAGE_PER_PERSON = 4
 
 LINES = [
@@ -34,6 +34,10 @@ LINES = [
     "Tiran to Israeli ships.",
     "In Amman, Jordan's King Hussein made his choice. He flew to Cairo.",
     "In Israel, the new defence minister, Moshe Dayan, wanted to strike first.",
+    # timeline-of-consequences preview
+    "On the twenty-second of May, Egypt closed the straits. On the fifth of "
+    "June, Israel struck first. On the seventh, the Old City of Jerusalem "
+    "fell. And on the tenth, the guns went quiet.",
 ]
 
 
