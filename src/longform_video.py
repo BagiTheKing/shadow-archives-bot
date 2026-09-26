@@ -1327,15 +1327,19 @@ def _intro_card_ass(epigraph: dict, out_path: str) -> float:
     return sched["total"]
 
 
-def _build_intro_card(epigraph: dict, build_dir: str):
+def _build_intro_card(epigraph: dict, build_dir: str, name: str = "lf_intro"):
     """Renders the cold-open card as its own silent clip, encoded to match
     the chapter reels exactly so it concatenates into the same stream-copy
     join as everything else (see Phase 3 below). Returns (path,
     duration_seconds) — the card's length depends on how much it has to
-    say, so the caller needs the real number, not an assumed constant."""
-    ass_path = os.path.join(build_dir, "lf_intro.ass")
+    say, so the caller needs the real number, not an assumed constant.
+
+    Each card needs its own file name: both cards used to render to
+    lf_intro.mp4, so the pre-verdict card overwrote the opening card before
+    the final join and the same quote played twice."""
+    ass_path = os.path.join(build_dir, f"{name}.ass")
     duration = _intro_card_ass(epigraph, ass_path)
-    out_path = os.path.join(build_dir, "lf_intro.mp4")
+    out_path = os.path.join(build_dir, f"{name}.mp4")
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
@@ -1569,7 +1573,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         # doubled up there.
         if pos == n_chapters - 2 and n_chapters >= 3 and verdict_epigraph:
             try:
-                verdict_clip, verdict_duration = _build_intro_card(verdict_epigraph, build_dir)
+                verdict_clip, verdict_duration = _build_intro_card(verdict_epigraph, build_dir,
+                                                                      name="lf_verdict")
                 reels.append(verdict_clip)
                 verdict_start = cursor
                 next_chapter_mark_start = verdict_start

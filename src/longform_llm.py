@@ -1866,8 +1866,12 @@ def _extract_search_terms(pool, topic):
               f"— searching {fallback!r} instead.")
         return fallback
 
+    # A weak model can echo the template back: the Six-Day War run searched
+    # Wikiquote for the literal "..." twice, found nothing, and both cards
+    # fell back to invented lines. A query needs real letters.
     queries = [q.strip() for q in (data or {}).get("queries") or []
-               if isinstance(q, str) and q.strip()]
+               if isinstance(q, str) and len(re.findall(r"[A-Za-z]", q)) >= 3
+               and "..." not in q]
     return queries[:3] or fallback
 
 
@@ -1890,7 +1894,7 @@ def _names_in(topic, limit=3):
     return names[:limit]
 
 
-def _gather_quote_candidates(pool, topic):
+def _gather_quote_candidates(pool, topic, sheet_quotes=None):
     """Every real, sourced quote candidate Wikiquote has for this topic —
     searched once and shared by every card this video needs (the opening
     card and the pre-verdict card draw from the same pool, since they're
@@ -1901,6 +1905,15 @@ def _gather_quote_candidates(pool, topic):
         raise
 
     candidates, seen = [], set()
+    # Story mode: the fact sheet's quotes come first. Each one is verbatim
+    # in the event's Wikipedia article (verify_sheet checks it) and carries
+    # its speaker, so none can be invented.
+    for q in sheet_quotes or []:
+        text, who = (q.get("text") or "").strip(), (q.get("speaker") or "").strip()
+        if text and who and 4 <= len(text.split()) <= 40 and text.lower() not in seen:
+            seen.add(text.lower())
+            candidates.append({"text": text, "attribution": who,
+                               "source_page": "Wikipedia"})
     for term in search_terms:
         try:
             found = search_quotes(term)
@@ -1925,7 +1938,7 @@ def _gather_quote_candidates(pool, topic):
 
 def _source_intro_quote(pool, topic, tone, context_before, context_after,
                         candidates, era_year=None, exclude_texts=None,
-                        exclude_speakers=None):
+                        exclude_speakers=None, real_only=False):
     """One black-screen title card's content: a real, sourced quote from
     `candidates` when one actually fits this spot, an original
     unattributed line (see _generate_intro_epigraph) otherwise. Search
@@ -1957,9 +1970,24 @@ def _source_intro_quote(pool, topic, tone, context_before, context_after,
             print(f"   📜 Using a real quote — {selected['attribution']}: "
                   f"{preview!r}")
             return selected
+        if real_only:
+            # Story mode: the owner wants real words on these cards, never
+            # an invented line. When no quote hits the register, the most
+            # card-like real one is used as written: a whole short quote,
+            # 8-40 words, from a named speaker.
+            pick = sorted((c for c in usable if 8 <= len(c["text"].split()) <= 40),
+                          key=lambda c: abs(len(c["text"].split()) - 22))
+            if pick:
+                c = pick[0]
+                print(f"   📜 No quote hit the register — using the closest "
+                      f"real one as written — {c['attribution']}: {c['text'][:70]!r}")
+                return {"sentences": [c["text"]], "keyword": "",
+                        "attribution": c["attribution"], "attribution_title": ""}
         print("   ↩️  None of the sourced quotes fit — falling back to an "
               "original line.")
 
+    if real_only:
+        return None
     return _generate_intro_epigraph(pool, topic, tone, context_before,
                                     era_year=era_year)
 
@@ -2465,11 +2493,15 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     # chapters are already paid for by this point, so a quota wall here
     # costs the run its cards, never the video already in hand.
     intro_epigraph = verdict_epigraph = None
+    real_only = False
     try:
         def _chapter_text(chapter):
             return " ".join(s["narration"] for s in chapter["scenes"])
 
-        quote_candidates = _gather_quote_candidates(pool, topic)
+        quote_candidates = _gather_quote_candidates(
+            pool, topic, sheet_quotes=(story or {}).get("sheet", {}).get("quotes")
+            if story else None)
+        real_only = bool(story) and bool(quote_candidates)
 
         # The owner's brief for the two cards: both dark, mysterious and
         # disturbing; the second one sad as well, because by then the story
@@ -2483,7 +2515,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             pool, topic, opening_tone,
             context_before=_chapter_text(chapters[0])[-700:],
             context_after=_chapter_text(chapters[1])[:500],
-            candidates=quote_candidates, era_year=era_year)
+            candidates=quote_candidates, era_year=era_year, real_only=real_only)
         if intro_epigraph:
             preview = " ".join(intro_epigraph.get("sentences")
                                or [intro_epigraph.get("text") or ""])
@@ -2506,7 +2538,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                 context_after=_chapter_text(chapters[-1])[:500],
                 candidates=quote_candidates, era_year=era_year,
                 exclude_texts=used,
-                exclude_speakers={(intro_epigraph or {}).get("attribution")})
+                exclude_speakers={(intro_epigraph or {}).get("attribution")},
+                real_only=real_only)
             if verdict_epigraph:
                 preview = " ".join(verdict_epigraph.get("sentences")
                                    or [verdict_epigraph.get("text") or ""])
@@ -2519,11 +2552,15 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
               f"using the channel's own stock lines.")
 
     # Never skip a card: whatever the layers above could not produce comes
-    # from the stock bank, which needs no model and cannot fail.
-    if not intro_epigraph:
+    # from the stock bank, which needs no model and cannot fail. Except in
+    # story mode with real quotes on hand: there an invented line would sit
+    # among real ones, so a card with no real quote left is dropped.
+    if real_only:
+        pass
+    elif not intro_epigraph:
         intro_epigraph = stock_epigraph(topic)
         print(f"🖤 Opening card (stock line): {intro_epigraph['text'][:70]!r}")
-    if len(chapters) >= 3 and not verdict_epigraph:
+    if len(chapters) >= 3 and not verdict_epigraph and not real_only:
         opening_text = " ".join(intro_epigraph.get("sentences")
                                 or [intro_epigraph.get("text") or ""])
         verdict_epigraph = stock_epigraph(topic, verdict=True,
