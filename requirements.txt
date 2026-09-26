@@ -24,3 +24,7 @@ google-auth-httplib2>=0.2.0
 # Optional: only used when ANTHROPIC_API_KEY is set, which puts the paid
 # tier last in the writer chain. Every free provider is reached first.
 anthropic>=0.69.0
+# Cast cards (src/cast_engine.py): face detection and matching (YuNet,
+# SFace) to make sure footage shows the right person. Headless build, no GUI.
+opencv-python-headless>=4.9
+numpy>=1.24

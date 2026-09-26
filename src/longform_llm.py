@@ -2951,16 +2951,23 @@ def _place_dossier(name, chapters, cast=None):
         full = next((c["name"] for c in cast
                      if surname(c.get("name")) == surname(name)), None)
         if not full:
+            # Only the decision chapter itself counts, and a tie names
+            # nobody: labelling the wrong leader DECISION MAKER would be a
+            # factual error on screen.
+            decision_scenes = chapters[pivot]["scenes"] if 0 < pivot < len(chapters) else []
             spoken = sorted(
                 ((sum(len(re.findall(rf"\b{re.escape(surname(c['name']))}\b",
-                                     s["narration"].lower())) for s in window),
+                                     s["narration"].lower())) for s in decision_scenes),
                   c["name"]) for c in cast if surname(c.get("name"))),
                 reverse=True)
-            full = spoken[0][1] if spoken and spoken[0][0] else None
+            full = (spoken[0][1] if spoken and spoken[0][0]
+                    and (len(spoken) < 2 or spoken[0][0] > spoken[1][0]) else None)
             if full:
                 print(f"   🗂️  Decision-maker from the cast: {full} "
                       f"(model named {name or 'nobody'!r}).")
         name = full or name
+        _place_cast(cast, full, chapters)
+        return
     if not name or len(name) > 40 or len(name.split()) < 2:
         print(f"   ↩️  No decision-maker card: no full name ({name!r}).")
         return
@@ -2977,8 +2984,65 @@ def _place_dossier(name, chapters, cast=None):
     first_idx = chapters.index(speaking[0][0])
     same = [cs for cs in speaking if chapters.index(cs[0]) == first_idx]
     same.sort(key=lambda cs: cs[0]["scenes"][0] is cs[1])
-    same[0][1]["dossier"] = {"name": name}
+    same[0][1]["dossier"] = {"name": name, "decision": True}
     print(f"🗂️  Decision-maker card planned: {name}.")
+
+
+CAST_CARD_GAP_WORDS = 130      # ~45-50 s of narration between two cards
+MAX_CAST_CARDS = 5
+
+
+def _place_cast(cast, decision_name, chapters):
+    """Story mode: one cast card per main person, on the first scene after
+    the cold open that speaks their surname — never a chapter's first scene
+    (its title sits where the name lands), a map or a chain, and never two
+    cards within CAST_CARD_GAP_WORDS of each other; a person whose first
+    mention falls too close gets the card at a later mention. Only the
+    decision-maker's card says DECISION MAKER; the others carry their role.
+    The photo swaps sides and the file number counts up."""
+    def surname(n):
+        parts = re.findall(r"[a-z]+", (n or "").lower())
+        return parts[-1] if parts else ""
+
+    people = [c for c in cast if surname(c.get("name"))][:MAX_CAST_CARDS]
+    decider = surname(decision_name)
+    placed, since = [], CAST_CARD_GAP_WORDS
+    for chapter in chapters[1:]:
+        for i, sc in enumerate(chapter["scenes"]):
+            text = sc["narration"].lower()
+            since += len(text.split())
+            if (i == 0 or sc.get("map") or sc.get("chain") or sc.get("dossier")
+                    or len(text.split()) < 8 or len(placed) >= MAX_CAST_CARDS):
+                continue
+            gap = since - len(text.split())
+            hits = []
+            for c in people:
+                if c["name"] in placed:
+                    continue
+                # the decision maker's card matters most: it only has to
+                # clear the card before it, not the full spacing
+                need = (CAST_CARD_GAP_WORDS // 3 if decider and surname(c["name"]) == decider
+                        else CAST_CARD_GAP_WORDS)
+                if gap < need:
+                    continue
+                m = re.search(rf"\b{re.escape(surname(c['name']))}\b", text)
+                if m:
+                    hits.append((m.start(), c))
+            if not hits:
+                continue
+            _, c = min(hits, key=lambda h: h[0])
+            n = len(placed) + 1
+            sc["dossier"] = {"name": c["name"], "shown": c["name"],
+                             "role": (c.get("role") or "")[:30],
+                             "decision": bool(decider) and surname(c["name"]) == decider,
+                             "file_no": n, "side": "left" if n % 2 else "right"}
+            placed.append(c["name"])
+            since = len(text.split())
+    if placed:
+        print(f"🎭 Cast cards planned: {', '.join(placed)}"
+              + (f" (decision maker: {decision_name})" if decision_name else "") + ".")
+    else:
+        print("   ↩️  No cast cards: no cast member is named after the cold open.")
 
 
 def _chapter_stamps(pool, topic, chapters, era_year, cast=None):

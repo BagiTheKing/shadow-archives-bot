@@ -243,25 +243,48 @@ def person_file(name, out_dir):
     return {"photo": photo, "lines": lines, "credit": credit}
 
 
-def render_dossier_scene(scene, out_mp4, duration, build_dir):
+def render_dossier_scene(scene, out_mp4, duration, build_dir, era=None):
     """(path, info) for one scene's card, or None. The scene carries
-    "dossier" ({"name"}) and "words" (narration timings)."""
-    name = ((scene.get("dossier") or {}).get("name") or "").strip()
+    "dossier" ({"name", and in story mode "shown", "role", "decision",
+    "file_no", "side"}) and "words" (narration timings).
+
+    The cast card (cast_engine: footage or cut-out portrait, freeze on the
+    name) is tried first; the case-file card is the fallback."""
+    d = scene.get("dossier") or {}
+    name = (d.get("name") or "").strip()
     if not name:
         return None
     try:
         from map_engine import spoken_at
-        info = person_file(name, build_dir)
+        photo_dir = os.path.join(build_dir, f"cast_{d.get('file_no') or 1:02d}")
+        os.makedirs(photo_dir, exist_ok=True)
+        info = person_file(name, photo_dir)
         if not info:
-            print(f"   ↩️  No decision-maker card: Wikipedia has no free "
-                  f"portrait and dated description for {name!r}.")
+            print(f"   ↩️  No card for {name!r}: Wikipedia has no free "
+                  f"portrait and description.")
             return None
-        at = spoken_at(scene.get("words") or [], name)
-        render(name, info["lines"], info["photo"], out_mp4, duration,
-               name_at=at if at is not None else 1.3)
-        print(f"🗂️  Decision-maker card: {name} — {' · '.join(info['lines'])}.")
+        surname = (d.get("shown") or name).split()[-1]
+        at = spoken_at(scene.get("words") or [], surname)
+        if at is None:
+            at = spoken_at(scene.get("words") or [], name)
+        at = min(at if at is not None else 1.3, max(0.5, duration - 3.0))
+        try:
+            from cast_engine import render_cast_scene
+            got = render_cast_scene(scene, out_mp4, duration, build_dir, info, at, era)
+        except Exception as e:
+            print(f"   ↩️  Cast card unavailable ({type(e).__name__}: {e}).")
+            got = None
+        if got:
+            path, credit, kind = got
+            scene["_cast_freeze"] = at
+            print(f"🎭 Cast card ({kind}): {d.get('shown') or name} — "
+                  f"{'DECISION MAKER' if d.get('decision') else d.get('role') or ''}.")
+            return path, {**info, "credit": credit}
+        render(d.get("shown") or name, info["lines"], info["photo"], out_mp4, duration,
+               name_at=at, file_no=d.get("file_no") or 1)
+        print(f"🗂️  Case-file card: {name} — {' · '.join(info['lines'])}.")
         return out_mp4, info
     except Exception as e:
-        print(f"⚠️ Decision-maker card skipped ({type(e).__name__}: {e}) — "
+        print(f"⚠️ Card for {name!r} skipped ({type(e).__name__}: {e}) — "
               f"keeping the scene's photos.")
         return None

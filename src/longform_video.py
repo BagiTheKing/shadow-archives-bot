@@ -931,6 +931,7 @@ def build_score(acts, total: float, out: str):
 # Held low on purpose. These are punctuation, not effects — the moment a viewer
 # notices the sound design as sound design, it reads as a template channel.
 IMPACT_GAIN = 0.28
+WHOOSH_GAIN = 0.3           # into a cast card's freeze
 RISER_GAIN = 0.16
 
 # The bed, and how far it moves. All five lowered ~30% (same ratio as the
@@ -1041,6 +1042,13 @@ def _sfx_sources(cues):
                 f"aevalsrc='{expr}':s=44100:d={span:.3f},highpass=f=1500[{label}r];"
                 f"[{label}r]aformat=channel_layouts=stereo,"
                 f"adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "whoosh":
+            frags.append(
+                f"anoisesrc=r=44100:d=0.4:c=pink:a=0.6,highpass=f=900,lowpass=f=6000,"
+                f"afade=t=in:d=0.3,afade=t=out:st=0.3:d=0.1,volume={WHOOSH_GAIN},"
+                f"aformat=channel_layouts=stereo,adelay={delay}|{delay}[{label}]")
             labels.append(label)
             continue
         if kind == "hit":
@@ -1397,7 +1405,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             from dossier_engine import render_dossier_scene
             got = render_dossier_scene(
                 s, os.path.join(build_dir, f"lf_dossier_{idx:03d}.mp4"),
-                s["duration"] + XFADE, build_dir)
+                s["duration"] + XFADE, build_dir, era=s.get("era_year"))
             if got:
                 # the portrait is the one picture on screen: its Commons
                 # credit spans the whole scene
@@ -1405,7 +1413,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]]
         shots = len(s.get("image_paths") or [1])
         kind = (("map" if s.get("map") else "chain" if s.get("chain")
-                 else "decision-maker card" if s.get("dossier") else "graphic")
+                 else "cast card" if s.get("dossier") else "graphic")
                 if s.get("_is_map") else "b-roll") if s.get("video_path") \
             else f"{shots} shot(s)"
         print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
@@ -1489,6 +1497,11 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             pivot_start = cursor
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
+            # a cast card's freeze: a short whoosh into it, a low hit on it
+            if g.get("_cast_freeze") is not None:
+                hit_at = cursor + o + g["_cast_freeze"]
+                rhythm_cues.append(("whoosh", max(0.0, hit_at - 0.3)))
+                rhythm_cues.append(("impact", hit_at))
 
         # A chapter's punch phrase, flashed over whatever frame is on screen
         # at the exact moment it is spoken. The phrase is attached to the
