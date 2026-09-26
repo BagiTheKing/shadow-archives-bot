@@ -1673,11 +1673,14 @@ def _select_real_quote(pool, topic, candidates, tone, context_before,
         f"{context_after}...\n\n"
         f"Real, sourced quotes found for this story:\n{listing}\n\n"
         f"Pick the ONE that reads best RIGHT HERE, in this exact spot "
-        f"between those two moments — {tone}. It has to feel like it "
-        f"belongs at this specific point in the video, not just "
-        f"generically related to the topic. If none of them actually fit "
-        f"or would make sense read alone out of context, say so instead "
-        f"of forcing one.\n"
+        f"between those two moments.\n"
+        f"THE REGISTER IS REQUIRED, not a preference: the card must feel "
+        f"{tone}. A quote that is only informative, rousing, defiant, "
+        f"diplomatic or matter-of-fact (a declaration of readiness, a "
+        f"policy statement, a battle order read aloud) does NOT qualify, "
+        f"however relevant — answer 0 and an original line in the right "
+        f"register is written instead. The same if none would make sense "
+        f"read alone out of context.\n"
         "HARD RULES:\n"
         "- Copy the chosen quote's wording EXACTLY, word for word — do "
         "not paraphrase, trim, modernise or correct it in any way. Split "
@@ -1812,40 +1815,6 @@ def _names_in(topic, limit=3):
     return names[:limit]
 
 
-# Scripture on a title card reads as judgment from on high — on the
-# 2026-09-26 Six-Day War video, Ezekiel 29:10 ("I will make the land of
-# Egypt a ruin…") sat right before the verdict, which takes a side between
-# present-day states no matter how real the quote is. Holy texts never
-# reach the cards; the written line or the stock bank takes the slot.
-_SCRIPTURE_BOOKS = (
-    "genesis", "exodus", "leviticus", "numbers", "deuteronomy", "joshua",
-    "judges", "ruth", "samuel", "kings", "chronicles", "ezra", "nehemiah",
-    "esther", "job", "psalm", "psalms", "proverbs", "ecclesiastes",
-    "song of songs", "song of solomon", "isaiah", "jeremiah",
-    "lamentations", "ezekiel", "daniel", "hosea", "joel", "amos",
-    "obadiah", "jonah", "micah", "nahum", "habakkuk", "zephaniah",
-    "haggai", "zechariah", "malachi", "matthew", "mark", "luke", "john",
-    "acts", "romans", "corinthians", "galatians", "ephesians",
-    "philippians", "colossians", "thessalonians", "timothy", "titus",
-    "philemon", "hebrews", "james", "peter", "jude", "revelation",
-    "bible", "gospel", "torah", "talmud", "quran", "qur'an", "koran",
-    "surah", "sura", "hadith", "bhagavad", "vedas", "upanishad",
-)
-
-
-def _is_scripture(attribution, text=""):
-    """A book of a holy text cited by chapter and verse ("Ezekiel 29:10",
-    "Surah 2:191"), or a holy text named outright."""
-    a = (attribution or "").lower()
-    if re.search(r"\b(bible|gospel|torah|talmud|qur'?an|koran|surah?|hadith|"
-                 r"bhagavad|vedas?|upanishads?|psalms?)\b", a):
-        return True
-    if re.search(r"\d+\s*[:.,]\s*\d+", a) and any(
-            re.search(rf"\b{re.escape(b)}\b", a) for b in _SCRIPTURE_BOOKS):
-        return True
-    return False
-
-
 def _gather_quote_candidates(pool, topic):
     """Every real, sourced quote candidate Wikiquote has for this topic —
     searched once and shared by every card this video needs (the opening
@@ -1856,7 +1825,7 @@ def _gather_quote_candidates(pool, topic):
     except QuotaExhausted:
         raise
 
-    candidates, seen, scripture = [], set(), 0
+    candidates, seen = [], set()
     for term in search_terms:
         try:
             found = search_quotes(term)
@@ -1866,15 +1835,9 @@ def _gather_quote_candidates(pool, topic):
             continue
         for c in found:
             key = c["text"].lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            if _is_scripture(c.get("attribution"), c.get("text")):
-                scripture += 1
-                continue
-            candidates.append(c)
-    if scripture:
-        print(f"   ↩️  {scripture} scripture quote(s) excluded from the cards.")
+            if key not in seen:
+                seen.add(key)
+                candidates.append(c)
 
     if candidates:
         print(f"🔍 {len(candidates)} sourced quote candidate(s) found for "
@@ -1886,18 +1849,26 @@ def _gather_quote_candidates(pool, topic):
 
 
 def _source_intro_quote(pool, topic, tone, context_before, context_after,
-                        candidates, era_year=None, exclude_texts=None):
+                        candidates, era_year=None, exclude_texts=None,
+                        exclude_speakers=None):
     """One black-screen title card's content: a real, sourced quote from
     `candidates` when one actually fits this spot, an original
     unattributed line (see _generate_intro_epigraph) otherwise. Search
     first, not the model's own memory — see quote_search.py for why.
 
     candidates comes from _gather_quote_candidates, shared across every
-    card in this video; exclude_texts (lower-cased quote text) keeps a
-    second card from picking the same quote the first one already used.
+    card in this video; exclude_texts and exclude_speakers keep the second
+    card from repeating the first card's quote or its speaker — the owner
+    wants two different voices, not one voice twice. Compared with case and
+    spacing normalised, since a used quote comes back split into sentences.
     """
+    def _key(t):
+        return " ".join(re.findall(r"[a-z0-9']+", (t or "").lower()))
+    texts = {_key(t) for t in (exclude_texts or ())}
+    speakers = {_key(a) for a in (exclude_speakers or ()) if a}
     usable = [c for c in candidates
-             if not exclude_texts or c["text"].lower() not in exclude_texts]
+              if _key(c["text"]) not in texts
+              and _key(c.get("attribution")) not in speakers]
 
     if usable:
         try:
@@ -2345,9 +2316,13 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
         quote_candidates = _gather_quote_candidates(pool, topic)
 
+        # The owner's brief for the two cards: both dark, mysterious and
+        # disturbing; the second one sad as well, because by then the story
+        # has a lesson in it.
         opening_tone = (
-            "poetic, disturbing — it sets the moral weight of what the "
-            "video is about to claim, the KIND of failure this story is"
+            "dark, mysterious, disturbing and concerning — an omen: it "
+            "unsettles the viewer about what is coming, the KIND of failure "
+            "this story is, without explaining it"
         )
         intro_epigraph = _source_intro_quote(
             pool, topic, opening_tone,
@@ -2361,20 +2336,22 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
         if len(chapters) >= 3:
             used = set()
-            if intro_epigraph and intro_epigraph.get("sentences"):
-                used.add(" ".join(intro_epigraph["sentences"]).lower())
+            if intro_epigraph:
+                used.add(" ".join(intro_epigraph.get("sentences")
+                                  or [intro_epigraph.get("text") or ""]))
             verdict_tone = (
-                "defeating, sad, weary — the cost has already been paid "
-                "and nothing reverses it now; a quiet gut-punch that "
-                "resets the viewer's attention right before the verdict, "
-                "not a cliffhanger"
+                "dark, mysterious and disturbing like the opening card, but "
+                "SAD as well — it carries the lesson: the cost has already "
+                "been paid and nothing reverses it now; a quiet gut-punch "
+                "right before the verdict, not a cliffhanger"
             )
             verdict_epigraph = _source_intro_quote(
                 pool, topic, verdict_tone,
                 context_before=_chapter_text(chapters[-2])[-700:],
                 context_after=_chapter_text(chapters[-1])[:500],
                 candidates=quote_candidates, era_year=era_year,
-                exclude_texts=used)
+                exclude_texts=used,
+                exclude_speakers={(intro_epigraph or {}).get("attribution")})
             if verdict_epigraph:
                 preview = " ".join(verdict_epigraph.get("sentences")
                                    or [verdict_epigraph.get("text") or ""])
