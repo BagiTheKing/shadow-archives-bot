@@ -654,7 +654,10 @@ def _scene_clip(scene, out, style):
       long narration segment no longer means a frozen frame."""
     audio, duration = scene["audio_path"], scene["duration"]
     clip_len = duration + XFADE
-    grade = GRADES.get(GRADE_BY_ROLE.get(scene.get("chapter_role"), ""), "")
+    # A map beat is a graphic drawn in its chapter's palette (map_engine);
+    # a photo grade on top would turn its red action grey.
+    grade = "" if scene.get("_is_map") else \
+        GRADES.get(GRADE_BY_ROLE.get(scene.get("chapter_role"), ""), "")
     graded = f",{grade}" if grade else ""
     # The picture runs on past the last word; the audio is padded to match so
     # the muxed clip has one length and the dissolve has something to dissolve.
@@ -1375,8 +1378,17 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     # ---- Phase 1: scene clips ----
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
+        if s.get("map"):
+            # The one map beat replaces this scene's pictures for its whole
+            # line; any failure leaves the photos exactly as they were.
+            from map_engine import render_map_scene
+            mp = render_map_scene(s, os.path.join(build_dir, f"lf_map_{idx:03d}.mp4"),
+                                  s["duration"] + XFADE)
+            if mp:
+                s["video_path"], s["_is_map"], s["credit"] = mp, True, []
         shots = len(s.get("image_paths") or [1])
-        kind = "b-roll" if s.get("video_path") else f"{shots} shot(s)"
+        kind = ("map" if s.get("_is_map") else "b-roll") if s.get("video_path") \
+            else f"{shots} shot(s)"
         print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
         _scene_clip(s, s["_clip"], idx % 8)
 

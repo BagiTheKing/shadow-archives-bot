@@ -2639,6 +2639,58 @@ def _stamp_grounded(place, date, narration, topic, era_year):
     return True
 
 
+def _named_in(name, text):
+    """Whether every word of a place name appears in the text, whole."""
+    words = re.findall(r"[a-z0-9]+", (name or "").lower())
+    return bool(words) and all(
+        re.search(rf"(?<![a-z0-9]){re.escape(w)}(?![a-z0-9])", text)
+        for w in words)
+
+
+def _place_map(plan, chapters, topic):
+    """Attaches scene["map"] to the first scene before the decision that
+    speaks the map's target. Every name must be in the narration before
+    the decision (or the topic); an origin or region that is not is
+    dropped, and a target that is not means no map at all."""
+    if not isinstance(plan, dict):
+        return
+    pivot = next((i for i, c in enumerate(chapters)
+                  if (c.get("pacing") or {}).get("role") == "pivot"),
+                 len(chapters))
+    # Chapter 0 is the cold open: the hook stays photos.
+    candidates = [(c, s) for c in chapters[1:pivot] for s in c["scenes"]]
+    text = " ".join(s["narration"] for _, s in candidates).lower() \
+        + " " + (topic or "").lower()
+    target = " ".join(str(plan.get("target") or "").split())
+    if not target or len(target) > 40 or not _named_in(target, text):
+        if target:
+            print(f"   ↩️  Map target {target!r} is not in the narration — no map.")
+        return
+    origin = " ".join(str(plan.get("origin") or "").split())
+    if origin and (len(origin) > 40 or not _named_in(origin, text)
+                   or origin.lower() == target.lower()):
+        origin = ""
+    action = str(plan.get("action") or "mark").lower()
+    if action not in ("strike", "move", "mark"):
+        action = "mark"
+    light = [" ".join(str(x).split()) for x in (plan.get("light") or [])
+             if isinstance(x, str)]
+    light = [x for x in light if 0 < len(x) <= 40 and _named_in(x, text)][:2]
+    # A chapter's first scene carries its on-screen title (middle-left, ~4s),
+    # which would sit over the map's action — so a later scene that speaks
+    # the target is preferred, and a first scene is the fallback.
+    speaking = [(c, s) for c, s in candidates
+                if _named_in(target, s["narration"].lower())]
+    speaking.sort(key=lambda cs: cs[0]["scenes"][0] is cs[1])
+    if not speaking:
+        print(f"   ↩️  No scene before the decision speaks {target!r} — no map.")
+        return
+    speaking[0][1]["map"] = {"target": target, "origin": origin,
+                             "action": action, "light": light}
+    print(f"🗺️  Map planned: {origin or '—'} → {target} ({action}; "
+          f"lit: {', '.join(light) or 'none'}).")
+
+
 def _chapter_stamps(pool, topic, chapters, era_year):
     """Writes chapter["stamp"] ("KINMEN · 23 AUGUST 1958") on the chapters in
     STAMP_ROLES whose narration states where and when they happen. One
@@ -2666,11 +2718,27 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         "'1958', or one of: " + ", ".join(STAMP_RELATIVE) + ". Empty if the "
         "chapter states no time.\n"
         "- Skip a chapter that names no place.\n\n"
+        "ALSO describe ONE map for the story's key place, as NAMES only "
+        "(never coordinates), all taken from the text above:\n"
+        "- target: the place where the decisive event happened (a city, "
+        "island, strait, base or battlefield);\n"
+        "- origin: where the force came from, if the text names it — a "
+        "city or base, or the province or country if that is all it names; "
+        "else empty;\n"
+        "- action: \"strike\" (shelling, bombing, attack), \"move\" (an "
+        "army, fleet or convoy travelling) or \"mark\" (neither);\n"
+        "- light: up to 2 countries or provinces the text names that the "
+        "viewer should see (e.g. the target's country across a border).\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
-        '"date": "..."}]}'
+        '"date": "..."}], "map": {"target": "...", "origin": "...", '
+        '"action": "strike", "light": ["..."]}}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
+    try:
+        _place_map((data or {}).get("map"), chapters, topic)
+    except Exception as e:
+        print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
     by_index = dict(wanted)
     placed = 0
     for st in (data or {}).get("stamps") or []:

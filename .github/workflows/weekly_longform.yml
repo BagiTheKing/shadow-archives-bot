@@ -60,6 +60,15 @@ jobs:
           path: models
           key: kokoro-v1.0-model-files
 
+      # Map beat data (src/map_engine.py): Natural Earth 1:10m countries,
+      # provinces and places, public domain, ~58MB. map_engine downloads
+      # whatever is missing; this cache just means it happens once.
+      - name: Cache Natural Earth map data
+        uses: actions/cache@v4
+        with:
+          path: models/naturalearth
+          key: naturalearth-10m-v1
+
       - name: Fetch Kokoro model files (cache miss only)
         run: |
           mkdir -p models
