@@ -231,6 +231,35 @@ def build_first_comment(script: dict) -> str:
             "it already too late?")
 
 
+def build_story(topic, build_dir):
+    """Research + fact sheet + outline (story_mode.py), printed for review.
+    Returns {"sheet", "plan", "era_year"} or None."""
+    from collections import Counter
+    from llm_provider import get_pool as _pool
+    from longform_llm import _call
+    import story_mode as sm
+    article = sm.research(topic)
+    if not article:
+        print(f"⚠️ Story mode: no Wikipedia article found for {topic!r}.")
+        return None
+    print(f"📚 Research: {article['title']} ({len(article['text']):,} chars)")
+    pool = _pool()
+    sheet = sm.fact_sheet(pool, topic, article, _call)
+    if not sheet:
+        print("⚠️ Story mode: the fact sheet came back too thin to tell a story.")
+        return None
+    plan = sm.outline(pool, topic, sheet, _call)
+    if not plan:
+        print("⚠️ Story mode: the outline did not come back usable.")
+        return None
+    sm.print_plan(sheet, plan)
+    sm.save(build_dir, sheet=sheet, plan=plan)
+    years = Counter(int(y) for t in sheet["timeline"]
+                    for y in re.findall(r"\b(1\d{3}|20\d{2})\b", t.get("date", "")))
+    return {"sheet": sheet, "plan": plan,
+            "era_year": years.most_common(1)[0][0] if years else None}
+
+
 def resolve_topic(lane: str, history=None):
     """Chooses this run's topic.
     Returns (topic, enforce_history, from_short, era_year).
@@ -335,7 +364,15 @@ def main():
     print(f"🧾 History: {describe(history)}")
 
     try:
-        topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
+        story_topic = os.getenv("STORY_TOPIC", "").strip()
+        stage = os.getenv("STORY_STAGE", "full").strip().lower()
+        if story_topic:
+            # A named story (e.g. the Six-Day War remake): no channel watch,
+            # no anchor — the topic is given, story mode tells it.
+            topic, enforce_history, from_short, era_year = story_topic, True, False, None
+            print(f"📖 Story topic given: {topic} (stage: {stage})")
+        else:
+            topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
         if not topic:
             print("❌ Halted: every topic in the pool is already published. "
                   "Add new entries to CORE_TOPICS in src/topics.py.")
@@ -347,9 +384,22 @@ def main():
             print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
             print(f"   enforce_history={enforce_history} era_year={era_year}")
             return
+        story = None
+        if story_topic or os.getenv("STORY_MODE", "0") == "1":
+            story = build_story(topic, BUILD_DIR)
+            if story:
+                era_year = era_year or story.get("era_year")
+            elif stage != "full":
+                print("❌ Story mode could not build a fact sheet and outline.")
+                raise SystemExit(1)
+            else:
+                print("↩️  Story mode unavailable — writing with the standard arc.")
+            if story and stage == "outline":
+                print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")
+                return
         script = generate_longform_script(topic=topic,
                                           enforce_history=enforce_history,
-                                          era_year=era_year)
+                                          era_year=era_year, story=story)
     except QuotaExhausted as e:
         print(f"\n❌ Halted: {e}")
         print("   OpenRouter's free tier allows 50 requests a day across all "
@@ -361,6 +411,19 @@ def main():
     if not script:
         print("❌ Halted: script generation failed.")
         raise SystemExit(1)
+    if os.getenv("STORY_STAGE", "full").strip().lower() == "script":
+        with open(os.path.join(BUILD_DIR, "longform_script.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump(script, f, indent=2, ensure_ascii=False)
+        print("=" * 70)
+        print(f"STORY MODE — SCRIPT: {script.get('title')}")
+        for c in script["chapters"]:
+            print(f"\n## {c['heading']}  [{(c.get('pacing') or {}).get('role')}]")
+            for sc in c["scenes"]:
+                print(sc["narration"])
+        print("=" * 70)
+        print("🛑 STORY_STAGE=script — stopping for approval of the script.")
+        return
     script["lane"] = lane
     script["has_short"] = from_short
 

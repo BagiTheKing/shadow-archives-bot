@@ -733,6 +733,19 @@ def _archive_query_rule(era_year):
 # cliffhanger at the end is the thing that makes people distrust the next one.
 # ---------------------------------------------------------------------------
 
+def _story_ending_rule(next_heading, hook) -> str:
+    """Story mode: a chapter ends on a hook only where the outline earned
+    one (at most two per video). The 1967 video ended every chapter on a
+    teaser, and by the second one viewers stopped believing them."""
+    if not next_heading:
+        return _handoff_rule(None)
+    if hook:
+        return ("END this chapter on this unresolved fact, in one flat "
+                f"sentence under 14 words: {hook}\n\n")
+    return ("END this chapter on its last beat itself. No teaser, no "
+            "foreshadowing of the next chapter, no summary.\n\n")
+
+
 def _handoff_rule(next_heading) -> str:
     """The instruction that turns a chapter ending into an open loop."""
     if not next_heading:
@@ -760,7 +773,7 @@ def _handoff_rule(next_heading) -> str:
 
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
                     era_year=None, covered=None, episode_format=None,
-                    next_heading=None, words_per_image=None):
+                    next_heading=None, words_per_image=None, story_hook=None):
     n_images = max(2, round(words / (words_per_image or WORDS_PER_IMAGE)))
 
     # The channel's promise for this episode type. Stated on every chapter
@@ -820,7 +833,7 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
         "nothing — never force one.\n\n"
         "Every sentence must carry information the viewer did not have a "
         "sentence ago. Never pad by restating an earlier line in new words.\n\n"
-        f"{_handoff_rule(next_heading)}"
+        f"{_story_ending_rule(next_heading, story_hook) if story_hook is not None else _handoff_rule(next_heading)}"
         "Output ONLY a JSON object, no markdown fences. Replace every "
         "placeholder below with material from this story:\n"
         '{"segments": [{"narration": "<narration, with at most one '
@@ -2130,7 +2143,7 @@ def _generate_joke_beat(pool, topic, decision_text, era_year=None):
 
 
 def generate_longform_script(topic: str = None, enforce_history: bool = False,
-                             era_year: int = None) -> dict:
+                             era_year: int = None, story=None) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
     unrecoverable — a single weak chapter is retried, not fatal to the run.
 
@@ -2163,6 +2176,16 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
     episode_format = format_of(topic)
     arc = arc_for(episode_format)
+    # Story mode (story_mode.py): the arc, the roles and the hooks come from
+    # the researched outline, and the writer works under the story voice.
+    story_roles = story_hooks = None
+    system_prompt = SYSTEM_PROMPT
+    if story:
+        from story_mode import story_arc, STORY_SYSTEM_PROMPT
+        arc, story_roles, story_hooks = story_arc(story["plan"], story["sheet"])
+        system_prompt = STORY_SYSTEM_PROMPT.format(style=STYLE_SUFFIX)
+        print(f"📖 Story mode: {len(arc)} chapters, "
+              f"~{sum(w for _, _, w in arc)} words — {story['plan']['question']}")
     print(f"🏷️  Format: {formats.name_of(episode_format)} — "
           f"{formats.get(episode_format)['promise']}")
 
@@ -2174,6 +2197,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     said_sentences, said_lines = [], []
     for c_index, (heading, brief, words) in enumerate(arc):
         pacing = pacing_for(c_index)
+        if story_roles:
+            pacing = next((p for p in PACING if p["role"] == story_roles[c_index]),
+                          pacing)
         # The last chapter closes the video; every other one hands off.
         next_heading = arc[c_index + 1][0] if c_index + 1 < len(arc) else None
         print(f"✍️  Chapter: {heading} (~{words} words, {pacing['role']}, "
@@ -2192,14 +2218,16 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             else CHAPTER_ATTEMPTS_OPENROUTER
         for attempt in range(attempts):
             try:
-                candidate = _call(pool, SYSTEM_PROMPT,
+                candidate = _call(pool, system_prompt,
                                   _chapter_prompt(topic, heading, brief, words,
                                                   tail, feedback,
                                                   era_year=era_year,
                                                   covered=said_lines,
                                                   episode_format=episode_format,
                                                   next_heading=next_heading,
-                                                  words_per_image=pacing["words_per_image"]),
+                                                  words_per_image=pacing["words_per_image"],
+                                                  story_hook=(story_hooks[c_index]
+                                                              if story_hooks else None)),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -2234,6 +2262,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                 # more: a closed ending is a real cost, an abandoned chapter is
                 # a bigger one.
                 if (next_heading and not handoff_retried
+                        and (not story_hooks or story_hooks[c_index])
                         and attempt < attempts - 1
                         and not _handoff_ok(candidate)):
                     if best is None:

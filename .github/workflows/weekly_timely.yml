@@ -34,6 +34,15 @@ on:
         description: 'Render only, do not upload (dry run)'
         type: boolean
         default: false
+      story_topic:
+        description: 'Story mode: tell this named event (e.g. Six-Day War). Blank = normal lane'
+        type: string
+        default: ''
+      story_stage:
+        description: 'Story mode stop: outline (plan only), script (text only) or full (render + upload)'
+        type: choice
+        options: [outline, script, full]
+        default: outline
       topic_only:
         description: 'Only choose the topic and print it (no script, render or upload)'
         type: boolean
@@ -54,7 +63,8 @@ concurrency:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # 240 (was 150): a story-mode video runs ~12 minutes, not 7.
+    timeout-minutes: 240
 
     steps:
       - name: Check out repository code
@@ -169,6 +179,8 @@ jobs:
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           LONGFORM_LANE: timely
           TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
+          STORY_TOPIC: ${{ inputs.story_topic }}
+          STORY_STAGE: ${{ inputs.story_stage || 'full' }}
           TREND_GEOS: ${{ inputs.trend_geos }}
           TREND_EDITIONS: ${{ inputs.trend_editions }}
           # Checked first, ahead of the trend feeds above — see
