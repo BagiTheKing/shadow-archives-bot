@@ -195,20 +195,37 @@ def person_file(name, out_dir):
         timeout=30)
     pages = list(((r.json().get("query") or {}).get("pages") or {}).values())
     if not pages or "missing" in pages[0]:
+        print(f"   ↩️  {name}: no Wikipedia article by that name.")
         return None
     page = pages[0]
+    commons_credit = None
     desc = (page.get("description") or "").strip()
     src = (page.get("original") or {}).get("source", "")
     file_name = page.get("pageimage", "")
-    m = _LIFESPAN.search(desc)
-    # A person's short description carries their years; anything else (an
-    # event, a place, a namesake) gets no card. Only a Commons image is free
-    # to use; a fair-use lead image lives on en.wikipedia and is refused.
-    if (not desc or not m or "/wikipedia/commons/" not in src
-            or not re.search(r"\.(jpe?g|png)$", src, re.I)):
+    # Only a Commons image is free to use; a fair-use lead image lives on
+    # en.wikipedia and is refused. Without one, the person's own Commons
+    # photos are searched instead.
+    if "/wikipedia/commons/" not in src or not re.search(r"\.(jpe?g|png)$", src, re.I):
+        from archive_engine import search_commons
+        hits = [c for c in search_commons(f"{name} portrait", limit=10)
+                if all(w.lower() in c.get("title", "").lower()
+                       for w in name.split()[-1:])]
+        if not hits:
+            print(f"   ↩️  {name}: no free portrait (lead image {src or 'none'}).")
+            return None
+        from archive_engine import format_credit
+        src, file_name = hits[0]["url"], hits[0]["title"]
+        commons_credit = format_credit(hits[0])
+    if not desc:
+        print(f"   ↩️  {name}: Wikipedia has no short description.")
         return None
-    what = _LIFESPAN.sub("", desc).strip(" ,;()").upper()
-    lines = [x for x in (what[:44], f"{m.group(1)} – {m.group(2)}") if x]
+    # The years are shown when the description carries them ("Israeli
+    # general (1915-1981)"); many leaders' descriptions give a term of
+    # office instead ("President of Egypt from 1954 to 1970"), which is
+    # kept as written.
+    m = _LIFESPAN.search(desc)
+    what = (_LIFESPAN.sub("", desc) if m else desc).strip(" ,;()").upper()
+    lines = [x for x in (what[:44], f"{m.group(1)} – {m.group(2)}" if m else "") if x]
 
     img = _polite_get(src, timeout=60)
     img.raise_for_status()
@@ -219,6 +236,8 @@ def person_file(name, out_dir):
     Image.open(photo).verify()
 
     credit = f"{file_name.replace('_', ' ')} (via Wikimedia Commons)"
+    if commons_credit:
+        return {"photo": photo, "lines": lines, "credit": commons_credit}
     try:
         info = _polite_get(COMMONS_API, params={
             "action": "query", "titles": f"File:{file_name}", "format": "json",
