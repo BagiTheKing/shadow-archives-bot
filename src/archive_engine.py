@@ -635,31 +635,75 @@ def search_commons_video(query: str, era=None, limit: int = 12) -> list:
                 (meta.get("LicenseShortName") or {}).get("value", "")),
             "duration": duration, "year": year, "source": "Wikimedia Commons",
         })
+    # Closest to the story's year first: for a 1967 story, Nasser in 1967
+    # before Nasser in 1958. Search rank breaks ties (sort is stable).
+    if era:
+        out.sort(key=lambda c: abs((c["year"] or era) - era))
     return out
+
+
+def _clip_seconds(path):
+    """Length of a cut clip, 0 when it cannot be read."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                              "format=duration", "-of", "csv=p=0", path],
+                             capture_output=True, text=True, timeout=30)
+        return float(out.stdout.strip() or 0)
+    except Exception:
+        return 0.0
 
 
 def fetch_commons_video(candidate: dict, output_path: str,
                         seconds: float = ARCHIVAL_CLIP_SECONDS) -> bool:
-    """Cuts `seconds` of silent footage out of a Commons video without
-    downloading the rest. Short files start just past their opening; long
-    ones (a full newsreel, a whole speech) a fifth of the way in, clear of
-    title cards and leader."""
+    """Cuts `seconds` of silent footage out of a Commons video. Streams
+    straight from Commons first, so only the seconds used are fetched; if
+    that fails (some transcodes do not seek over HTTP) the file is downloaded
+    once, capped, and cut locally. Short files start just past their
+    opening; long ones (a full newsreel, a whole speech) a fifth of the way
+    in, clear of title cards and leader."""
     dur = candidate.get("duration") or 0
     start = 1.0 if dur <= seconds + 4 else min(dur * 0.2, dur - seconds - 2)
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-user_agent", HEADERS["User-Agent"], "-rw_timeout", "60000000",
-             "-ss", f"{max(0.0, start):.2f}", "-i", candidate["url"],
-             "-t", f"{min(seconds, max(4.0, dur - 1)):.2f}", "-an",
+    length = min(seconds, max(4.0, dur - 1))
+
+    def cut(src, extra=()):
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *extra,
+             "-ss", f"{max(0.0, start):.2f}", "-i", src,
+             "-t", f"{length:.2f}", "-an",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
              "-pix_fmt", "yuv420p", output_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True,
-            timeout=240)
-        ok = os.path.exists(output_path) and os.path.getsize(output_path) > 20000
+            capture_output=True, text=True, timeout=240)
+        ok = r.returncode == 0 and _clip_seconds(output_path) >= min(4.0, length - 1)
+        if not ok:
+            print(f"⚠️ Commons video cut failed ({candidate.get('title')}): "
+                  f"{(r.stderr or 'clip too short').strip()[-160:]}")
+        return ok
+
+    ok = False
+    try:
+        ok = cut(candidate["url"], ("-user_agent", HEADERS["User-Agent"],
+                                    "-rw_timeout", "60000000"))
     except Exception as e:
-        print(f"⚠️ Commons video cut failed ({candidate.get('title')}): {e}")
-        ok = False
+        print(f"⚠️ Commons video stream failed ({candidate.get('title')}): {e}")
+    if not ok:
+        tmp = output_path + ".src"
+        try:
+            with _polite_get(candidate["url"], stream=True, timeout=120,
+                             headers={**HEADERS, "Accept": "*/*"}) as resp:
+                resp.raise_for_status()
+                size = 0
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_content(1 << 20):
+                        size += len(chunk)
+                        if size > 150 * 1024 * 1024:
+                            raise ValueError("source file too large")
+                        f.write(chunk)
+            ok = cut(tmp)
+        except Exception as e:
+            print(f"⚠️ Commons video download failed ({candidate.get('title')}): {e}")
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
     if not ok and os.path.exists(output_path):
         os.remove(output_path)
     return ok

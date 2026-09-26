@@ -72,6 +72,20 @@ suspense lines. The events supply the drama.
 - Do not take sides between present-day states. Narrate what people did and what it \
 cost, attributed to them.
 
+SIMPLICITY — the viewer has NO political, military or historical background:
+- Name ONLY the people in this video's CAST. The first time each is named, say who \
+they are in the same sentence ("Egypt's president, Gamal Abdel Nasser"); after \
+that, remind the viewer now and then ("Nasser, Egypt's leader"). Everyone else is \
+a role: "an Israeli general", "Jordan's king", "a UN officer".
+- Name ONLY the PLACES listed for this video. Any other place is described in \
+plain words ("a desert pass", "the border villages").
+- No unit names or numbers (no brigades, divisions, battalions, squadrons by name \
+or number): "Israeli tanks", "Egyptian troops".
+- At most three figures in a chapter, rounded ("about 1,000", "nearly 20,000"), \
+each used only for exactly what it measures.
+- A quote is at most 40 words.
+- One sentence, one idea. Nothing over 30 words.
+
 IMAGE PROMPTS:
 - One clear focal subject: one person, one object or one place, with the shot type \
 first and the period's dress, vehicles and buildings named explicitly. One figure at \
@@ -153,6 +167,11 @@ def verify_beats(plan, article_text):
             dropped.append("HOOK: " + c["hook"])
             c["hook"] = ""
     plan["chapters"] = [c for c in plan["chapters"] if c["beats"]]
+    for key, name in (("cast", lambda c: c.get("name")), ("places", lambda p: p)):
+        kept = [x for x in plan.get(key) or [] if _names_ok(name(x), art)]
+        dropped += [f"{key.upper()}: {name(x)}" for x in plan.get(key) or []
+                    if x not in kept]
+        plan[key] = kept
     return dropped
 
 
@@ -234,19 +253,28 @@ def fact_sheet(pool, topic, article, call):
     return sheet
 
 
-def sheet_text(sheet, chapter_span=None):
-    """The fact sheet as compact lines for a prompt."""
+QUOTE_MAX_WORDS = 40
+
+
+def sheet_text(sheet, chapter_span=None, cast=None):
+    """The fact sheet as compact lines for a prompt. With a cast, only those
+    people are listed, and only their quotes."""
     lines = ["TIMELINE:"]
     lines += [f"- {t['date']}: {t['event']}" + (f" ({t['place']})" if t.get("place") else "")
               for t in sheet["timeline"]]
     lines.append("PEOPLE:")
-    lines += [f"- {p['name']}: {p.get('role', '')}" for p in sheet["people"]]
+    people = [{"name": c["name"], "role": c.get("role", "")} for c in cast] \
+        if cast else sheet["people"]
+    lines += [f"- {p['name']}: {p.get('role', '')}" for p in people]
     if sheet["numbers"]:
         lines.append("FIGURES:")
         lines += [f"- {n['value']}: {n['what']}" for n in sheet["numbers"]]
-    if sheet["quotes"]:
+    quotes = [q for q in sheet["quotes"]
+              if len(q["text"].split()) <= QUOTE_MAX_WORDS
+              and (not cast or _in_cast(q.get("speaker"), cast))]
+    if quotes:
         lines.append("QUOTES (use only word for word):")
-        lines += [f"- \"{q['text']}\" — {q['speaker']}" for q in sheet["quotes"]]
+        lines += [f"- \"{q['text']}\" — {q['speaker']}" for q in quotes]
     return "\n".join(lines)
 
 
@@ -255,6 +283,18 @@ def sheet_text(sheet, chapter_span=None):
 # ---------------------------------------------------------------------------
 
 ROLES = ("open", "build", "pivot", "drive", "close")
+MAX_CAST = 5
+MAX_PLACES = 5
+
+
+def _surname(name):
+    parts = [w for w in re.findall(r"[A-Za-z'-]+", name or "") if len(w) > 2]
+    return parts[-1].lower() if parts else ""
+
+
+def _in_cast(name, cast):
+    sur = _surname(name)
+    return bool(sur) and any(sur == _surname(c["name"]) for c in cast)
 
 
 def fix_roles(chapters):
@@ -284,10 +324,28 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "something happening), and it STOPS at the instant before the "
         "outcome: nothing is hit, destroyed, won or decided in it. It must "
         "not reveal any result a later chapter tells.\n"
-        "- After it, go CHRONOLOGICAL: 4-6 chapters from the first cause to "
-        "the aftermath. Each has a dated span, follows 1-3 named people (pov), "
-        "and has 3-6 beats: concrete things that happen, taken from the "
-        "timeline.\n"
+        "- After it, go CHRONOLOGICAL: 5 more chapters (6 in all) from the "
+        "first cause to the aftermath, told as ONE story, not parallel "
+        "threads. Each has a dated span, follows 1-2 people from the cast "
+        "(pov), and has 3-5 beats: concrete things that happen, taken from "
+        "the timeline.\n"
+        "- The viewer has NO background. Keep it SIMPLE:\n"
+        f"  * cast: at most {MAX_CAST} people for the whole video, each with a "
+        "plain role (\"Egypt's president\"). Pick the leaders on EVERY side "
+        "so both sides are heard. Everyone else in the beats is a role "
+        "(\"an Israeli general\"), never a name.\n"
+        f"  * places: at most {MAX_PLACES} places for the whole video, only "
+        "the ones the story cannot do without. Other places are described "
+        "(\"a desert pass\").\n"
+        "  * No unit names or numbers (brigades, divisions). Few figures, "
+        "rounded, each only for what it measures.\n"
+        "  * Basics first: the first chapter after the cold open begins with "
+        "who is who (which countries or sides, who leads them) and why the "
+        "key place matters, in plain words, before any events.\n"
+        "  * Leave out side incidents that would need their own explanation "
+        "and do not change the outcome.\n"
+        "  * The leaders of the losing side come back in the last chapter: "
+        "what they did and said afterwards.\n"
         "- The turning point (role \"pivot\") is its OWN SHORT chapter, "
         "150-250 words: the decisive choice itself — the room, the people, "
         "the vote or the order — and nothing else. The climax chapter comes "
@@ -302,8 +360,9 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "most words (at least a third of the total). Background gets the "
         "least. The last chapter (aftermath and what it changed) is about an "
         "eighth.\n"
-        "- A story question, not a verdict: what the viewer wants answered. "
-        "It must be NEUTRAL — not asked from one side's point of view, and "
+        "- A story question, not a verdict: one short, sharp question a "
+        "stranger wants answered (how, or at what cost, something turned out), "
+        "under 15 words. It must be NEUTRAL — not asked from one side's point of view, and "
         "never framing one side as the threat or the victim. Every fear, "
         "claim or threat in a beat is attributed to whoever held it "
         "(\"Israel's leaders feared...\", \"Nasser declared...\"), never "
@@ -313,14 +372,19 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "- Titles are story beats (\"The Bluff\", \"7:45 a.m.\"), never "
         "abstract labels.\n"
         f"- Words across all chapters add up to {total_words}.\n\n"
-        'Output ONLY JSON: {"question": "", "chapters": [{"title": "", '
+        'Output ONLY JSON: {"question": "", "cast": [{"name": "", "role": ""}], '
+        '"places": [""], "chapters": [{"title": "", '
         '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", '
         '"beats": [""], "words": 0, "hook": ""}]}')
     data = call(pool, "You plan documentary stories. Output only JSON.",
                 prompt, max_tokens=5000)
     chapters = (data or {}).get("chapters") if isinstance(data, dict) else None
-    if not chapters or not (5 <= len(chapters) <= 8):
+    if not chapters or not (5 <= len(chapters) <= 7):
         return None
+    cast = [c for c in (data.get("cast") or [])
+            if isinstance(c, dict) and c.get("name")][:MAX_CAST]
+    places = [p for p in (data.get("places") or [])
+              if isinstance(p, str) and p.strip()][:MAX_PLACES]
     chapters = fix_roles([c for c in chapters if c.get("title") and c.get("beats")])
     # Budgets scaled to the target, with floors so no chapter is a stub.
     raw = [max(80, int(c.get("words") or 0)) for c in chapters]
@@ -338,7 +402,8 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
             hooks += 1
             if hooks > 2 or c["role"] == "close":
                 c["hook"] = ""
-    return {"question": (data.get("question") or "").strip(), "chapters": chapters}
+    return {"question": (data.get("question") or "").strip(), "cast": cast,
+            "places": places, "chapters": chapters}
 
 
 def print_plan(sheet, plan):
@@ -347,6 +412,9 @@ def print_plan(sheet, plan):
     print(sheet_text(sheet))
     print("-" * 70)
     print(f"STORY QUESTION: {plan['question']}")
+    print("CAST: " + "; ".join(f"{c['name']} ({c.get('role', '')})"
+                               for c in plan.get("cast") or []))
+    print("PLACES: " + ", ".join(plan.get("places") or []))
     for i, c in enumerate(plan["chapters"], 1):
         print(f"\n{i}. {c['title']}  [{c['role']}, ~{c['words']} words, "
               f"{c.get('span', '')}]  POV: {', '.join(c.get('pov') or [])}")
@@ -380,8 +448,24 @@ def chapter_brief(plan, i, sheet):
         f"Tell these beats, in order, as scenes:\n{beats}\n"
         f"Chapters already told: {'; '.join(before) or 'none'}. "
         f"Still to come: {'; '.join(after) or 'none'} — do not tell their "
-        "events here.\n\n"
-        f"FACT SHEET (the only facts you may use):\n{sheet_text(sheet)}")
+        "events here.\n"
+        f"{_cast_note(plan)}\n"
+        f"FACT SHEET (the only facts you may use):\n"
+        f"{sheet_text(sheet, cast=plan.get('cast'))}")
+
+
+def _cast_note(plan):
+    cast, places = plan.get("cast") or [], plan.get("places") or []
+    out = ""
+    if cast:
+        out += ("CAST — the ONLY people you may name, each introduced with "
+                "their role: " + "; ".join(
+                    f"{c['name']} ({c.get('role', '')})" for c in cast)
+                + ". Anyone else is a role, never a name.\n")
+    if places:
+        out += ("PLACES — the only places you may name: " + ", ".join(places)
+                + ". Describe any other place in plain words.\n")
+    return out
 
 
 def story_arc(plan, sheet):
@@ -400,3 +484,99 @@ def save(build_dir, **parts):
             json.dump(parts, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# 5. Simplicity check — "could a viewer with no background follow this?"
+# ---------------------------------------------------------------------------
+
+LONG_SENTENCE_WORDS = 30
+MAX_FIGURES_PER_CHAPTER = 4
+_UNIT_RE = re.compile(r"\b(brigades?|divisions?|battalions?|regiments?|"
+                      r"squadrons?|corps)\b", re.I)
+_YEARISH = re.compile(r"^(1[5-9]\d\d|20[0-2]\d)$")
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july",
+           "august", "september", "october", "november", "december")
+
+
+def simplicity_issues(text, plan, sheet):
+    """What a counting check finds in one chapter's narration: names outside
+    the cast, places outside the list, unit names, too many or unrounded
+    figures, over-long sentences. Plain sentences, ready to hand back to
+    the writer."""
+    issues = []
+    low = text.lower()
+    cast = plan.get("cast") or []
+    if cast:
+        extra = sorted({p["name"] for p in sheet.get("people") or []
+                        if not _in_cast(p["name"], cast)
+                        and re.search(rf"\b{re.escape(_surname(p['name']))}\b",
+                                      low) and len(_surname(p["name"])) > 3})
+        if extra:
+            issues.append("Names people outside the cast: " + ", ".join(extra)
+                          + ". Refer to them by their role instead.")
+    places = [p.lower() for p in plan.get("places") or []]
+    if places:
+        extra = sorted({p for p in sheet.get("places") or []
+                        if isinstance(p, str) and p.lower() not in places
+                        and not any(p.lower() in q or q in p.lower() for q in places)
+                        and re.search(rf"\b{re.escape(p.lower())}\b", low)})
+        if extra:
+            issues.append("Names places outside the list: " + ", ".join(extra)
+                          + ". Describe them in plain words instead.")
+    units = sorted({m.group(0).lower() for m in _UNIT_RE.finditer(text)})
+    if units:
+        issues.append("Uses military unit names (" + ", ".join(units)
+                      + "). Say \"troops\", \"tanks\" or \"soldiers\" instead.")
+    figures = []
+    for m in re.finditer(r"\d[\d,.]*", text):
+        tok = m.group(0).rstrip(".,")
+        before = low[max(0, m.start() - 12):m.start()]
+        after = low[m.end():m.end() + 12]
+        if _YEARISH.match(tok) or any(mo in before or mo in after for mo in _MONTHS):
+            continue          # a year or a date, not a figure
+        if re.match(r"(st|nd|rd|th)\b", after):
+            continue          # an ordinal ("7th"), caught by the unit rule
+        if re.search(r"(a\.m|p\.m|o'clock|:)", after[:5]) or ":" in tok:
+            continue          # a clock time
+        figures.append(tok)
+    if len(figures) > MAX_FIGURES_PER_CHAPTER:
+        issues.append(f"Uses {len(figures)} figures ({', '.join(figures)}). "
+                      f"Keep at most three, the ones that matter most.")
+    unrounded = [f for f in figures
+                 if len(f.replace(",", "")) >= 4 and f.replace(",", "")[-2:] != "00"]
+    if unrounded:
+        issues.append("Unrounded figures: " + ", ".join(unrounded)
+                      + ". Round them (\"about 20,000\").")
+    long = [x for x in re.split(r"(?<=[.!?])\s+", text)
+            if len(x.split()) > LONG_SENTENCE_WORDS]
+    if long:
+        issues.append(f"{len(long)} sentence(s) over {LONG_SENTENCE_WORDS} "
+                      f"words, e.g. \"{long[0][:90]}...\". Split them.")
+    return issues
+
+
+def viewer_check(pool, text, earlier, call):
+    """A model reads the chapter as a viewer with no background who has
+    watched only the chapters before it, and lists what would lose them.
+    [] when clear, or when the check itself fails."""
+    prompt = (
+        "You are a regular YouTube viewer with NO knowledge of history, "
+        "politics or the military. You have watched the video so far:\n"
+        f"{earlier[-5000:] or '(nothing yet)'}\n\n"
+        f"Now you hear this part:\n{text}\n\n"
+        "List the points where you would get lost: a person you cannot place, "
+        "a place you do not know why it matters, a term you do not "
+        "understand, a jump you cannot follow, too many names or numbers at "
+        "once. At most 5, each one short sentence naming the exact word or "
+        "moment. Only real problems; an empty list if it is clear.\n"
+        'Output ONLY JSON: {"confusing": [""]}')
+    try:
+        data = call(pool, "You judge whether a narration is easy to follow. "
+                    "Output only JSON.", prompt, max_tokens=800)
+    except Exception as e:
+        if type(e).__name__ == "QuotaExhausted":
+            raise
+        return []
+    items = (data or {}).get("confusing") if isinstance(data, dict) else None
+    return [str(x).strip() for x in (items or []) if str(x).strip()][:5]

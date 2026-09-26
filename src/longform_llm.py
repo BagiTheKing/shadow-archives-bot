@@ -2142,6 +2142,57 @@ def _generate_joke_beat(pool, topic, decision_text, era_year=None):
     return None
 
 
+def _simplify_chapter(pool, story, data, heading, words, said_lines,
+                      said_sentences, enforce_history, rewrite, is_open=False):
+    """Story mode's simplicity gate. A counting check (names outside the
+    cast, places outside the list, unit names, figures, long sentences) and
+    a model reading as a viewer with no background; if either finds
+    something, ONE rewrite with those exact points. The rewrite is kept only
+    if it is a sound chapter that is no harder than the first; out of quota,
+    the chapter stays as it was."""
+    from story_mode import simplicity_issues, viewer_check
+    plan, sheet = story["plan"], story["sheet"]
+    text = " ".join(x["narration"] for x in data["segments"])
+    issues = simplicity_issues(text, plan, sheet)
+    try:
+        confusing = viewer_check(pool, text, " ".join(said_lines), _call)
+    except QuotaExhausted:
+        print("   🛑 Quota gone — simplicity check skipped, chapter kept.")
+        return data
+    if not issues and not confusing:
+        print("   🧒 Simplicity check: clear to a viewer with no background.")
+        return data
+    points = issues + [f"A viewer would be lost here: {c}" for c in confusing]
+    print(f"   🧒 Simplicity check flagged {len(points)} point(s):")
+    for pt in points:
+        print(f"      - {pt[:140]}")
+    feedback = (
+        "Your previous attempt is too hard to follow for a viewer with no "
+        "historical or political background. Write the chapter again, telling "
+        "the same events, and fix exactly these points:\n"
+        + "\n".join(f"- {pt}" for pt in points)
+        + "\n\nYOUR PREVIOUS ATTEMPT:\n" + text)
+    try:
+        candidate = rewrite(feedback)
+    except QuotaExhausted:
+        print("   🛑 Quota gone — keeping the chapter as written.")
+        return data
+    if not _validate_chapter(candidate, words, enforce_history=enforce_history,
+                             previous_sentences=said_sentences):
+        print("   ↩️  Rewrite unusable — keeping the first version.")
+        return data
+    if is_open and _opening_hook_ok(data) and not _opening_hook_ok(candidate):
+        print("   ↩️  Rewrite lost the opening hook — keeping the first version.")
+        return data
+    new_text = " ".join(x["narration"] for x in candidate["segments"])
+    left = simplicity_issues(new_text, plan, sheet)
+    if len(left) > len(issues):
+        print("   ↩️  Rewrite was no simpler — keeping the first version.")
+        return data
+    print(f"   ✅ Simplified: {len(issues)} counted issue(s) -> {len(left)}.")
+    return candidate
+
+
 def generate_longform_script(topic: str = None, enforce_history: bool = False,
                              era_year: int = None, story=None) -> dict:
     """Builds the full chaptered script. Returns None only if a chapter is
@@ -2338,6 +2389,19 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             dropped.append(heading)
             print("   ↩️  Continuing without it.")
             continue
+
+        if story:
+            data = _simplify_chapter(
+                pool, story, data, heading, words, said_lines, said_sentences,
+                enforce_history,
+                lambda fb: _call(pool, system_prompt, _chapter_prompt(
+                    topic, heading, brief, words, tail, fb, era_year=era_year,
+                    covered=said_lines, episode_format=episode_format,
+                    next_heading=next_heading,
+                    words_per_image=pacing["words_per_image"],
+                    story_hook=story_hooks[c_index] if story_hooks else None),
+                    max_tokens=CHAPTER_MAX_TOKENS),
+                is_open=heading == opening_heading)
 
         segs = data["segments"]
         for s in segs:

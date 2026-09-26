@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from archive_engine import (search_commons_video, fetch_commons_video,
+from archive_engine import (search_commons_video, fetch_commons_video, _clip_seconds,
                             search_archival_video)
 
 ERA = int(os.getenv("PROBE_ERA", "1967"))
@@ -23,5 +23,8 @@ for i, q in enumerate(sys.argv[1:]):
     if found:
         out = f"probe_out/clip{i}.mp4"
         ok = fetch_commons_video(found[0], out)
-        print(f"  cut: {ok} ({os.path.getsize(out) if ok else 0} bytes)")
+        print(f"  cut: {ok} ({_clip_seconds(out) if ok else 0:.1f}s)")
+    for j, c in enumerate(found[1:3], 1):
+        o = f"probe_out/clip{i}_{j}.mp4"
+        print(f"  cut {j}: {fetch_commons_video(c, o)}")
     print(f"  newsreels: {len(search_archival_video(q))}")
