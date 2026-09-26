@@ -89,6 +89,51 @@ EPIGRAPH_MARGIN = 100
 EPIGRAPH_MAX_WIDTH = W - 2 * EPIGRAPH_MARGIN
 
 FONT_NAME = "Anton"
+STAMP_FONT = "FreeMono"   # fonts/FreeMonoBold.ttf — the typewriter stamps
+
+# ---------------------------------------------------------------------------
+# Rhythm: each act looks, cuts and sounds different
+#
+# Approved from tools/render_rhythm_preview.py (v2). Seven minutes of one
+# grade, one voice and one slow zoom is what made the videos feel like one
+# long beat. Three changes break that up:
+#
+# 1. A colour grade per chapter role. B&W archive photos take a tint well, so
+#    even an all-monochrome video reads as different places: the plan warm
+#    and faded, the decision a dark red tint (deliberately subtle — the
+#    owner found a stronger wash too much), the cost and the chain cold.
+# 2. Typewriter date-and-place stamps where the story moves (see
+#    longform_llm._chapter_stamps — only places and dates the chapter's own
+#    narration states, checked in code).
+# 3. Before "The Decision": an echoing clock rises from -30 dB while the
+#    music slides down, one second of black and silence, then a low hit as
+#    the chapter opens.
+# ---------------------------------------------------------------------------
+GRADES = {
+    "warm": ("colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131,"
+             "eq=saturation=0.85:contrast=0.9:brightness=0.02,"
+             "curves=all='0/0.08 1/0.93'"),
+    "red": ("eq=saturation=0.35:contrast=1.18:brightness=-0.02,"
+            "colorbalance=rs=.23:gs=-.06:bs=-.08:rm=.16:gm=-.04:bm=-.06,"
+            "vignette=PI/3.6"),
+    "cold": ("colorbalance=rs=-.10:gs=-.02:bs=.14:rm=-.06:bm=.10,"
+             "eq=saturation=0.4:contrast=1.15:brightness=-0.04,"
+             "vignette=PI/4"),
+}
+# By pacing role (longform_llm.PACING). The claim and the verdict keep the
+# neutral look: they are the narrator speaking now, not the past.
+GRADE_BY_ROLE = {"open": "cold", "build": "warm", "pivot": "red",
+                 "drive": "cold"}
+
+SILENCE_BEFORE_DECISION = 1.0
+CLOCK_SPAN = 6.0            # the clock only plays under the build-up's end
+CLOCK_START_DB = -30        # enters barely audible...
+CLOCK_PEAK_DB = -6          # ...and is clearly there by the silence
+MUSIC_UNDER_CLOCK = 0.3     # music slides down to 30% as the clock rises
+HIT_GAIN = 0.45             # peaks level with the narration, not above it
+KEYCLICK_GAIN = 0.08        # present, never in the way of the voice
+TYPE_RATE = 0.055           # seconds per typed stamp character
+STAMP_HOLD = 2.6
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS_DIR = os.path.join(BASE_DIR, "fonts")
 MUSIC_DIR = os.path.join(BASE_DIR, "music")
@@ -109,6 +154,7 @@ Style: Chapter,{FONT_NAME},110,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0
 Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,4,3,2,140,140,200,1
 Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
 Style: Scrim,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Stamp,{STAMP_FONT},39,&H00E8F0F0,&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,3,0,1,2,0,7,78,78,66,1
 Style: Epigraph,{FONT_NAME},{EPIGRAPH_FONT_SIZE},&H00FFFFFF,&H0000E8FF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,0,5,{EPIGRAPH_MARGIN},{EPIGRAPH_MARGIN},0,1
 
 [Events]
@@ -401,8 +447,24 @@ def _pivot_events(start: float, duration: float, number: int, heading: str):
     return [scrim, rule, card]
 
 
+def _stamp_events(start: float, text: str):
+    """A date-and-place stamp typed in one character at a time behind a block
+    cursor, held, then faded. Top-left, clear of the captions (bottom), the
+    chapter title (middle-left) and the punch phrase (top-centre)."""
+    events = []
+    for i in range(1, len(text) + 1):
+        a, b = start + (i - 1) * TYPE_RATE, start + i * TYPE_RATE
+        events.append(f"Dialogue: 2,{_ass_time(a)},{_ass_time(b)},Stamp,,0,0,0,,"
+                      f"{text[:i]}█")
+    typed = start + len(text) * TYPE_RATE
+    events.append(f"Dialogue: 2,{_ass_time(typed)},{_ass_time(typed + STAMP_HOLD)},"
+                  f"Stamp,,0,0,0,,{{\\fad(0,500)}}{text}")
+    return events
+
+
 def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
-                       chapter_titles=None, total_duration=0.0):
+                       chapter_titles=None, total_duration=0.0,
+                       stamp_cues=None):
     """offsets[i] is the global start time of scene i on the final timeline.
     punch_cues is [(start_seconds, end_spoken_seconds, phrase), ...] for the
     punch-phrase callouts.
@@ -448,6 +510,9 @@ def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
             events.extend(_pivot_events(start, duration, number, heading))
         else:
             events.append(_chapter_title_event(start, duration, number, heading))
+
+    for start, text in (stamp_cues or []):
+        events.extend(_stamp_events(start, text))
 
     # End card over the closing seconds. Layer 1 keeps it above the narration
     # captions, and its own margin keeps it clear of them.
@@ -589,6 +654,8 @@ def _scene_clip(scene, out, style):
       long narration segment no longer means a frozen frame."""
     audio, duration = scene["audio_path"], scene["duration"]
     clip_len = duration + XFADE
+    grade = GRADES.get(GRADE_BY_ROLE.get(scene.get("chapter_role"), ""), "")
+    graded = f",{grade}" if grade else ""
     # The picture runs on past the last word; the audio is padded to match so
     # the muxed clip has one length and the dissolve has something to dissolve.
     tail = ["-af", f"apad=pad_dur={XFADE:.3f}",
@@ -598,7 +665,7 @@ def _scene_clip(scene, out, style):
 
     if scene.get("video_path"):
         vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
-              f"crop={W}:{H},setsar=1,fps={FPS}")
+              f"crop={W}:{H},setsar=1,fps={FPS}{graded}")
         _run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", scene["video_path"],
               "-i", audio, "-map", "0:v", "-map", "1:a", "-vf", vf, *tail])
         return
@@ -607,7 +674,7 @@ def _scene_clip(scene, out, style):
     if len(images) == 1:
         _run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS),
               "-i", images[0], "-i", audio,
-              "-vf", _ken_burns(clip_len, style), *tail])
+              "-vf", _ken_burns(clip_len, style) + graded, *tail])
         return
 
     durs = _shot_durations(clip_len, len(images))
@@ -617,7 +684,7 @@ def _scene_clip(scene, out, style):
                    "-t", f"{d + 0.1:.3f}", "-i", img]
     inputs += ["-i", audio]
 
-    fc = [f"[{i}:v]{_ken_burns(d, style + i * 3)}[z{i}]"
+    fc = [f"[{i}:v]{_ken_burns(d, style + i * 3)}{graded}[z{i}]"
           for i, d in enumerate(durs)]
     starts = _shot_starts(clip_len, len(images))
     prev = "[z0]"
@@ -885,12 +952,29 @@ def _bump(a: float, b: float, fade: float = MUSIC_RAMP) -> str:
             f"min(1,max(0,({b:.3f}-t)/{fade:.3f})))")
 
 
-def music_envelope(card_starts, pivot_start, total: float) -> str:
+def music_envelope(card_starts, pivot_start, total: float,
+                   silence=None) -> str:
     """The music bed's level as a function of time, as an ffmpeg expression.
 
     Everything is additive against MUSIC_BASE, and every term is a ramped
     window, so the result is continuous and never goes negative.
+
+    silence=(clock_start, silence_start, silence_end) multiplies the whole
+    bed by a factor that slides from 1 to MUSIC_UNDER_CLOCK across the clock,
+    is 0 through the black, and is 1 again from the hit.
     """
+    expr = _music_additive(card_starts, pivot_start, total)
+    if not silence:
+        return expr
+    c0, s0, s1 = silence
+    span = max(0.1, s0 - c0)
+    factor = (f"if(lt(t,{c0:.3f}),1,if(lt(t,{s0:.3f}),"
+              f"1-{1 - MUSIC_UNDER_CLOCK:.3f}*(t-{c0:.3f})/{span:.3f},"
+              f"if(lt(t,{s1:.3f}),0,1)))")
+    return f"({expr})*({factor})"
+
+
+def _music_additive(card_starts, pivot_start, total: float) -> str:
     terms = [f"{MUSIC_BASE:.4f}"]
 
     for start in card_starts or []:
@@ -920,10 +1004,47 @@ def _sfx_sources(cues):
     riser:  a tone sweeping upward over a second, ending where the card lands.
     """
     frags, labels = [], []
-    for i, (kind, at) in enumerate(cues):
+    for i, cue in enumerate(cues):
+        kind, at = cue[0], cue[1]
+        span = cue[2] if len(cue) > 2 else 0.0
         label = f"sfx{i}"
         delay = max(0, int(at * 1000))
-        if kind == "impact":
+        if kind == "clock":
+            # One mechanical tick a second (a noise transient and two damped
+            # metallic partials) with a long hall echo, rising from
+            # CLOCK_START_DB to CLOCK_PEAK_DB across the span. The last echo
+            # rings into the silence and is gone by its midpoint, so the hit
+            # still lands on nothing.
+            tail = SILENCE_BEFORE_DECISION / 2
+            expr = ("((random(0)*2-1)*exp(-900*mod(t,1))*0.9"
+                    "+sin(2*PI*2750*t)*exp(-160*mod(t,1))*0.55"
+                    "+sin(2*PI*5600*t)*exp(-260*mod(t,1))*0.25)")
+            ramp = (f"pow(10,({CLOCK_START_DB}+({CLOCK_PEAK_DB - CLOCK_START_DB})"
+                    f"*t/{span:.3f})/20)")
+            frags.append(
+                f"aevalsrc='{expr}':s=44100:d={span + tail:.3f},"
+                f"highpass=f=500,lowpass=f=8000,"
+                f"aecho=0.8:0.88:170|340|560|820:0.5|0.34|0.22|0.12,"
+                f"volume=eval=frame:volume='{ramp}',"
+                f"afade=t=out:st={span:.3f}:d={tail:.3f}[{label}r];"
+                f"[{label}r]aformat=channel_layouts=stereo,"
+                f"adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "keys":
+            expr = (f"(random(0)*2-1)*exp(-140*mod(t,{TYPE_RATE}))"
+                    f"*{KEYCLICK_GAIN}")
+            frags.append(
+                f"aevalsrc='{expr}':s=44100:d={span:.3f},highpass=f=1500[{label}r];"
+                f"[{label}r]aformat=channel_layouts=stereo,"
+                f"adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "hit":
+            expr = ("(sin(2*PI*48*t)*0.9+sin(2*PI*96*t)*0.35"
+                    "+(random(0)*2-1)*exp(-22*t)*0.8)*exp(-2.2*t)")
+            dur, gain = 2.2, HIT_GAIN
+        elif kind == "impact":
             # exp decay over 1.1s, fundamental at 58Hz with an octave above.
             expr = ("(sin(2*PI*58*t)*0.7+sin(2*PI*116*t)*0.3)"
                     "*exp(-3.4*t)")
@@ -947,7 +1068,7 @@ def build_sfx_bed(cues, total: float, out: str):
     Returns the path, or None — sound design is the first thing that should be
     dropped if ffmpeg is unhappy, because the video is fine without it.
     """
-    cues = [(k, t) for k, t in (cues or []) if 0 <= t < total]
+    cues = [c for c in (cues or []) if 0 <= c[1] < total]
     if not cues:
         return None
     try:
@@ -964,9 +1085,10 @@ def build_sfx_bed(cues, total: float, out: str):
         _run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
               "-filter_complex", chain, "-map", "[out]",
               "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", out])
+        kinds = [c[0] for c in cues]
         print(f"🔔 Sound design: {len(cues)} cues "
-              f"({sum(1 for k, _ in cues if k == 'impact')} impacts, "
-              f"{sum(1 for k, _ in cues if k == 'riser')} risers).")
+              + ", ".join(f"{kinds.count(k)} {k}" for k in dict.fromkeys(kinds))
+              + ".")
         return out
     except Exception as e:
         print(f"⚠️ Sound design skipped ({type(e).__name__}: {e}).")
@@ -1218,6 +1340,19 @@ def _build_intro_card(epigraph: dict, build_dir: str):
     return out_path, duration
 
 
+def _build_black_clip(duration: float, build_dir: str) -> str:
+    """A black, silent clip encoded like the chapter reels (see
+    _build_intro_card), for the beat of silence before the decision."""
+    out_path = os.path.join(build_dir, "lf_silence.mp4")
+    _run(["ffmpeg", "-y",
+          "-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r={FPS}",
+          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+          "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
+          "-pix_fmt", "yuv420p", "-t", f"{duration:.3f}", out_path])
+    return out_path
+
+
 def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                             verdict_epigraph=None):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks,
@@ -1269,8 +1404,36 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     # of music changes.
     next_chapter_mark_start = None
     n_chapters = len(chapters)
+    stamp_cues, rhythm_cues, silence = [], [], None
+    prev_chapter_start = 0.0
     for pos, (c_idx, group) in enumerate(chapters):
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
+
+        # The beat before the decision: the clock has been rising under the
+        # end of the previous chapter, then one second of black and total
+        # silence, then a low hit as this chapter opens. Inserted before the
+        # chapter mark is taken, so the decision's own score starts on the
+        # hit, not under the black.
+        if group[0].get("is_pivot") and pos > 0:
+            try:
+                black = _build_black_clip(SILENCE_BEFORE_DECISION, build_dir)
+                clock_start = max(prev_chapter_start, cursor - CLOCK_SPAN)
+                silence = (clock_start, cursor, cursor + SILENCE_BEFORE_DECISION)
+                rhythm_cues.append(("clock", clock_start, cursor - clock_start))
+                reels.append(black)
+                cursor += SILENCE_BEFORE_DECISION
+                rhythm_cues.append(("hit", cursor))
+                print(f"🕰️  Clock from {clock_start:.1f}s, silence at "
+                      f"{silence[1]:.1f}s, hit at {cursor:.1f}s.")
+            except Exception as e:
+                silence = None
+                print(f"⚠️ Silence beat skipped ({type(e).__name__}: {e}).")
+        prev_chapter_start = cursor
+
+        stamp = (group[0].get("stamp") or "").strip()
+        if stamp:
+            stamp_cues.append((cursor + 0.6, stamp))
+            rhythm_cues.append(("keys", cursor + 0.6, len(stamp) * TYPE_RATE))
         print(f"🔗 Chapter {c_idx + 1}: crossfading {len(group)} scenes...")
         offs, total = _xfade_chapter([g["_clip"] for g in group],
                                      [g["duration"] + XFADE for g in group],
@@ -1395,7 +1558,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
     generate_subtitles(usable, ass_path, global_offsets, punch_cues=punch_cues,
                        chapter_titles=chapter_titles,
-                       total_duration=total_duration)
+                       total_duration=total_duration, stamp_cues=stamp_cues)
 
     # The uploadable copy of the same words. Seven minutes of narration is the
     # most indexable thing this channel produces and none of it has ever been
@@ -1424,7 +1587,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     # one piece of sound design that announces itself, on a channel whose
     # whole voice is that it does not. The impacts stay: they sit under a
     # phrase, they are felt rather than heard, and nothing was wrong with them.
-    sfx_cues = [("impact", start) for start, _, _ in punch_cues]
+    sfx_cues = [("impact", start) for start, _, _ in punch_cues] + rhythm_cues
     sfx = build_sfx_bed(sfx_cues, total_duration,
                         os.path.join(build_dir, "lf_sfx.wav"))
 
@@ -1454,7 +1617,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         inputs += ["-i", score]
         # Level still moves inside an act: it ducks into the midpoint and
         # swells for the closing lines — see music_envelope.
-        envelope = music_envelope(card_starts, pivot_start, total_duration)
+        envelope = music_envelope(card_starts, pivot_start, total_duration,
+                                  silence=silence)
         mix_parts.append(
             f"[{idx}:a]aloop=loop=-1:size=2e9,atrim=0:{total_duration:.3f},"
             f"volume=volume='{envelope}':eval=frame,"

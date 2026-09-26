@@ -254,9 +254,9 @@ PIVOT_INDEX = 3
 PACING = [
     {"role": "open",  "words_per_image": 22, "tts_rate": "+10%"},
     {"role": "claim", "words_per_image": 32, "tts_rate": "+7%"},
-    {"role": "build", "words_per_image": 36, "tts_rate": "+6%"},
+    {"role": "build", "words_per_image": 40, "tts_rate": "+6%"},
     {"role": "pivot", "words_per_image": 24, "tts_rate": "+2%"},
-    {"role": "drive", "words_per_image": 22, "tts_rate": "+12%"},
+    {"role": "drive", "words_per_image": 18, "tts_rate": "+12%"},
     {"role": "close", "words_per_image": 30, "tts_rate": "+7%"},
 ]
 
@@ -2398,6 +2398,13 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # would be absurd — fall back to topic-derived metadata.
         print("🛑 Quota gone before packaging; deriving metadata from the topic.")
 
+    try:
+        _chapter_stamps(pool, topic, chapters, era_year)
+    except QuotaExhausted:
+        print("🛑 Quota gone before the date stamps; publishing without them.")
+    except Exception as e:
+        print(f"⚠️ Date stamps skipped ({type(e).__name__}: {e}).")
+
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
 
@@ -2545,6 +2552,149 @@ PIVOT_BEAT = 0.9
 CLOSING_BEAT = 0.6
 
 
+# Date-and-place stamps: only on the chapters where the story is somewhere
+# (the plan, the decision, the chain). The cold open and the verdict are the
+# narrator speaking now, so a stamp there would orient no one.
+STAMP_ROLES = ("build", "pivot", "drive")
+STAMP_RELATIVE = ("THE SAME NIGHT", "THE SAME DAY", "THE NEXT MORNING",
+                  "THAT NIGHT", "THAT MORNING", "HOURS LATER", "DAYS LATER",
+                  "WEEKS LATER", "MONTHS LATER", "YEARS LATER")
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july",
+           "august", "september", "october", "november", "december")
+
+
+_ONES = ("", "one", "two", "three", "four", "five", "six", "seven", "eight",
+         "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+         "sixteen", "seventeen", "eighteen", "nineteen")
+_ORD = {"one": "first", "two": "second", "three": "third", "five": "fifth",
+        "eight": "eighth", "nine": "ninth", "twelve": "twelfth",
+        "twenty": "twentieth", "thirty": "thirtieth"}
+
+
+def _day_forms(day: int):
+    """Every way a narration might say a day of the month: "23", "23rd",
+    "twenty-three", "twenty-third", "twenty third"."""
+    suffix = ("th" if 10 <= day % 100 <= 20
+              else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th"))
+    tens, ones = divmod(day, 10)
+    if day < 20:
+        card = _ONES[day]
+        ords = [_ORD.get(card, card + "th")]
+    else:
+        ten = {2: "twenty", 3: "thirty"}[tens]
+        if ones:
+            card = f"{ten}-{_ONES[ones]}"
+            ords = [f"{ten}-{_ORD.get(_ONES[ones], _ONES[ones] + 'th')}"]
+        else:
+            card, ords = ten, [_ORD[ten]]
+    forms = {f" {day} ", f" {day}{suffix}", card, *ords}
+    forms |= {f.replace("-", " ") for f in list(forms)}
+    return forms
+
+
+def _says_day(text: str, day: int) -> bool:
+    """Whether the text states this day, as a whole word — "third" inside
+    "twenty-third" is the 23rd, not the 3rd."""
+    for form in _day_forms(day):
+        form = form.strip()
+        for m in re.finditer(rf"(?<![a-z0-9]){re.escape(form)}(?![a-z0-9])",
+                             text):
+            before = text[max(0, m.start() - 7):m.start()]
+            if day < 20 and re.search(r"(twenty|thirty)[- ]$", before):
+                continue
+            return True
+    return False
+
+
+def _stamp_grounded(place, date, narration, topic, era_year):
+    """A stamp is published only when every place word and every date word
+    is in the chapter's own narration (or the topic). A stamp is on screen
+    as fact, and this pipeline publishes without anyone reading it, so a
+    model's plausible-looking date is dropped, not trusted."""
+    text = f" {narration} {topic} ".lower()
+    words = set(re.findall(r"[a-z0-9]+", text))
+    place_words = re.findall(r"[a-z0-9]+", (place or "").lower())
+    if not place_words or len(place_words) > 4 or len(place) > 28:
+        return False
+    if any(w not in words for w in place_words if len(w) > 2):
+        return False
+    if not date or date.upper() in STAMP_RELATIVE:
+        return True
+    tokens = re.findall(r"[a-z0-9]+", date.lower())
+    month_ok = any(m in words for m in _MONTHS if m in tokens)
+    for t in tokens:
+        if t.isdigit() and len(t) == 4:
+            if t not in words and str(era_year or "") != t:
+                return False
+        elif t.isdigit():
+            # A day of the month is usually spoken as words ("the
+            # twenty-third of August"), so it must appear in any of its
+            # spoken or written forms, and its month must be stated too.
+            if not month_ok or not 1 <= int(t) <= 31:
+                return False
+            if not _says_day(text, int(t)):
+                return False
+        elif t not in words:
+            return False
+    return True
+
+
+def _chapter_stamps(pool, topic, chapters, era_year):
+    """Writes chapter["stamp"] ("KINMEN · 23 AUGUST 1958") on the chapters in
+    STAMP_ROLES whose narration states where and when they happen. One
+    request for the whole video; anything the grounding check rejects is
+    simply left without a stamp."""
+    wanted = [(i, c) for i, c in enumerate(chapters)
+              if (c.get("pacing") or {}).get("role") in STAMP_ROLES]
+    if not wanted:
+        return
+    listing = "\n\n".join(
+        f"[{i}] {c['heading']}\n"
+        + " ".join(s["narration"] for s in c["scenes"])[:900]
+        for i, c in wanted)
+    prompt = (
+        f"Story: {topic}\n\nChapters of a documentary:\n\n{listing}\n\n"
+        "For each chapter, give an on-screen stamp of WHERE and WHEN its "
+        "events happen, the way a documentary types it at the corner of "
+        "the screen.\n"
+        "HARD RULES:\n"
+        "- Use ONLY a place and a date that the chapter's own text states. "
+        "Never add a day, month, year or place it does not say.\n"
+        "- place: 1-3 words, the most specific place named (a city, island, "
+        "coast, ship or building).\n"
+        "- date: a date written like '23 AUGUST 1958' or 'SUMMER 1958' or "
+        "'1958', or one of: " + ", ".join(STAMP_RELATIVE) + ". Empty if the "
+        "chapter states no time.\n"
+        "- Skip a chapter that names no place.\n\n"
+        'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
+        '"date": "..."}]}'
+    )
+    data = _call(pool, "You write documentary location stamps. Output only "
+                 "JSON.", prompt, max_tokens=1500)
+    by_index = dict(wanted)
+    placed = 0
+    for st in (data or {}).get("stamps") or []:
+        try:
+            i = int(st.get("chapter"))
+        except (TypeError, ValueError):
+            continue
+        chapter = by_index.get(i)
+        place = " ".join(str(st.get("place") or "").split()).upper()
+        date = " ".join(str(st.get("date") or "").split()).upper()
+        if not chapter or chapter.get("stamp"):
+            continue
+        narration = " ".join(s["narration"] for s in chapter["scenes"])
+        if not _stamp_grounded(place, date, narration, topic, era_year):
+            print(f"   ↩️  Stamp dropped, not in the narration: "
+                  f"{place} · {date}")
+            continue
+        chapter["stamp"] = f"{place} · {date}" if date else place
+        placed += 1
+        print(f"🗓️  Stamp for {chapter['heading']!r}: {chapter['stamp']}")
+    if not placed:
+        print("   No chapter got a stamp this run.")
+
+
 def flatten_scenes(script: dict) -> list:
     """Flattens chapters into the scene list the audio/visual engines expect.
     Chapter titles are typeset over the footage by the video engine (keyed off
@@ -2574,6 +2724,8 @@ def flatten_scenes(script: dict) -> list:
             s["chapter_role"] = pacing.get("role", "build")
             s["is_pivot"] = (c_idx == pivot_pos)
             s["tts_rate"] = pacing.get("tts_rate")
+            if s_idx == 0 and chapter.get("stamp"):
+                s["stamp"] = chapter["stamp"]
             # The visual engine gates archival search and b-roll on the era.
             s["era_year"] = script.get("era_year")
             if chapter.get("punch_phrase") and s_idx == chapter.get("punch_idx"):
