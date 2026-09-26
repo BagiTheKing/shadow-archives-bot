@@ -1376,16 +1376,23 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
     # ---- Phase 1: scene clips ----
+    map_targets = []        # where each rendered map landed, see map_engine
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
         if s.get("map"):
-            # The one map beat replaces this scene's pictures for its whole
-            # line; any failure leaves the photos exactly as they were.
+            # A map beat (up to two per video) replaces this scene's pictures
+            # for its whole line; any failure leaves the photos as they were.
             from map_engine import render_map_scene
             mp = render_map_scene(s, os.path.join(build_dir, f"lf_map_{idx:03d}.mp4"),
-                                  s["duration"] + XFADE)
+                                  s["duration"] + XFADE, avoid=map_targets)
             if mp:
                 s["video_path"], s["_is_map"], s["credit"] = mp, True, []
+        elif s.get("chain"):
+            from chain_engine import render_chain_scene
+            cp = render_chain_scene(s, os.path.join(build_dir, f"lf_chain_{idx:03d}.mp4"),
+                                    s["duration"] + XFADE)
+            if cp:
+                s["video_path"], s["_is_map"], s["credit"] = cp, True, []
         shots = len(s.get("image_paths") or [1])
         kind = ("map" if s.get("_is_map") else "b-roll") if s.get("video_path") \
             else f"{shots} shot(s)"

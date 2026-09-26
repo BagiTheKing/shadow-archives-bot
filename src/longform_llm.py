@@ -2726,18 +2726,27 @@ def _named_in(name, text):
         for w in words)
 
 
-def _place_map(plan, chapters, topic):
-    """Attaches scene["map"] to the first scene before the decision that
-    speaks the map's target. Every name must be in the narration before
-    the decision (or the topic); an origin or region that is not is
-    dropped, and a target that is not means no map at all."""
+def _place_map(plan, chapters, topic, after_decision=False):
+    """Attaches scene["map"] to the first scene that speaks the map's
+    target: before the decision for the first map, after it (in the chain,
+    not the verdict) for the second. Every name must be in that part's
+    narration (or the topic); an origin or region that is not is dropped,
+    and a target that is not means no map at all. A scene already holding
+    a map or the chain is never reused."""
     if not isinstance(plan, dict):
         return
     pivot = next((i for i, c in enumerate(chapters)
                   if (c.get("pacing") or {}).get("role") == "pivot"),
                  len(chapters))
-    # Chapter 0 is the cold open: the hook stays photos.
-    candidates = [(c, s) for c in chapters[1:pivot] for s in c["scenes"]]
+    # Chapter 0 is the cold open: the hook stays photos. The verdict is the
+    # narrator speaking now: no map there either.
+    span = chapters[pivot + 1:-1] if after_decision else chapters[1:pivot]
+    candidates = [(c, s) for c in span for s in c["scenes"]
+                  if not s.get("map") and not s.get("chain")]
+    if after_decision and any(s.get("map", {}).get("target", "").lower()
+                              == str(plan.get("target") or "").lower()
+                              for c in chapters for s in c["scenes"]):
+        return
     text = " ".join(s["narration"] for _, s in candidates).lower() \
         + " " + (topic or "").lower()
     target = " ".join(str(plan.get("target") or "").split())
@@ -2762,12 +2771,64 @@ def _place_map(plan, chapters, topic):
                 if _named_in(target, s["narration"].lower())]
     speaking.sort(key=lambda cs: cs[0]["scenes"][0] is cs[1])
     if not speaking:
-        print(f"   ↩️  No scene before the decision speaks {target!r} — no map.")
+        where = "after" if after_decision else "before"
+        print(f"   ↩️  No scene {where} the decision speaks {target!r} — no map.")
         return
     speaking[0][1]["map"] = {"target": target, "origin": origin,
                              "action": action, "light": light}
     print(f"🗺️  Map planned: {origin or '—'} → {target} ({action}; "
           f"lit: {', '.join(light) or 'none'}).")
+
+
+_CHAIN_STOP = {"the", "and", "into", "from", "with", "that", "this",
+               "their", "they", "them", "then", "were", "was", "had", "has",
+               "have", "for", "its", "his", "her"}
+
+
+def _chain_words(text):
+    return [w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if len(w) >= 4 and w not in _CHAIN_STOP]
+
+
+def _place_chain(steps, chapters, topic):
+    """Attaches scene["chain"] to the scene in "The Chain" whose narration
+    matches the steps best (not the chapter's first scene, which carries
+    its title; not a map scene). Every meaningful word of every step must
+    appear somewhere in the narration or the topic — matched on 5-letter
+    prefixes, so "escorts break" meets "escorts broke" but an invented
+    event does not — or the chain is dropped whole."""
+    if not isinstance(steps, list):
+        return
+    steps = [" ".join(str(x).split()) for x in steps if isinstance(x, str)]
+    steps = [x for x in steps if 1 <= len(x.split()) <= 7][:4]
+    if len(steps) < 3:
+        return
+    known = {w[:5] for c in chapters for s in c["scenes"]
+             for w in _chain_words(s["narration"])}
+    known |= {w[:5] for w in _chain_words(topic)}
+    for step in steps:
+        words = _chain_words(step)
+        missing = [w for w in words if w[:5] not in known]
+        # One unmatched word is tolerated when the rest is grounded — a verb
+        # in another tense ("break" for the narration's "broke") — but two,
+        # or a step with fewer than two grounded words, is an invention.
+        if len(missing) > 1 or len(words) - len(missing) < min(2, len(words)):
+            print(f"   ↩️  Chain dropped: {step!r} says {missing} — not in the "
+                  f"narration.")
+            return
+    drive = [c for c in chapters if (c.get("pacing") or {}).get("role") == "drive"]
+    if not drive:
+        return
+    step_words = {w[:5] for st in steps for w in _chain_words(st)}
+    options = [s for s in drive[0]["scenes"][1:]
+               if not s.get("map") and not s.get("chain")]
+    if not options:
+        print("   ↩️  Chain skipped: no free scene in the chain chapter.")
+        return
+    best = max(options, key=lambda s: len(step_words & {
+        w[:5] for w in _chain_words(s["narration"])}))
+    best["chain"] = steps
+    print(f"⛓️  Chain planned: {' → '.join(steps)}.")
 
 
 def _chapter_stamps(pool, topic, chapters, era_year):
@@ -2797,8 +2858,11 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         "'1958', or one of: " + ", ".join(STAMP_RELATIVE) + ". Empty if the "
         "chapter states no time.\n"
         "- Skip a chapter that names no place.\n\n"
-        "ALSO describe ONE map for the story's key place, as NAMES only "
-        "(never coordinates), all taken from the text above:\n"
+        "ALSO describe up to TWO maps, as NAMES only (never coordinates), "
+        "all taken from the text above: the first for where the story "
+        "begins (before the decision), the second — only if the text names "
+        "a clearly different place — for where the consequence lands "
+        "(after the decision). Each map has:\n"
         "- target: the place where the decisive event happened (a city, "
         "island, strait, base or battlefield);\n"
         "- origin: where the force came from, if the text names it — a "
@@ -2808,16 +2872,30 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         "army, fleet or convoy travelling) or \"mark\" (neither);\n"
         "- light: up to 2 countries or provinces the text names that the "
         "viewer should see (e.g. the target's country across a border).\n\n"
+        "ALSO write the chain of consequences: 3 or 4 steps, 2-6 words each, "
+        "from the decision to what it finally cost, each one a thing the "
+        "text above actually says happened, in its own words and tense "
+        "(e.g. \"The shelling of Kinmen\", \"The Seventh Fleet in the "
+        "strait\", \"Escorts broke the blockade\", \"Beijing called a "
+        "ceasefire\"). "
+        "No numbers, names or events the text does not state.\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
-        '"date": "..."}], "map": {"target": "...", "origin": "...", '
-        '"action": "strike", "light": ["..."]}}'
+        '"date": "..."}], "maps": [{"target": "...", "origin": "...", '
+        '"action": "strike", "light": ["..."]}], "chain": ["...", "..."]}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
+    maps = (data or {}).get("maps") or [(data or {}).get("map")]
+    for i, plan in enumerate(maps[:2]):
+        try:
+            _place_map(plan, chapters, topic,
+                       after_decision=(i == 1))
+        except Exception as e:
+            print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
     try:
-        _place_map((data or {}).get("map"), chapters, topic)
+        _place_chain((data or {}).get("chain"), chapters, topic)
     except Exception as e:
-        print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
+        print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
     by_index = dict(wanted)
     placed = 0
     for st in (data or {}).get("stamps") or []:

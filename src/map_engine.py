@@ -550,7 +550,7 @@ def build_spec(plan, words, duration, era_year=None):
     }
 
 
-def render_map_scene(scene, out_mp4, duration):
+def render_map_scene(scene, out_mp4, duration, avoid=None):
     """The map for one scene, or None. The scene carries "map" (names from
     the script step), "words" (narration timings), "era_year" and
     "chapter_role" (its palette)."""
@@ -562,8 +562,16 @@ def render_map_scene(scene, out_mp4, duration):
                           era_year=scene.get("era_year"))
         if not spec:
             return None
+        # A second map on (nearly) the same spot adds nothing: skipped.
+        target_ll = spec["targets"][0]["ll"]
+        if any(_km(target_ll, p) < 50 for p in (avoid or [])):
+            print(f"   ↩️  Map on {plan['target']!r} skipped — within 50 km "
+                  f"of the video's other map.")
+            return None
         tone = TONE_BY_ROLE.get(scene.get("chapter_role"), "neutral")
         render(spec, out_mp4, duration, tone=tone)
+        if avoid is not None:
+            avoid.append(target_ll)
         print(f"🗺️  Map beat: {plan.get('origin') or '—'} → {plan['target']}"
               f" ({plan.get('action', 'mark')}; lit: "
               f"{', '.join(plan.get('light') or []) or 'none'}).")
