@@ -19,32 +19,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from archive_engine import search_archives, download_archival_image, format_credit
 from audio_engine import _synthesize_kokoro, get_audio_duration
 
-# The Kinmen video's own story, 23 August 1958.
-QUERIES = [
-    "Kinmen 1958", "Mao Zedong 1958", "Fujian coast artillery",
-    "Chinese artillery 1958", "Kinmen bombardment", "Kinmen bunker",
-    "Taiwan Strait Crisis 1958", "USS Midway 1958", "Seventh Fleet 1958",
-    "Dwight Eisenhower 1958", "Chiang Kai-shek Kinmen",
-    # decision-maker card preview
-    "Mao Zedong 1959", "Mao Zedong portrait",
-]
+# Cast-card preview (Six-Day War). Stills are not needed this time; the
+# earlier sets are already on the branch history.
+QUERIES = []
 PER_QUERY = 2
+PEOPLE = ["Gamal Abdel Nasser", "Hussein of Jordan", "Moshe Dayan",
+          "Nureddin al-Atassi"]
 
 LINES = [
-    "In the summer of 1958, the plan in Beijing looked simple.",
-    "Shell the islands of Kinmen, cut them off from Taiwan, and watch "
-    "Washington hesitate.",
-    "Along the Fujian coast, hundreds of guns waited for a single word.",
-    "On the twenty-third of August, Mao Zedong gave it.",
-    "Within hours, tens of thousands of shells had fallen on Kinmen.",
-    "And Washington did not hesitate. It sent the Seventh Fleet.",
-    # Two-maps + chain-of-consequences preview (2026-09-26).
-    "American warships sailed from their bases in the Philippines into "
-    "the Taiwan Strait.",
-    "The shelling drew the Seventh Fleet into the strait. American escorts "
-    "broke the blockade, and in October, Beijing called a ceasefire.",
-    # decision-maker card preview
-    "In Beijing, the decision belonged to one man: Mao Zedong.",
+    "In Cairo, Egypt's president, Gamal Abdel Nasser, closed the Straits of "
+    "Tiran to Israeli ships.",
+    "In Amman, Jordan's King Hussein made his choice. He flew to Cairo.",
+    "In Israel, the new defence minister, Moshe Dayan, wanted to strike first.",
 ]
 
 
@@ -65,6 +51,21 @@ def main(out):
                 got += 1
         print(f"{q!r}: {got} image(s)")
 
+    from dossier_engine import person_file
+    people = []
+    for i, name in enumerate(PEOPLE):
+        d = os.path.join(out, "people", f"{i:02d}")
+        os.makedirs(d, exist_ok=True)
+        try:
+            info = person_file(name, d)
+        except Exception as e:
+            info = None
+            print(f"{name}: failed ({e})")
+        if info:
+            info["photo"] = os.path.relpath(info["photo"], out)
+            people.append({"name": name, **info})
+        print(f"{name}: {'photo + ' + ' · '.join(info['lines']) if info else 'no free portrait'}")
+
     voice = os.getenv("KOKORO_VOICE", "am_onyx")
     lines = []
     for i, text in enumerate(LINES):
@@ -75,7 +76,7 @@ def main(out):
         print(f"line {i}: {lines[-1]['duration']:.1f}s")
 
     with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump({"images": images, "lines": lines, "voice": voice}, f,
+        json.dump({"images": images, "people": people, "lines": lines, "voice": voice}, f,
                   indent=2, ensure_ascii=False)
     print(f"{len(images)} images, {len(lines)} lines -> {out}")
 
