@@ -401,7 +401,7 @@ ARCHIVE_ORG_METADATA_API = "https://archive.org/metadata"
 # Rather than guess and risk showing the wrong story under the right
 # narration, long items are skipped entirely; short, single-subject items are
 # the only ones actually used.
-MAX_SOURCE_RUNTIME_SECONDS = 150
+MAX_SOURCE_RUNTIME_SECONDS = 300
 
 # Regardless of the source item's own length, only ever use this many seconds
 # of it — a firm cap, not a hint, enforced by ffmpeg at extraction time. Keeps
@@ -537,3 +537,129 @@ def fetch_archival_video(identifier: str, output_path: str) -> bool:
 def format_archival_video_credit(identifier: str, title: str) -> str:
     return (f"{title} (Internet Archive — {identifier}, public domain, "
            f"via archive.org)")
+
+
+# ---------------------------------------------------------------------------
+# Real archival video — Wikimedia Commons
+#
+# The newsreel collection above stops in 1967 and its runtime rules leave very
+# little, so in practice no run ever showed a moving picture. Commons hosts a
+# great deal of genuine historical footage (government newsreels, army film,
+# speeches), every file carrying its own free licence and author, which is
+# the same bar the stills already meet. Files are streamed and cut by ffmpeg
+# straight from Commons' own transcodes: only the seconds used are fetched.
+# ---------------------------------------------------------------------------
+
+# Modern productions about the past, not footage of it.
+VIDEO_JUNK_WORDS = ("interview", "documentary", "trailer", "lecture", "animation",
+                    "animated", "game", "tutorial", "podcast", "wikipedia",
+                    "slideshow", "timelapse", "time-lapse", "reenactment",
+                    "re-enactment", "museum", "memorial", "anniversary",
+                    "ceremony 20", "vlog", "tour")
+VIDEO_MIN_SECONDS = 8
+VIDEO_MAX_SECONDS = 3600
+_YEAR_RE = re.compile(r"\b(1[89]\d\d|20[0-2]\d)\b")
+
+
+def _video_year(title: str, meta: dict):
+    """The year the footage was shot: the file's own original date first,
+    then a year in its title. None when neither says."""
+    m = _YEAR_RE.search(_strip_html(
+        (meta.get("DateTimeOriginal") or {}).get("value", "")))
+    if not m:
+        m = _YEAR_RE.search(title)
+    return int(m.group(1)) if m else None
+
+
+def _best_derivative(info: dict):
+    """Commons re-encodes every video; the 480p or 720p WebM is plenty for a
+    scene that is graded and cover-cropped anyway, and far smaller."""
+    ranked = []
+    for d in info.get("derivatives") or []:
+        src, h = d.get("src"), int(d.get("height") or 0)
+        if not src or h < 240:
+            continue
+        ranked.append((abs(h - 600), src))
+    ranked.sort()
+    url = ranked[0][1] if ranked else info.get("url")
+    return f"https:{url}" if url and url.startswith("//") else url
+
+
+def search_commons_video(query: str, era=None, limit: int = 12) -> list:
+    """Genuine footage from Wikimedia Commons for a query. Each candidate:
+    {url, title, artist, license, duration, year, source}. Footage dated
+    after the story's era (a modern documentary, a commemoration) is dropped,
+    and so is undated footage when the era is known: a wrong clip under the
+    right narration is worse than a still."""
+    params = {
+        "action": "query", "format": "json", "generator": "search",
+        "gsrsearch": f"filetype:video {query}", "gsrnamespace": 6,
+        "gsrlimit": limit, "prop": "videoinfo",
+        "viprop": "url|size|mime|extmetadata|derivatives",
+    }
+    try:
+        r = _polite_get(COMMONS_API, params=params, timeout=25)
+        r.raise_for_status()
+        pages = r.json().get("query", {}).get("pages", {})
+    except Exception as e:
+        print(f"⚠️ Commons video search failed for {query!r}: {e}")
+        return []
+
+    out = []
+    for page in sorted(pages.values(), key=lambda p: p.get("index", 99)):
+        infos = page.get("videoinfo") or []
+        if not infos:
+            continue
+        info = infos[0]
+        title = page.get("title", "").replace("File:", "").rsplit(".", 1)[0]
+        low = title.lower().replace("_", " ")
+        if any(w in low for w in VIDEO_JUNK_WORDS):
+            continue
+        duration = float(info.get("duration") or 0)
+        if not (VIDEO_MIN_SECONDS <= duration <= VIDEO_MAX_SECONDS):
+            continue
+        if int(info.get("width") or 0) < 320:
+            continue
+        meta = info.get("extmetadata") or {}
+        year = _video_year(title, meta)
+        if era:
+            if year is None or year > era + 3 or year < era - 40:
+                continue
+        url = _best_derivative(info)
+        if not url:
+            continue
+        out.append({
+            "url": url, "title": title.replace("_", " ")[:120],
+            "artist": _strip_html((meta.get("Artist") or {}).get("value", ""))[:60],
+            "license": _strip_html(
+                (meta.get("LicenseShortName") or {}).get("value", "")),
+            "duration": duration, "year": year, "source": "Wikimedia Commons",
+        })
+    return out
+
+
+def fetch_commons_video(candidate: dict, output_path: str,
+                        seconds: float = ARCHIVAL_CLIP_SECONDS) -> bool:
+    """Cuts `seconds` of silent footage out of a Commons video without
+    downloading the rest. Short files start just past their opening; long
+    ones (a full newsreel, a whole speech) a fifth of the way in, clear of
+    title cards and leader."""
+    dur = candidate.get("duration") or 0
+    start = 1.0 if dur <= seconds + 4 else min(dur * 0.2, dur - seconds - 2)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-user_agent", HEADERS["User-Agent"], "-rw_timeout", "60000000",
+             "-ss", f"{max(0.0, start):.2f}", "-i", candidate["url"],
+             "-t", f"{min(seconds, max(4.0, dur - 1)):.2f}", "-an",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+             "-pix_fmt", "yuv420p", output_path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True,
+            timeout=240)
+        ok = os.path.exists(output_path) and os.path.getsize(output_path) > 20000
+    except Exception as e:
+        print(f"⚠️ Commons video cut failed ({candidate.get('title')}): {e}")
+        ok = False
+    if not ok and os.path.exists(output_path):
+        os.remove(output_path)
+    return ok

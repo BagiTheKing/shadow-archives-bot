@@ -1,0 +1,29 @@
+name: Probe archival footage
+
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: "Queries, separated by |"
+        default: "Six-Day War|Gamal Abdel Nasser|Israel 1967|Egypt 1967 army|Straits of Tiran"
+      era:
+        default: "1967"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install requests pillow
+      - name: Probe
+        env:
+          PROBE_ERA: ${{ inputs.era }}
+          QUERIES: ${{ inputs.queries }}
+        run: |
+          IFS='|' read -ra Q <<< "$QUERIES"
+          python tools/probe_footage.py "${Q[@]}"

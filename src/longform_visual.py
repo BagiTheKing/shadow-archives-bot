@@ -49,7 +49,8 @@ from archive_engine import (search_archives, search_commons,
                             download_archival_image, format_credit,
                             pexels_available, fetch_broll_video,
                             extract_poster_frame, search_archival_video,
-                            fetch_archival_video, format_archival_video_credit)
+                            fetch_archival_video, format_archival_video_credit,
+                            search_commons_video, fetch_commons_video)
 from visual_engine import download_image, make_fallback_image
 
 # Delivery resolution for the long-form video.
@@ -82,8 +83,13 @@ BROLL_MIN_GAP = 4
 # two or three real clips are enough. Spaced wider than b-roll on purpose, so
 # the few clips that do appear land in different chapters instead of
 # clustering, which is what "diversity" actually asks for here.
-MAX_ARCHIVAL_VIDEO_CLIPS = 3
-ARCHIVAL_VIDEO_MIN_GAP = 8
+#
+# Raised once Commons footage was added: with stills tried first, footage was
+# only ever looked for when no photo existed, which is almost never, so not
+# one clip reached a video. Real moving pictures of the actual events (the
+# war, a leader speaking) now get first refusal on a spaced set of scenes.
+MAX_ARCHIVAL_VIDEO_CLIPS = 6
+ARCHIVAL_VIDEO_MIN_GAP = 3
 
 # Photography exists from roughly here; before it, a Commons "photo" of the
 # subject is by definition a modern anachronism.
@@ -220,6 +226,39 @@ def _vary_prompt(prompt: str, shot: int) -> str:
     return angles[shot % len(angles)] + prompt
 
 
+def _archival_footage(query, era, idx, output_dir, used_urls):
+    """(video_path, poster, credit, label) for real footage of a query, or
+    None. Commons with the query as written, then widened; then the
+    public-domain newsreels."""
+    video_path = os.path.join(output_dir, f"lf_archival_video_{idx:03d}.mp4")
+    poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
+    queries = [query]
+    widened = _widen_query(query)
+    if widened and widened != query:
+        queries.append(widened)
+    for q in queries:
+        for cand in search_commons_video(q, era=era)[:3]:
+            if cand["url"] in used_urls:
+                continue
+            if not fetch_commons_video(cand, video_path):
+                continue
+            if extract_poster_frame(video_path, poster, KB_W, KB_H):
+                used_urls.add(cand["url"])
+                return video_path, poster, format_credit(cand), cand["title"]
+            os.remove(video_path)
+    for cand in search_archival_video(query):
+        if cand["identifier"] in used_urls:
+            continue
+        if not fetch_archival_video(cand["identifier"], video_path):
+            continue
+        if extract_poster_frame(video_path, poster, KB_W, KB_H):
+            used_urls.add(cand["identifier"])
+            return (video_path, poster, format_archival_video_credit(
+                cand["identifier"], cand["title"]), cand["identifier"])
+        os.remove(video_path)
+    return None
+
+
 def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     """Fills each scene with image_paths (1-3 frames), possibly a video_path
     (muted b-roll), and a credit string when a real archival photo was used.
@@ -256,6 +295,32 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
         wanted = _shots_for(scene.get("duration", 0))
         era = scene.get("era_year")
         images, credits = [], []
+
+        # ---- 0) Real archival FOOTAGE, before any still ----
+        # Tried first on a spaced set of plain scenes (maps, chains and the
+        # decision-maker card draw their own pictures). Wikimedia Commons
+        # first — every file with its own free licence and author — then the
+        # public-domain newsreel collection. Any failure falls through to
+        # the stills below.
+        vquery = (scene.get("archive_query") or "").strip()
+        if (vquery and not (scene.get("map") or scene.get("chain")
+                            or scene.get("dossier"))
+                and archival_video_used < MAX_ARCHIVAL_VIDEO_CLIPS
+                and idx - last_archival_video_idx > ARCHIVAL_VIDEO_MIN_GAP
+                and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
+            got = _archival_footage(vquery, era, idx, output_dir, used_urls)
+            if got:
+                video_path, poster, credit, label = got
+                scene["video_path"] = video_path
+                scene["image_path"] = poster
+                scene["image_paths"] = [poster]
+                scene["credit"] = [credit]
+                scene["is_real"] = True
+                archival_video_used += 1
+                last_archival_video_idx = idx
+                print(f"🎞️  Scene {idx}: real archival footage for "
+                      f"{vquery!r} ({label})")
+                continue
 
         # ---- 1) Real archival imagery from Wikimedia Commons ----
         # For post-photography stories: genuine photographs. For older ones:
@@ -317,38 +382,6 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
                 subject_counts[_subject_key(query)] = subject_repeat + 1
                 print(f"📜 Scene {idx}: {len(images)} archival image(s) "
                       f"for {query!r}")
-
-        # ---- 1.5) Real archival VIDEO footage, trusted collections only ----
-        # Only tried when no still photo was found, and capped low — this is
-        # a deliberate garnish on top of the archival stills, not a
-        # replacement for them. See archive_engine.py's
-        # TRUSTED_VIDEO_COLLECTIONS for why this only searches inside
-        # collections whose public-domain status is a documented fact about
-        # the whole collection, not a per-upload claim.
-        if (not images and query
-                and archival_video_used < MAX_ARCHIVAL_VIDEO_CLIPS
-                and idx - last_archival_video_idx > ARCHIVAL_VIDEO_MIN_GAP
-                and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
-            for cand in search_archival_video(query):
-                video_path = os.path.join(output_dir,
-                                          f"lf_archival_video_{idx:03d}.mp4")
-                if not fetch_archival_video(cand["identifier"], video_path):
-                    continue
-                poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
-                if extract_poster_frame(video_path, poster, KB_W, KB_H):
-                    scene["video_path"] = video_path
-                    scene["image_path"] = poster
-                    scene["image_paths"] = [poster]
-                    scene["credit"] = [format_archival_video_credit(
-                        cand["identifier"], cand["title"])]
-                    archival_video_used += 1
-                    last_archival_video_idx = idx
-                    print(f"🎞️  Scene {idx}: real archival footage for "
-                          f"{query!r} ({cand['identifier']})")
-                    break
-                os.remove(video_path)
-            if scene.get("video_path"):
-                continue
 
         # ---- 2) Muted stock b-roll, timeless subjects only (optional) ----
         # Spaced through the video rather than granted first-come, so clips
