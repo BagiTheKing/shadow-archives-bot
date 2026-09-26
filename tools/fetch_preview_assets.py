@@ -26,6 +26,9 @@ PER_QUERY = 2
 PEOPLE = ["Gamal Abdel Nasser", "Hussein of Jordan", "Moshe Dayan",
           "Nureddin al-Atassi"]
 
+FOOTAGE = [("Gamal Abdel Nasser", 1967)]
+FOOTAGE_PER_PERSON = 4
+
 LINES = [
     "In Cairo, Egypt's president, Gamal Abdel Nasser, closed the Straits of "
     "Tiran to Israeli ships.",
@@ -66,6 +69,37 @@ def main(out):
             people.append({"name": name, **info})
         print(f"{name}: {'photo + ' + ' · '.join(info['lines']) if info else 'no free portrait'}")
 
+    # Footage-card preview: whole short Commons clips of each person, so
+    # the freeze frame can be chosen offline.
+    from archive_engine import search_commons_video, _polite_get, HEADERS
+    footage = []
+    for name, era in FOOTAGE:
+        d = os.path.join(out, "footage")
+        os.makedirs(d, exist_ok=True)
+        for c in search_commons_video(name, era=era)[:FOOTAGE_PER_PERSON]:
+            path = os.path.join(d, f"{len(footage):02d}.webm")
+            try:
+                with _polite_get(c["url"], stream=True, timeout=120,
+                                 headers={**HEADERS, "Accept": "*/*"}) as r:
+                    r.raise_for_status()
+                    size = 0
+                    with open(path, "wb") as f:
+                        for chunk in r.iter_content(1 << 20):
+                            size += len(chunk)
+                            if size > 60 * 1024 * 1024:
+                                raise ValueError("too large")
+                            f.write(chunk)
+            except Exception as e:
+                print(f"{name}: {c['title']}: {e}")
+                if os.path.exists(path):
+                    os.remove(path)
+                continue
+            footage.append({"name": name, "file": os.path.relpath(path, out),
+                            "title": c["title"], "year": c["year"],
+                            "duration": c["duration"], "license": c["license"],
+                            "artist": c["artist"]})
+            print(f"{name}: {c['year']} {c['duration']:.0f}s {c['title']}")
+
     voice = os.getenv("KOKORO_VOICE", "am_onyx")
     lines = []
     for i, text in enumerate(LINES):
@@ -76,7 +110,7 @@ def main(out):
         print(f"line {i}: {lines[-1]['duration']:.1f}s")
 
     with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump({"images": images, "people": people, "lines": lines, "voice": voice}, f,
+        json.dump({"images": images, "people": people, "footage": footage, "lines": lines, "voice": voice}, f,
                   indent=2, ensure_ascii=False)
     print(f"{len(images)} images, {len(lines)} lines -> {out}")
 
