@@ -25,6 +25,8 @@ QUERIES = [
     "Chinese artillery 1958", "Kinmen bombardment", "Kinmen bunker",
     "Taiwan Strait Crisis 1958", "USS Midway 1958", "Seventh Fleet 1958",
     "Dwight Eisenhower 1958", "Chiang Kai-shek Kinmen",
+    # decision-maker card preview
+    "Mao Zedong 1959", "Mao Zedong portrait",
 ]
 PER_QUERY = 2
 
@@ -41,6 +43,8 @@ LINES = [
     "the Taiwan Strait.",
     "The shelling drew the Seventh Fleet into the strait. American escorts "
     "broke the blockade, and in October, Beijing called a ceasefire.",
+    # decision-maker card preview
+    "In Beijing, the decision belonged to one man: Mao Zedong.",
 ]
 
 
