@@ -253,6 +253,24 @@ def _crop(rings, bbox):
     return out
 
 
+def _sea_bend(p0, p1, land):
+    """The curve for a movement arrow that crosses the least land: a fleet
+    goes round an island, not over it (the first two-map preview drew the
+    Seventh Fleet across Taiwan). Tried in lon/-lat, the same orientation
+    as the screen, so the bend chosen here is the bend drawn."""
+    near = [r for r in land
+            if min(_km(q, p0) for q in (r[0], r[len(r) // 2])) < 3000]
+    best = None
+    for bend in (0.18, -0.18, 0.0, 0.32, -0.32):
+        pts = _bezier((p0[0], -p0[1]), (p1[0], -p1[1]), bend=bend, n=24)[2:-2]
+        hits = sum(1 for x, y in pts if _inside((x, -y), near))
+        if best is None or hits < best[0]:
+            best = (hits, bend)
+        if hits == 0:
+            break
+    return best[1]
+
+
 def render(spec, out_mp4, duration, tone="neutral"):
     """Renders spec (see build_spec) to a silent 1920x1080 clip `duration`
     seconds long. Frames are drawn up to the last animation, then the final
@@ -278,7 +296,8 @@ def render(spec, out_mp4, duration, tone="neutral"):
                               a["to"][1] + rnd.uniform(-spread / 6, spread / 6)),
                              a["at"] + i * 0.18, 3, False))
         else:
-            arcs.append((a["from"], a["to"], a["at"], 5, True))
+            arcs.append((a["from"], a["to"], a["at"], 5,
+                         _sea_bend(a["from"], a["to"], land)))
 
     anim_end = min(duration, spec.get("anim_end", duration))
     frames = max(1, int(round(anim_end * FPS)))
@@ -312,11 +331,13 @@ def render(spec, out_mp4, duration, tone="neutral"):
 
             glow = Image.new("RGBA", img.size, (0, 0, 0, 0))
             gd = ImageDraw.Draw(glow)
-            for p0, p1, start, width, head in arcs:
-                frac = ease((t - start) / (0.7 if not head else 1.2))
+            for p0, p1, start, width, bend in arcs:
+                move = bend is not False
+                frac = ease((t - start) / (1.2 if move else 0.7))
                 if frac <= 0:
                     continue
-                pts = _bezier(cam.xy(*p0), cam.xy(*p1), bend=0.35 if not head else 0.18)
+                pts = _bezier(cam.xy(*p0), cam.xy(*p1),
+                              bend=bend if move else 0.35)
                 _arrow(gd, pts, frac, (width + 7) * SS, RED + (90,), head=False)
                 _arrow(d, pts, frac, width * SS, RED + (255,))
             if glow.getbbox():
@@ -459,7 +480,7 @@ def build_spec(plan, words, duration, era_year=None):
                 xs += [p[0] for p in ring]
                 ys += [p[1] for p in ring]
         fx0, fx1, fy0, fy1 = min(xs), max(xs), min(ys), max(ys)
-        fw = max(fx1 - fx0, (fy1 - fy0) * (W / H) * math.cos(math.radians(cy))) * 1.3
+        fw = max(fx1 - fx0, (fy1 - fy0) * (W / H) / math.cos(math.radians(cy))) * 1.3
         final = ((fx0 + fx1) / 2, (fy0 + fy1) / 2, max(close_w * 1.5, min(40.0, fw)))
 
     if final is None and origin_region:
@@ -468,7 +489,7 @@ def build_spec(plan, words, duration, era_year=None):
         ox, oy = origin_region[2]
         xs, ys = [target_ll[0], ox], [target_ll[1], oy]
         fw = max(max(xs) - min(xs),
-                 (max(ys) - min(ys)) * (W / H) * math.cos(math.radians(cy))) * 1.6
+                 (max(ys) - min(ys)) * (W / H) / math.cos(math.radians(cy))) * 1.6
         final = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2,
                  max(close_w * 1.5, min(40.0, fw)))
 
