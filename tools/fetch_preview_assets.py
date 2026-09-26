@@ -36,6 +36,11 @@ LINES = [
     "On the twenty-third of August, Mao Zedong gave it.",
     "Within hours, tens of thousands of shells had fallen on Kinmen.",
     "And Washington did not hesitate. It sent the Seventh Fleet.",
+    # Two-maps + chain-of-consequences preview (2026-09-26).
+    "American warships sailed from their bases in the Philippines into "
+    "the Taiwan Strait.",
+    "The shelling drew the Seventh Fleet into the strait. American escorts "
+    "broke the blockade, and in October, Beijing called a ceasefire.",
 ]
 
 
