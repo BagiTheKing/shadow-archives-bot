@@ -252,6 +252,13 @@ def build_story(topic, build_dir):
     if not plan:
         print("⚠️ Story mode: the outline did not come back usable.")
         return None
+    dropped = sm.verify_beats(plan, article["text"])
+    for d in dropped:
+        print(f"   ↩️  Beat dropped, not in the source: {d[:110]}")
+    if len(plan["chapters"]) < 5:
+        print("⚠️ Story mode: too few chapters survived verification.")
+        return None
+    sm.fix_roles(plan["chapters"])
     sm.print_plan(sheet, plan)
     sm.save(build_dir, sheet=sheet, plan=plan)
     years = Counter(int(y) for t in sheet["timeline"]

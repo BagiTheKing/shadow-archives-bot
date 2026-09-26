@@ -37,7 +37,9 @@ import re
 
 STORY_WORDS = int(os.getenv("STORY_WORDS", "2000"))     # ~12 min narrated
 WIKI_API = "https://en.wikipedia.org/w/api.php"
-ARTICLE_CHARS = 45000
+# The whole article, not its first third: at 45,000 characters the Six-Day
+# War outline lost the Syrian front and Nasser's resignation entirely.
+ARTICLE_CHARS = 150000
 _DROP_SECTIONS = ("See also", "References", "Notes", "Further reading",
                   "External links", "Bibliography", "Sources", "Citations",
                   "Footnotes")
@@ -119,6 +121,41 @@ def _norm(s):
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
+def _names_ok(text, art):
+    """Every capitalised word is in the article (a possessive "Gur's"
+    matched as "Gur")."""
+    return all(re.sub(r"'s$", "", w).lower() in art
+               for w in re.findall(r"[A-Z][a-zA-Z'-]{2,}", text or ""))
+
+
+def _digits_ok(text, art_digits):
+    return all(d.rstrip(".,") in art_digits
+               for d in re.findall(r"\d[\d,.]*", _norm(text)))
+
+
+def verify_beats(plan, article_text):
+    """The outline's beats and hooks get the fact sheet's check: a beat or
+    hook naming a place, person or figure the article does not contain is
+    dropped (v1 invented "the Lion's Gate" and a pre-dawn launch)."""
+    art = _norm(article_text)
+    digits = {d.rstrip(".,") for d in re.findall(r"\d[\d,.]*", art)}
+    dropped = []
+    for c in plan["chapters"]:
+        kept = []
+        for b in c["beats"]:
+            if _names_ok(b, art) and _digits_ok(b, digits):
+                kept.append(b)
+            else:
+                dropped.append(b)
+        c["beats"] = kept
+        if c.get("hook") and not (_names_ok(c["hook"], art)
+                                  and _digits_ok(c["hook"], digits)):
+            dropped.append("HOOK: " + c["hook"])
+            c["hook"] = ""
+    plan["chapters"] = [c for c in plan["chapters"] if c["beats"]]
+    return dropped
+
+
 def verify_sheet(sheet, article_text):
     """Drops every quote that is not verbatim in the article, every figure
     whose digits are not in it, and every person, place or timeline entry
@@ -128,8 +165,7 @@ def verify_sheet(sheet, article_text):
     dropped = 0
 
     def names_ok(text):
-        words = [w for w in re.findall(r"[A-Z][a-zA-Z'-]{2,}", text or "")]
-        return all(w.lower() in art for w in words)
+        return _names_ok(text, art)
 
     def digits_ok(text):
         return all(d in art_digits or d.rstrip(".,") in art_digits
@@ -165,9 +201,12 @@ def fact_sheet(pool, topic, article, call):
         f"{article['text']}\n\n"
         "Extract a FACT SHEET for a documentary, using ONLY this article. "
         "Copy names, dates and figures exactly as the article writes them.\n"
-        "- timeline: 20-35 dated events in order, from the first cause to the "
-        "aftermath. Each: date (as the article gives it, with the year), event "
-        "(one plain sentence of what happened), place, people (names).\n"
+        "- timeline: 25-45 dated events in order, from the first cause to the "
+        "aftermath, covering EVERY phase and EVERY front or theatre the "
+        "article describes, through to the end (ceasefire, resignation, "
+        "treaty — whatever ends it). Each: date (as the article gives it, "
+        "with the year), event (one plain sentence of what happened), "
+        "place, people (names).\n"
         "- people: the 6-12 key people: name and their role at the time.\n"
         "- places: the key places.\n"
         "- numbers: 8-15 figures (troops, aircraft, casualties, distances, "
@@ -242,18 +281,33 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "RULES:\n"
         "- Chapter 1 is a cold open: 90-130 words dropping the viewer into the "
         "single most gripping MOMENT of the whole story (a time, a place, "
-        "something happening), then stopping before it resolves.\n"
+        "something happening), and it STOPS at the instant before the "
+        "outcome: nothing is hit, destroyed, won or decided in it. It must "
+        "not reveal any result a later chapter tells.\n"
         "- After it, go CHRONOLOGICAL: 4-6 chapters from the first cause to "
         "the aftermath. Each has a dated span, follows 1-3 named people (pov), "
         "and has 3-6 beats: concrete things that happen, taken from the "
         "timeline.\n"
-        "- One chapter is the turning point (role \"pivot\"): the decisive "
-        "choice. Mark it.\n"
+        "- The turning point (role \"pivot\") is its OWN SHORT chapter, "
+        "150-250 words: the decisive choice itself — the room, the people, "
+        "the vote or the order — and nothing else. The climax chapter comes "
+        "right after it.\n"
+        "- When several fronts, theatres or places run at the same time, "
+        "give each its own chapter or its own unbroken run of beats. Never "
+        "hop between fronts inside a chapter. Cover EVERY front and every "
+        "major turn in the timeline — none may be left out.\n"
+        "- Beats use ONLY the fact sheet: no place, name, time, number or "
+        "action that is not in it.\n"
         "- Give space where the drama is: the climax and its events get the "
         "most words (at least a third of the total). Background gets the "
         "least. The last chapter (aftermath and what it changed) is about an "
         "eighth.\n"
-        "- A story question, not a verdict: what the viewer wants answered.\n"
+        "- A story question, not a verdict: what the viewer wants answered. "
+        "It must be NEUTRAL — not asked from one side's point of view, and "
+        "never framing one side as the threat or the victim. Every fear, "
+        "claim or threat in a beat is attributed to whoever held it "
+        "(\"Israel's leaders feared...\", \"Nasser declared...\"), never "
+        "narrated as fact.\n"
         "- hook: at most TWO chapters end on a hook, and only where the next "
         "chapter pays it off. Every other hook is empty.\n"
         "- Titles are story beats (\"The Bluff\", \"7:45 a.m.\"), never "
@@ -273,6 +327,10 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
     scale = total_words / max(1, sum(raw))
     for c, w in zip(chapters, raw):
         c["words"] = max(90 if c["role"] == "open" else 180, int(w * scale))
+        if c["role"] == "pivot":
+            c["words"] = min(c["words"], 260)
+        if c["role"] == "open":
+            c["words"] = min(c["words"], 140)
     hooks = 0
     for c in chapters:
         c["hook"] = (c.get("hook") or "").strip()
