@@ -198,24 +198,17 @@ def person_file(name, out_dir):
         print(f"   ↩️  {name}: no Wikipedia article by that name.")
         return None
     page = pages[0]
-    commons_credit = None
     desc = (page.get("description") or "").strip()
-    src = (page.get("original") or {}).get("source", "")
+    # Wikipedia now appends tracking parameters ("...jpg?utm_source=...")
+    # to image links; checked as-is, no portrait ever passed and the card
+    # never appeared in a published video.
+    src = (page.get("original") or {}).get("source", "").split("?")[0]
     file_name = page.get("pageimage", "")
     # Only a Commons image is free to use; a fair-use lead image lives on
-    # en.wikipedia and is refused. Without one, the person's own Commons
-    # photos are searched instead.
+    # en.wikipedia and is refused.
     if "/wikipedia/commons/" not in src or not re.search(r"\.(jpe?g|png)$", src, re.I):
-        from archive_engine import search_commons
-        hits = [c for c in search_commons(f"{name} portrait", limit=10)
-                if all(w.lower() in c.get("title", "").lower()
-                       for w in name.split()[-1:])]
-        if not hits:
-            print(f"   ↩️  {name}: no free portrait (lead image {src or 'none'}).")
-            return None
-        from archive_engine import format_credit
-        src, file_name = hits[0]["url"], hits[0]["title"]
-        commons_credit = format_credit(hits[0])
+        print(f"   ↩️  {name}: no free portrait (lead image {src or 'none'}).")
+        return None
     if not desc:
         print(f"   ↩️  {name}: Wikipedia has no short description.")
         return None
@@ -236,8 +229,6 @@ def person_file(name, out_dir):
     Image.open(photo).verify()
 
     credit = f"{file_name.replace('_', ' ')} (via Wikimedia Commons)"
-    if commons_credit:
-        return {"photo": photo, "lines": lines, "credit": commons_credit}
     try:
         info = _polite_get(COMMONS_API, params={
             "action": "query", "titles": f"File:{file_name}", "format": "json",
