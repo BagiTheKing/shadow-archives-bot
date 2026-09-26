@@ -634,6 +634,8 @@ def search_commons_video(query: str, era=None, limit: int = 12) -> list:
         out.append({
             "url": url, "title": title.replace("_", " ")[:120],
             "about": about.lower()[:3000],
+            "tagline": " ".join([title.replace("_", " "), _strip_html(
+                (meta.get("Categories") or {}).get("value", ""))]).lower(),
             "artist": _strip_html((meta.get("Artist") or {}).get("value", ""))[:60],
             "license": _strip_html(
                 (meta.get("LicenseShortName") or {}).get("value", "")),

@@ -55,7 +55,7 @@ MIN_FACE = 0.16         # face height as a share of the frame
 FUZZY_MAX = 0.08        # soft-edge share of the cut-out; clean ones ~0.015
 MIN_PHOTO_HEIGHT = 400
 MAX_CLIPS = 3
-MAX_CLIP_MB = 60
+MAX_CLIP_MB = 150
 SCAN_SECONDS = 600
 SCAN_STEP = 0.25
 
@@ -421,7 +421,7 @@ def render_card(name, role, lines, src, out_mp4, duration, freeze_at,
     lead: the footage frames before it, played until freeze_at."""
     plain, frozen_bg, person, outline, glow, centre, geo = _layers(src, side, bool(lead))
     streak_mask = _speed_lines(centre, file_no, side)
-    stamp = _stamp_tile(role.upper()[:30])
+    stamp = _stamp_tile(short_role(role))
     words = name.upper().split()
     top, last = " ".join(words[:-1]), words[-1]
     f_top = ImageFont.truetype(ANTON, 70)
@@ -512,6 +512,20 @@ def render_card(name, role, lines, src, out_mp4, duration, freeze_at,
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return out_mp4
+
+
+def short_role(role, limit=26):
+    """A role that fits the stamp whole: "Chief of Staff of the Israel
+    Defense Forces" becomes "CHIEF OF STAFF", never "...THE ISRAEL D"."""
+    r = " ".join((role or "").split()).upper()
+    if len(r) <= limit:
+        return r
+    for sep in (" OF THE ", ", ", " OF "):
+        head = r.split(sep)[0]
+        if 3 <= len(head) <= limit:
+            return head
+    cut = r[:limit].rsplit(" ", 1)[0]
+    return cut if len(cut) >= 3 else r[:limit]
 
 
 def card_lines(role, info_lines):

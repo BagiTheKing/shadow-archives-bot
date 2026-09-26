@@ -1894,6 +1894,33 @@ def _names_in(topic, limit=3):
     return names[:limit]
 
 
+_NOT_A_NAME = {"article", "quoted", "quote", "by", "describing", "about", "said",
+               "wrote", "according", "the", "unknown", "anonymous", "source",
+               "report", "reports", "newspaper", "editorial", "project"}
+_NAME_PARTICLES = {"al", "el", "bin", "ibn", "de", "da", "di", "van", "von", "der", "la", "le", "of", "abu", "ben"}
+
+
+def _speaker_ok(name):
+    """A card's speaker must be a person's name ("Gamal Abdel Nasser",
+    "Hussein of Jordan"), not a description of a source. The Six-Day War
+    run printed "Quoted by Project Herzl." and "The article describing
+    Yitzhak Rabin" under its two cards."""
+    words = re.findall(r"[A-Za-z][A-Za-z'.]*", name or "")
+    if not (1 <= len(words) <= 6):
+        return False
+    if any(w.lower().strip(".") in _NOT_A_NAME for w in words):
+        return False
+    return all(w[0].isupper() or w.lower() in _NAME_PARTICLES for w in words)
+
+
+def _quote_ok(text):
+    """A whole spoken line: starts like a sentence and ends like one, not a
+    fragment lifted from the middle of an article sentence ("chose the
+    least ostentatious, the Six-Day War...")."""
+    t = (text or "").strip().strip('"“”')
+    return bool(t) and (t[0].isupper() or t[0].isdigit()) and t[-1] in ".!?…"
+
+
 def _gather_quote_candidates(pool, topic, sheet_quotes=None):
     """Every real, sourced quote candidate Wikiquote has for this topic —
     searched once and shared by every card this video needs (the opening
@@ -1910,7 +1937,8 @@ def _gather_quote_candidates(pool, topic, sheet_quotes=None):
     # its speaker, so none can be invented.
     for q in sheet_quotes or []:
         text, who = (q.get("text") or "").strip(), (q.get("speaker") or "").strip()
-        if text and who and 4 <= len(text.split()) <= 40 and text.lower() not in seen:
+        if (text and _speaker_ok(who) and _quote_ok(text)
+                and 4 <= len(text.split()) <= 40 and text.lower() not in seen):
             seen.add(text.lower())
             candidates.append({"text": text, "attribution": who,
                                "source_page": "Wikipedia"})
@@ -1923,6 +1951,8 @@ def _gather_quote_candidates(pool, topic, sheet_quotes=None):
             continue
         for c in found:
             key = c["text"].lower()
+            if not (_speaker_ok(c.get("attribution")) and _quote_ok(c.get("text"))):
+                continue
             if key not in seen:
                 seen.add(key)
                 candidates.append(c)

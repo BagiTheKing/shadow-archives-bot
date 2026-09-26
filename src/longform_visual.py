@@ -241,7 +241,9 @@ def _archival_footage(query, era, idx, output_dir, used_urls):
         for cand in search_commons_video(q, era=era)[:6]:
             if cand["url"] in used_urls:
                 continue
-            if not footage_matches(query, cand.get("about", "")):
+            # title and categories only: a long file description mentions
+            # everything (an ASEAN newsreel passed for "United Nations 1967")
+            if not footage_matches(query, cand.get("tagline", "")):
                 continue
             if not fetch_commons_video(cand, video_path):
                 continue
