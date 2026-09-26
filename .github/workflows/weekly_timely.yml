@@ -180,7 +180,7 @@ jobs:
           # 48h per the owner (was 24h).
           WATCH_LOOKBACK_HOURS: '48'
           # Nothing after this year may appear in the narration.
-          HISTORY_CUTOFF_YEAR: '2005'
+          HISTORY_CUTOFF_YEAR: '2010'
         run: python src/longform_main.py
 
       - name: Upload script for review

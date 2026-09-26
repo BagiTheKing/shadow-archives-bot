@@ -845,7 +845,14 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
 # because prompting alone is not a control.
 # ---------------------------------------------------------------------------
 
-HISTORY_CUTOFF_YEAR = int(os.getenv("HISTORY_CUTOFF_YEAR", "2005"))
+# 2010 since 2026-09-26 (was 2005), the owner asking for "as close to the
+# present as stays safe". Roughly fifteen years back is where an event is
+# both settled (its war or crisis has ended, its inquiries have reported)
+# and still densely covered in every free model's training data; past it,
+# the models' knowledge thins and the dispute is often still live. Moving
+# it later should keep that gap: 2020-era events (the war in Yemen since
+# 2015, Syria, Crimea) are exactly the live disputes this rule exists for.
+HISTORY_CUTOFF_YEAR = int(os.getenv("HISTORY_CUTOFF_YEAR", "2010"))
 
 # Present-tense framing that would turn a history video into commentary.
 PRESENT_TENSE_BANS = (
@@ -920,6 +927,38 @@ def _extract_punch_phrase(segs):
         if matches:
             s["narration"] = _PUNCH_RE.sub(lambda m: m.group(1), text)
     return phrase, idx
+
+
+_ACTOR_FILLER = {"the", "of", "and", "movement", "government", "forces",
+                 "state", "people", "republic", "kingdom", "party"}
+
+
+def _actors_for(candidates, data):
+    """The main actors of the headline the model chose: the ones channel
+    watch extracted for that subject when it has them (more reliable than
+    the anchor call grading its own answer), else the anchor's own
+    "actor"."""
+    chosen = (data.get("subject") or "").lower()
+    for c in candidates or []:
+        subj = (c.get("subject") or "").lower()
+        if c.get("actors") and subj and (subj in chosen or chosen in subj):
+            return c["actors"]
+    actor = (data.get("actor") or "").strip()
+    return [actor] if actor else []
+
+
+def _anchor_names_actor(actors, topic: str, why: str) -> bool:
+    """The anchor must name one of the headline's main actors (prefix-matched,
+    so Houthi/Houthis or Yemen/Yemeni count). This is the check the 1967
+    Straits of Tiran pick failed: the headline was about the Houthis, and
+    "Red Sea" alone was enough to pass _anchor_is_relevant. No actors known
+    means nothing to check."""
+    words = [w for a in (actors or []) for w in re.findall(r"[a-z]+", a.lower())
+             if len(w) >= 4 and w not in _ACTOR_FILLER]
+    if not words:
+        return True
+    haystack = f"{topic} {why}".lower()
+    return any(w[:5] in haystack for w in words)
 
 
 def _anchor_is_relevant(subject: str, topic: str, why: str) -> bool:
@@ -1059,9 +1098,13 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
         "count, relative to the upload's age, only as a tiebreaker between "
         "otherwise comparable stories.\n"
         f"{avoid_block}\n"
+        "For each subject also give actors: the MAIN group or state at the "
+        "centre of it and its country (e.g. [\"Houthis\", \"Yemen\"]) — who "
+        "is acting, not where it happens.\n"
         'Output ONLY JSON: {"subjects": [{"label": "...", "why_important": '
-        '"one sentence"}, ...]}, ranked most important first. Omit anything '
-        "that does not qualify. Use an empty list if nothing qualifies."
+        '"one sentence", "actors": ["...", "..."]}, ...]}, ranked most '
+        "important first. Omit anything that does not qualify. Use an empty "
+        "list if nothing qualifies."
     )
 
     data = _call(pool,
@@ -1075,6 +1118,8 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
     n = len(subjects)
     return [{"subject": s["label"].strip(),
              "why": (s.get("why_important") or "").strip(),
+             "actors": [a.strip() for a in (s.get("actors") or [])
+                        if isinstance(a, str) and a.strip()][:3],
              "score": n - i, "source": "channel_watch"}
             for i, s in enumerate(subjects)]
 
@@ -1135,6 +1180,14 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         "happening. The event you choose must be the origin of that exact "
         "dispute, border, alliance or grievance — not a famous episode that "
         "merely happens to involve the same country.\n"
+        "THE MAIN ACTOR DECIDES IT, NOT THE PLACE. The event must be about the "
+        "group or state at the centre of the headline, or its direct origin. "
+        "Sharing only the sea, strait or region is not relevance:\n"
+        "- Headline about the Houthi campaign against Red Sea shipping -> the "
+        "origin of the Houthis in Yemen (a Yemeni decision that created or "
+        "hardened the movement). NOT another country's Red Sea blockade, "
+        "which happened in the same water and explains nothing about the "
+        "Houthis.\n"
         "- Headline about Russian strikes on Ukraine -> the 1994 Budapest "
         "Memorandum, or the 1954 transfer of Crimea. NOT the Trans-Siberian "
         "Railway, which involves Russia but explains nothing in the headline.\n"
@@ -1175,7 +1228,8 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         "candidates clears that bar, say so instead of forcing one.\n"
         "- The topic must fit this channel: a decision, order or miscalculation "
         "and what it cost.\n\n"
-        'Output ONLY JSON: {"subject": "the headline you chose", "topic": "one '
+        'Output ONLY JSON: {"subject": "the headline you chose", "actor": "the '
+        'main group or state at the centre of that headline", "topic": "one '
         'specific sentence describing the historical event", "name": "the '
         'event\'s common name in 2-6 words, no year, e.g. The Capture of '
         'Ceuta", "anchor_year": 1415, "why": "one sentence naming the '
@@ -1217,6 +1271,14 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
                       f"{HISTORY_CUTOFF_YEAR} cutoff")
             print(f"⚠️ Anchor rejected: year {year} is later than the "
                   f"{HISTORY_CUTOFF_YEAR} cutoff. ({data.get('topic', '')[:70]})")
+        elif not _anchor_names_actor(_actors_for(candidates, data),
+                                     data.get("topic", ""), data.get("why", "")):
+            actors = _actors_for(candidates, data)
+            reason = (f"the event you chose is not about the headline's main "
+                      f"actor ({', '.join(actors)}) — it only shares a place "
+                      f"with it; choose the origin of {actors[0]} itself")
+            print(f"⚠️ Anchor rejected: not about the main actor "
+                  f"({', '.join(actors)}). ({data.get('topic', '')[:70]})")
         elif not _anchor_is_relevant(data.get("subject", ""),
                                      data.get("topic", ""),
                                      data.get("why", "")):

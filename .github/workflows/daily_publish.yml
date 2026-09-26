@@ -164,7 +164,7 @@ jobs:
           SHORTS_LIVE_MODE: alternate
           WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
           WATCH_LOOKBACK_HOURS: '48'
-          HISTORY_CUTOFF_YEAR: '2005'
+          HISTORY_CUTOFF_YEAR: '2010'
           # The closing question is posted as the first comment only. Speaking
           # it too was tried for six episodes: it cost ~7 seconds per video,
           # produced zero comments, and talked over the script's designed last
