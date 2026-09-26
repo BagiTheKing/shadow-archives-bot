@@ -2398,9 +2398,6 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # would be absurd — fall back to topic-derived metadata.
         print("🛑 Quota gone before packaging; deriving metadata from the topic.")
 
-    for c in chapters:
-        if (c.get("pacing") or {}).get("role") == "pivot":
-            c.setdefault("decision_question", stock_decision_question(topic))
     try:
         _chapter_stamps(pool, topic, chapters, era_year)
     except QuotaExhausted:
@@ -2642,60 +2639,13 @@ def _stamp_grounded(place, date, narration, topic, era_year):
     return True
 
 
-# The "what would you do?" pause before the decision (see
-# longform_video._build_question_card). Written with the stamps, in the same
-# request; one of these is used whenever the written one is missing or fails
-# _question_ok, so the pause never depends on a model.
-STOCK_DECISION_QUESTIONS = (
-    "You know what they knew. What do you order?",
-    "Same facts. Same clock. What is your decision?",
-    "Everything they knew is in front of you. Do you give the order?",
-    "The room is waiting for your answer. What do you do?",
-    "You have one chance to decide. Do you go ahead?",
-)
-_QUESTION_WORDS = {"you", "your", "do", "does", "what", "would", "will",
-                   "which", "who", "how", "when", "where", "is", "are", "the",
-                   "a", "an", "it", "if", "in", "on", "and", "or", "same"}
-
-
-def stock_decision_question(topic):
-    import hashlib
-    i = int(hashlib.sha1((topic or "").encode()).hexdigest(), 16)
-    return STOCK_DECISION_QUESTIONS[i % len(STOCK_DECISION_QUESTIONS)]
-
-
-def _question_ok(question, context):
-    """Short, a real question, and every name, place or number in it stated
-    in the narration before the decision — it is on screen as the setup of a
-    true story, so it must not invent who, where or when."""
-    q = " ".join((question or "").split())
-    n = len(q.split())
-    if not (5 <= n <= 16) or not q.endswith("?"):
-        return False
-    low = f" {context.lower()} "
-    for w in re.findall(r"[A-Za-z][\w'-]*|\d+", q)[1:]:
-        if (w[0].isupper() or w.isdigit()) and w.lower() not in _QUESTION_WORDS:
-            if not re.search(rf"(?<![a-z0-9]){re.escape(w.lower())}(?![a-z0-9])",
-                             low):
-                return False
-    return True
-
-
 def _chapter_stamps(pool, topic, chapters, era_year):
     """Writes chapter["stamp"] ("KINMEN · 23 AUGUST 1958") on the chapters in
-    STAMP_ROLES whose narration states where and when they happen, and
-    chapter["decision_question"] on the pivot chapter. One request for the
-    whole video; a stamp the grounding check rejects is simply left out,
-    and a rejected question falls back to STOCK_DECISION_QUESTIONS."""
+    STAMP_ROLES whose narration states where and when they happen. One
+    request for the whole video; anything the grounding check rejects is
+    simply left without a stamp."""
     wanted = [(i, c) for i, c in enumerate(chapters)
               if (c.get("pacing") or {}).get("role") in STAMP_ROLES]
-    pivot = next((i for i, c in enumerate(chapters)
-                  if (c.get("pacing") or {}).get("role") == "pivot"), None)
-    before = ""
-    if pivot:
-        before = " ".join(s["narration"] for c in chapters[:pivot]
-                          for s in c["scenes"])
-        chapters[pivot]["decision_question"] = stock_decision_question(topic)
     if not wanted:
         return
     listing = "\n\n".join(
@@ -2716,26 +2666,11 @@ def _chapter_stamps(pool, topic, chapters, era_year):
         "'1958', or one of: " + ", ".join(STAMP_RELATIVE) + ". Empty if the "
         "chapter states no time.\n"
         "- Skip a chapter that names no place.\n\n"
-        "ALSO write \"question\": the question put to the viewer on screen "
-        "right BEFORE the decision is revealed, as if they were the one who "
-        "had to decide. Second person, 6-14 words, ends with a question "
-        "mark, e.g. \"It is 1958 in Beijing. Do you give the order?\" "
-        "Use only names, places and years the story has already stated, and "
-        "never hint at what was actually decided or what followed.\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
-        '"date": "..."}], "question": "..."}'
+        '"date": "..."}]}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
-    if pivot:
-        q = " ".join(str((data or {}).get("question") or "").split())
-        if q and _question_ok(q, f"{before} {topic}"):
-            chapters[pivot]["decision_question"] = q
-            print(f"❓ Decision question: {q}")
-        else:
-            print(f"❓ Decision question (stock): "
-                  f"{chapters[pivot]['decision_question']}"
-                  + (f" — written one dropped: {q[:60]!r}" if q else ""))
     by_index = dict(wanted)
     placed = 0
     for st in (data or {}).get("stamps") or []:
@@ -2791,8 +2726,6 @@ def flatten_scenes(script: dict) -> list:
             s["tts_rate"] = pacing.get("tts_rate")
             if s_idx == 0 and chapter.get("stamp"):
                 s["stamp"] = chapter["stamp"]
-            if s_idx == 0 and chapter.get("decision_question"):
-                s["decision_question"] = chapter["decision_question"]
             # The visual engine gates archival search and b-roll on the era.
             s["era_year"] = script.get("era_year")
             if chapter.get("punch_phrase") and s_idx == chapter.get("punch_idx"):

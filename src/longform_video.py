@@ -134,14 +134,6 @@ HIT_GAIN = 0.45             # peaks level with the narration, not above it
 KEYCLICK_GAIN = 0.08        # present, never in the way of the voice
 TYPE_RATE = 0.055           # seconds per typed stamp character
 STAMP_HOLD = 2.6
-
-# 4. "What would you do?": right before the silence, the last frame freezes
-#    (blurred, darkened), the viewer is asked to make the decision
-#    themselves, and a 3-2-1 countdown lands on the clock's last three ticks.
-#    Set DECISION_QUESTION=off to drop it; the clock/silence/hit stay.
-DECISION_QUESTION = os.getenv("DECISION_QUESTION", "on").strip().lower() != "off"
-QUESTION_HOLD = 4.0         # 1s for the question alone, then 3, 2, 1
-QUESTION_CLOCK = 7          # whole seconds of clock before the silence
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONTS_DIR = os.path.join(BASE_DIR, "fonts")
 MUSIC_DIR = os.path.join(BASE_DIR, "music")
@@ -163,8 +155,6 @@ Style: Cta,{FONT_NAME},64,&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,0,0,0,0,10
 Style: Pivot,{FONT_NAME},128,&H00FFFFFF,&H0000E8FF,&H00000000,&HB0000000,0,0,0,0,100,100,2,0,1,5,4,5,120,120,60,1
 Style: Scrim,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 Style: Stamp,{STAMP_FONT},39,&H00E8F0F0,&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,3,0,1,2,0,7,78,78,66,1
-Style: Question,{FONT_NAME},76,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,1,3,0,5,240,240,0,1
-Style: Countdown,{FONT_NAME},170,&H000000FF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 Style: Epigraph,{FONT_NAME},{EPIGRAPH_FONT_SIZE},&H00FFFFFF,&H0000E8FF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,0,5,{EPIGRAPH_MARGIN},{EPIGRAPH_MARGIN},0,1
 
 [Events]
@@ -1363,44 +1353,6 @@ def _build_black_clip(duration: float, build_dir: str) -> str:
     return out_path
 
 
-def _build_question_card(question: str, background: str, grade: str,
-                         build_dir: str):
-    """The "what would you do?" freeze: the previous chapter's last frame,
-    blurred and darkened under its own grade, with the question and a 3-2-1
-    countdown. Silent, encoded like the reels so it joins by stream copy."""
-    ass_path = os.path.join(build_dir, "lf_question.ass")
-    out_path = os.path.join(build_dir, "lf_question.mp4")
-    end = QUESTION_HOLD
-    events = [
-        f"Dialogue: 1,{_ass_time(0.15)},{_ass_time(end)},Chapter,,0,0,0,,"
-        f"{{\\an5\\pos({W // 2},{int(H * 0.25)})\\fad(300,0)\\fs44"
-        f"\\c{ACCENT_ASS}\\bord2}}YOUR DECISION",
-        f"Dialogue: 1,{_ass_time(0.15)},{_ass_time(end)},Question,,0,0,0,,"
-        f"{{\\pos({W // 2},{int(H * 0.44)})\\fad(400,0)}}{question.upper()}",
-    ]
-    for n, digit in enumerate(("3", "2", "1"), 1):
-        events.append(
-            f"Dialogue: 2,{_ass_time(n)},{_ass_time(n + 1)},Countdown,,0,0,0,,"
-            f"{{\\pos({W // 2},{int(H * 0.72)})\\fscx130\\fscy130"
-            f"\\t(0,180,\\fscx100\\fscy100)}}{digit}")
-    with open(ass_path, "w", encoding="utf-8") as f:
-        f.write(ASS_HEADER + "\n".join(events) + "\n")
-
-    safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
-    safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
-    graded = f"{GRADES[grade]}," if grade in GRADES else ""
-    vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-          f"setsar=1,{graded}gblur=sigma=14,eq=brightness=-0.22:saturation=0.6,"
-          f"vignette=PI/3,ass='{safe_ass}':fontsdir='{safe_fonts}'")
-    _run(["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS), "-i", background,
-          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-          "-vf", vf, "-r", str(FPS),
-          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-          "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
-          "-pix_fmt", "yuv420p", "-t", f"{end:.3f}", out_path])
-    return out_path
-
-
 def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                             verdict_epigraph=None):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks,
@@ -1463,33 +1415,9 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         # chapter mark is taken, so the decision's own score starts on the
         # hit, not under the black.
         if group[0].get("is_pivot") and pos > 0:
-            question = (group[0].get("decision_question") or "").strip()
-            if question and DECISION_QUESTION:
-                try:
-                    prev = chapters[pos - 1][1][-1]
-                    bg = (prev.get("image_paths") or [prev["image_path"]])[-1]
-                    card = _build_question_card(
-                        question, bg,
-                        GRADE_BY_ROLE.get(prev.get("chapter_role"), ""),
-                        build_dir)
-                    reels.append(card)
-                    print(f"❓ Decision question at {cursor:.1f}s: {question}")
-                    cursor += QUESTION_HOLD
-                except Exception as e:
-                    question = ""
-                    print(f"⚠️ Decision question skipped "
-                          f"({type(e).__name__}: {e}).")
-            else:
-                question = ""
             try:
                 black = _build_black_clip(SILENCE_BEFORE_DECISION, build_dir)
-                if question:
-                    # Whole seconds back from the silence, so the ticks fall
-                    # exactly on the countdown's 3, 2 and 1.
-                    lead = min(QUESTION_CLOCK, int(cursor - prev_chapter_start))
-                    clock_start = cursor - lead
-                else:
-                    clock_start = max(prev_chapter_start, cursor - CLOCK_SPAN)
+                clock_start = max(prev_chapter_start, cursor - CLOCK_SPAN)
                 silence = (clock_start, cursor, cursor + SILENCE_BEFORE_DECISION)
                 rhythm_cues.append(("clock", clock_start, cursor - clock_start))
                 reels.append(black)
