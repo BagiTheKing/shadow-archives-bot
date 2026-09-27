@@ -213,13 +213,15 @@ def find_dates(words, state):
                 i = e
                 continue
         clock, tj = _time_near(toks, s, e) if kind == "day" else (None, None)
-        at = starts[min(s, tj) if tj is not None else s]
+        first = min(s, tj) if tj is not None else s
+        at = starts[first]
         label = (f"{date.day} {MONTHS[date.month - 1].upper()} {date.year}" if kind == "day"
                  else f"{MONTHS[date.month - 1].upper()} {date.year}" if kind == "month"
                  else f"{date.year}")
         ordv = date.toordinal() + (14 if kind == "month" else 0)
         state.update(year=date.year, month=date.month, ord=ordv)
-        out.append({"at": at, "ord": ordv, "label": label, "time": clock or "", "kind": kind})
+        out.append({"at": at, "ord": ordv, "label": label, "time": clock or "", "kind": kind,
+                    "idx": first})
         i = e
     return out
 
@@ -230,7 +232,10 @@ def collect(scenes_with_offsets, era_year=None):
     state = {"year": era_year}
     events = []
     for scene, offset in scenes_with_offsets:
-        for ev in find_dates(scene.get("words") or [], state):
+        dates = find_dates(scene.get("words") or [], state)
+        if scene.get("chapter_index") == 0:
+            continue        # never in the teaser (docs/VIDEO_SPEC.md 1, 8)
+        for ev in dates:
             ev["at"] += offset
             if events and (ev["at"] - events[-1]["at"] < MIN_GAP
                            or (ev["ord"] == events[-1]["ord"] and ev["at"] - events[-1]["at"] < 20)):

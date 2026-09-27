@@ -243,7 +243,109 @@ def _synthesize_kokoro(text: str, output_path: str, voice: str = None,
         if os.path.exists(tmp_wav):
             os.remove(tmp_wav)
 
+    global _last_engine
+    _last_engine = "kokoro"
+    try:
+        words = _align_kokoro(text, samples, sample_rate, _kokoro_lang(voice))
+        if words and len(words) == len(text.split()):
+            return words
+    except Exception as e:
+        print(f"   ⚠️ Pause alignment failed ({type(e).__name__}: {e}) — estimating.")
     return _estimate_word_timings(text, duration)
+
+
+_last_engine = None
+
+
+_PUNCT_END = (",", ";", ":", ".", "!", "?", "—", "–")
+
+
+def _align_kokoro(text, samples, sr, lang):
+    """Word timings for a Kokoro take, anchored on its real pauses.
+
+    Kokoro reports no timings, and a letter-count estimate drifts by up to a
+    second over a long sentence, which put cast-card freezes and date-ruler
+    landings visibly off the spoken word. Kokoro pauses at every comma and
+    full stop; those pauses are found in the audio itself and pinned to the
+    punctuation that caused them, the speech start and end are pinned the
+    same way, and inside each clause the words share the time by how many
+    sounds (phonemes) they have. docs/VIDEO_SPEC.md 10."""
+    import numpy as np
+    tokens = (text or "").split()
+    if not tokens:
+        return []
+    x = np.abs(np.asarray(samples, dtype=np.float32))
+    hop = max(1, int(sr * 0.01))
+    n = len(x) // hop
+    if n < 5:
+        return _estimate_word_timings(text, len(x) / float(sr))
+    env = x[: n * hop].reshape(n, hop).mean(axis=1)
+    thr = max(1e-4, float(np.percentile(env, 99)) * 0.04)
+    loud = env > thr
+    idx = np.nonzero(loud)[0]
+    if not len(idx):
+        return _estimate_word_timings(text, len(x) / float(sr))
+    s0, s1 = idx[0] * 0.01, (idx[-1] + 1) * 0.01
+    gaps, run = [], None
+    for k in range(idx[0], idx[-1] + 1):
+        if not loud[k]:
+            run = k if run is None else run
+        elif run is not None:
+            if k - run >= 7:                       # 70 ms or more of silence
+                gaps.append((run * 0.01, k * 0.01))
+            run = None
+
+    tok = None
+    try:
+        tok = _kokoro_instance_get().tokenizer
+    except Exception:
+        pass
+
+    def weight(w):
+        core = re.sub(r"[^\w'-]", "", w)
+        if tok is not None and core:
+            try:
+                return max(1, len(tok.phonemize(core, lang).replace(" ", "")))
+            except Exception:
+                pass
+        return max(1, len(core))
+
+    weights = [weight(w) for w in tokens]
+    bounds = [j for j, w in enumerate(tokens[:-1]) if w.rstrip("\"')").endswith(_PUNCT_END)]
+    total = float(sum(weights))
+    speech = s1 - s0 - sum(b - a for a, b in gaps)
+    # expected boundary times from the weights, then match real pauses in order
+    anchors = [(0, s0, None)]
+    gi = 0
+    cum = 0.0
+    for j in range(len(tokens) - 1):
+        cum += weights[j]
+        if j not in bounds:
+            continue
+        expect = s0 + speech * cum / total + sum(b - a for a, b in gaps[:gi])
+        best = None
+        for g in range(gi, len(gaps)):
+            mid = (gaps[g][0] + gaps[g][1]) / 2
+            if abs(mid - expect) <= 0.9 and (best is None or abs(mid - expect) < abs(
+                    (gaps[best][0] + gaps[best][1]) / 2 - expect)):
+                best = g
+            if mid - expect > 0.9:
+                break
+        if best is not None:
+            anchors[-1] = anchors[-1][:2] + (gaps[best][0],)
+            anchors.append((j + 1, gaps[best][1], None))
+            gi = best + 1
+    anchors[-1] = anchors[-1][:2] + (s1,)
+    out = [None] * len(tokens)
+    for a, (i0, t0, t1) in enumerate(anchors):
+        i1 = anchors[a + 1][0] if a + 1 < len(anchors) else len(tokens)
+        span_w = float(sum(weights[i0:i1])) or 1.0
+        t = t0
+        for k in range(i0, i1):
+            d = (t1 - t0) * weights[k] / span_w
+            out[k] = {"word": tokens[k], "start": round(t, 3), "end": round(t + d, 3)}
+            t += d
+    return out
 
 
 # ---------------------------------------------------------------------------

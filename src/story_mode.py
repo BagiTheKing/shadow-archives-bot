@@ -71,7 +71,9 @@ the moment needs room, and short hard ones — three to six words — for impact
 Never three long sentences in a row.
 - Plain language for a general audience: explain any military, political or technical \
 term in the same sentence.
-- No jokes, no rhetorical questions to the viewer, no "we", no "you". No fake \
+- Speak to the viewer at turning points, the way a storyteller does ("Remember \
+Nasser's gamble?", "Now watch what happens next", "Let's go back to that morning") \
+— once or twice a chapter, never in every sentence. No jokes. No fake \
 suspense lines. The events supply the drama.
 - Do not take sides between present-day states. Narrate what people did and what it \
 cost, attributed to them.
@@ -170,7 +172,9 @@ def verify_beats(plan, article_text):
                                   and _digits_ok(c["hook"], digits)):
             dropped.append("HOOK: " + c["hook"])
             c["hook"] = ""
-    plan["chapters"] = [c for c in plan["chapters"] if c["beats"]]
+    # the teaser and the cast chapter keep their places even without beats:
+    # everything after them is positioned by index
+    plan["chapters"] = [c for i, c in enumerate(plan["chapters"]) if c["beats"] or i < 2]
     for key, name in (("cast", lambda c: c.get("name")), ("places", lambda p: p)):
         kept = [x for x in plan.get(key) or [] if _names_ok(name(x), art)]
         dropped += [f"{key.upper()}: {name(x)}" for x in plan.get(key) or []
@@ -305,8 +309,9 @@ def fix_roles(chapters):
     """First chapter open, last close, exactly one pivot in between (the one
     the outline marked, else the middle), build before it, drive after."""
     n = len(chapters)
+    # never the teaser (0) or the cast chapter (1)
     marked = [i for i, c in enumerate(chapters) if c.get("role") == "pivot"
-              and 0 < i < n - 1]
+              and 1 < i < n - 1]
     pivot = marked[0] if marked else n // 2
     for i, c in enumerate(chapters):
         c["role"] = ("open" if i == 0 else "close" if i == n - 1 else
@@ -323,16 +328,23 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         f"{round(total_words / 165)} minutes) that tells this as a STORY a "
         "stranger cannot stop watching.\n"
         "RULES:\n"
-        "- Chapter 1 is a cold open: 90-130 words dropping the viewer into the "
-        "single most gripping MOMENT of the whole story (a time, a place, "
-        "something happening), and it STOPS at the instant before the "
-        "outcome: nothing is hit, destroyed, won or decided in it. It must "
-        "not reveal any result a later chapter tells.\n"
-        "- After it, go CHRONOLOGICAL: 5 more chapters (6 in all) from the "
-        "first cause to the aftermath, told as ONE story, not parallel "
-        "threads. Each has a dated span, follows 1-2 people from the cast "
-        "(pov), and has 3-5 beats: concrete things that happen, taken from "
-        "the timeline.\n"
+        "- Chapter 1 is a TEASER, 100-140 words: the big picture only — what "
+        "happened, which countries or sides fought whom, the scale of it, and "
+        "why it still matters — ending on the question the video answers. "
+        "No specific days, dates or clock times, and no individual named or "
+        "introduced (sides and countries only). It makes a stranger want the "
+        "details; it does not give them.\n"
+        "- Chapter 2 INTRODUCES THE CAST as a story, 200-300 words: who each "
+        "cast member is, what they want, and who stands with whom and against "
+        "whom — told as one flowing passage, never a list. EVERY cast member "
+        "is introduced here, one beat each.\n"
+        "- Then 4 more chapters (6 in all), in time order from the first "
+        "cause to the aftermath, told as ONE story. Each has a dated span, "
+        "follows 1-2 people from the cast (pov), and has 3-5 beats: concrete "
+        "things that happen, taken from the timeline. A chapter may go BACK "
+        "in time only to follow another front or side; then its \"bridge\" "
+        "says so in one sentence (e.g. \"While the desert burned, a second war "
+        "began in Jerusalem that same morning\"); otherwise bridge is empty.\n"
         "- The viewer has NO background. Keep it SIMPLE:\n"
         f"  * cast: at most {MAX_CAST} people for the whole video, each with a "
         "plain role (\"Egypt's president\"). Pick the leaders on EVERY side "
@@ -343,9 +355,8 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "(\"a desert pass\").\n"
         "  * No unit names or numbers (brigades, divisions). Few figures, "
         "rounded, each only for what it measures.\n"
-        "  * Basics first: the first chapter after the cold open begins with "
-        "who is who (which countries or sides, who leads them) and why the "
-        "key place matters, in plain words, before any events.\n"
+        "  * Basics first: the cast chapter also says, in plain words, why the "
+        "key place matters, before any events.\n"
         "  * Leave out side incidents that would need their own explanation "
         "and do not change the outcome.\n"
         "  * The leaders of the losing side come back in the last chapter: "
@@ -378,7 +389,7 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         f"- Words across all chapters add up to {total_words}.\n\n"
         'Output ONLY JSON: {"question": "", "cast": [{"name": "", "role": ""}], '
         '"places": [""], "chapters": [{"title": "", '
-        '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", '
+        '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", "bridge": "", '
         '"beats": [""], "words": 0, "hook": ""}]}')
     data = call(pool, "You plan documentary stories. Output only JSON.",
                 prompt, max_tokens=5000)
@@ -400,6 +411,15 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
             c["words"] = min(c["words"], 260)
         if c["role"] == "open":
             c["words"] = min(c["words"], 140)
+    if len(chapters) > 1 and cast:
+        # the cast chapter's length follows its shape: a setting, one short
+        # introduction per person, a closing
+        chapters[1]["words"] = 35 + 18 * len(cast) + 35
+    for c in chapters:
+        c["bridge"] = (c.get("bridge") or "").strip() if isinstance(c.get("bridge"), str) else ""
+    chapters[0]["bridge"] = ""
+    if len(chapters) > 1:
+        chapters[1]["bridge"] = ""
     hooks = 0
     for c in chapters:
         c["hook"] = (c.get("hook") or "").strip()
@@ -440,13 +460,20 @@ def chapter_brief(plan, i, sheet):
     after = [f"{j + 1}. {x['title']}" for j, x in enumerate(plan["chapters"])
              if j > i]
     beats = "\n".join(f"- {b}" for b in c["beats"])
-    open_note = (
-        "This is the COLD OPEN: drop the viewer into this moment in the first "
-        "sentence — a time, a place, something happening — and stop before it "
-        "resolves. The chapters after it go back in time and tell how it came "
-        "to this.\n" if c["role"] == "open" else "")
+    if i == 0:
+        note = TEASER_NOTE
+    elif i == 1:
+        note = CAST_NOTE
+    elif (c.get("bridge") or "").strip():
+        note = (f"This chapter goes BACK in time: {c['bridge'].strip()}\n"
+                "Open it with one or two sentences spoken to the viewer that say "
+                "so plainly — where we are going back to and why (\"While all "
+                "eyes were on the desert, a second war was starting in "
+                "Jerusalem. Let's go back to that same Monday morning.\").\n")
+    else:
+        note = ""
     return (
-        f"{open_note}"
+        f"{note}"
         f"The video's story question: {plan['question']}\n"
         f"This chapter covers {c.get('span', '')}, following "
         f"{', '.join(c.get('pov') or ['its people'])}.\n"
@@ -457,6 +484,44 @@ def chapter_brief(plan, i, sheet):
         f"{_cast_note(plan)}\n"
         f"FACT SHEET (the only facts you may use):\n"
         f"{sheet_text(sheet, cast=plan.get('cast'))}")
+
+
+TEASER_NOTE = (
+    "This is the TEASER that opens the video: the big picture only — what "
+    "happened, which countries or sides fought whom, the scale, and why it "
+    "still matters — ending on the question the video answers. Do NOT give "
+    "any specific day, date or clock time, and do NOT name or introduce any "
+    "individual person (say \"Egypt\", \"Israel's leaders\", never a name). "
+    "Make a stranger want the details without giving them.\n")
+
+CAST_NOTE = (
+    "This chapter INTRODUCES THE CAST as a story: who each person is, what "
+    "they want, and who stands with whom and against whom — one flowing "
+    "passage, never a list (\"First there is... then there is...\" is "
+    "forbidden). Every cast member below appears here, introduced with their "
+    "role the first time they are named.\n")
+
+
+def segment_plan(plan, i):
+    """(segment count, rule) for chapters with a fixed shape, or None. The
+    cast chapter needs one short segment per person: each of those segments
+    becomes that person's cast card, so it must be about 5-8 seconds and name
+    only them."""
+    if i != 1:
+        return None
+    cast = plan.get("cast") or []
+    if not cast:
+        return None
+    names = ", ".join(c["name"] for c in cast)
+    n = len(cast) + 2
+    rule = (
+        f"Split it into exactly {n} consecutive segments: first a scene-setting "
+        f"segment that names no one (25-40 words); then ONE segment for EACH cast "
+        f"member, in the order they enter the story ({names}), 14-22 words each, "
+        f"that names that person (with their role) and no other cast member; then "
+        f"a closing segment (25-45 words) that shows how they stand toward each "
+        f"other. Each segment gets its own image prompt.")
+    return n, rule
 
 
 def _cast_note(plan):
@@ -479,6 +544,10 @@ def story_arc(plan, sheet):
     arc = [(c["title"], chapter_brief(plan, i, sheet), c["words"])
            for i, c in enumerate(plan["chapters"])]
     return arc, [c["role"] for c in plan["chapters"]], [c["hook"] for c in plan["chapters"]]
+
+
+def segment_plans(plan):
+    return [segment_plan(plan, i) for i in range(len(plan["chapters"]))]
 
 
 def save(build_dir, **parts):
@@ -585,3 +654,78 @@ def viewer_check(pool, text, earlier, call):
         return []
     items = (data or {}).get("confusing") if isinstance(data, dict) else None
     return [str(x).strip() for x in (items or []) if str(x).strip()][:5]
+
+
+# ---------------------------------------------------------------------------
+# 6. Structure checks (docs/VIDEO_SPEC.md 1-3), by code, per chapter
+# ---------------------------------------------------------------------------
+
+BRIDGE_WORDS = ("back", "meanwhile", "earlier", "same day", "same morning",
+                "same night", "same time", "same hour", "while", "rewind",
+                "at the same", "that same", "hours before", "days before")
+CAST_SEGMENT_MAX_WORDS = 26
+
+
+def _dates_in(text, year):
+    from date_ticker import find_dates
+    words = [{"word": w, "start": 0.0} for w in (text or "").split()]
+    return find_dates(words, {"year": year})
+
+
+def _sn(name):
+    parts = [w for w in re.findall(r"[a-z]+", (name or "").lower()) if len(w) > 2]
+    return parts[-1] if parts else ""
+
+
+def structure_issues(i, plan, segments, earlier_text, era_year):
+    """What breaks the agreed structure in chapter i, as plain instructions
+    for a rewrite. [] when it is right."""
+    texts = [s.get("narration", "") for s in segments]
+    text = " ".join(texts)
+    low = text.lower()
+    cast = plan.get("cast") or []
+    issues = []
+    if i == 0:
+        dated = [d["label"] for d in _dates_in(text, era_year) if d["kind"] != "year"]
+        if dated or re.search(r"\b\d{1,2}:\d{2}\b|\bo'clock\b", low):
+            issues.append("The teaser gives specific dates or times (" + ", ".join(dated) +
+                          "). Remove them: the big picture only.")
+        named = [c["name"] for c in cast
+                 if _sn(c["name"]) and re.search(rf"\b{_sn(c['name'])}\b", low)]
+        if named:
+            issues.append("The teaser names individuals (" + ", ".join(named) +
+                          "). Speak of countries and sides instead.")
+    elif i == 1 and cast:
+        seg_low = [t.lower() for t in texts]
+        for c in cast:
+            sn = _sn(c["name"])
+            hits = [k for k, t in enumerate(seg_low) if re.search(rf"\b{sn}\b", t)]
+            if not hits:
+                issues.append(f"{c['name']} ({c.get('role', '')}) is never introduced. "
+                              f"Give them a segment of their own.")
+                continue
+            k = hits[0]
+            others = [o["name"] for o in cast if o is not c and _sn(o["name"])
+                      and re.search(rf"\b{_sn(o['name'])}\b", seg_low[k])]
+            n = len(texts[k].split())
+            if others:
+                issues.append(f"{c['name']} is introduced in the same segment as "
+                              f"{', '.join(others)}. Each person gets a segment of their own.")
+            if n > CAST_SEGMENT_MAX_WORDS:
+                issues.append(f"{c['name']}'s introduction is {n} words; keep it to 14-22.")
+        if re.search(r"\b(first|then|next|finally)\s*,?\s+(there\s+(is|was)|we\s+have)\b", low):
+            issues.append("The cast is presented as a list (\"first there is... then...\"). "
+                          "Tell it as one flowing story.")
+    elif i >= 2:
+        before = [d for d in _dates_in(earlier_text, era_year) if d["kind"] == "day"]
+        here = [d for d in _dates_in(text, era_year) if d["kind"] == "day"]
+        if before and here and here[0]["ord"] < before[-1]["ord"]:
+            opening = " ".join(re.split(r"(?<=[.!?])\s+", text)[:2]).lower()
+            if not any(w in opening for w in BRIDGE_WORDS):
+                issues.append(
+                    f"This chapter goes back in time (to {here[0]['label']}, after the "
+                    f"previous chapter reached {before[-1]['label']}) without saying so. "
+                    f"Open with one or two sentences spoken to the viewer that take them "
+                    f"back (\"While all eyes were on the desert, a second war was "
+                    f"starting elsewhere. Let's go back to that same morning.\").")
+    return issues

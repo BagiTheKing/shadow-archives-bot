@@ -773,7 +773,8 @@ def _handoff_rule(next_heading) -> str:
 
 def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
                     era_year=None, covered=None, episode_format=None,
-                    next_heading=None, words_per_image=None, story_hook=None):
+                    next_heading=None, words_per_image=None, story_hook=None,
+                    segment_rule=None):
     n_images = max(2, round(words / (words_per_image or WORDS_PER_IMAGE)))
 
     # The channel's promise for this episode type. Stated on every chapter
@@ -815,10 +816,12 @@ def _chapter_prompt(topic, heading, brief, words, previous_tail, feedback="",
         f"Write the chapter titled \"{heading}\".\n"
         f"Its job: {brief}\n\n"
         f"Write approximately {words} words of narration, and no fewer than "
-        f"{int(words * 0.8)}. Split it into exactly "
-        f"{n_images} consecutive segments; each segment gets its own image prompt. "
-        f"Each segment should be roughly {max(20, words // n_images)} words — do not "
-        f"write one-line segments.\n\n"
+        f"{int(words * 0.8)}. "
+        + (f"{segment_rule}\n\n" if segment_rule else
+           f"Split it into exactly "
+           f"{n_images} consecutive segments; each segment gets its own image prompt. "
+           f"Each segment should be roughly {max(20, words // n_images)} words — do not "
+           f"write one-line segments.\n\n") +
         f"{_archive_query_rule(era_year)}\n\n"
         "In exactly ONE segment's narration, mark the single punchiest short "
         f"phrase — {MIN_PUNCH_WORDS} to {MAX_PUNCH_WORDS} words, verbatim, exactly as "
@@ -2207,33 +2210,40 @@ def _generate_joke_beat(pool, topic, decision_text, era_year=None):
 
 
 def _simplify_chapter(pool, story, data, heading, words, said_lines,
-                      said_sentences, enforce_history, rewrite, is_open=False):
+                      said_sentences, enforce_history, rewrite, is_open=False,
+                      c_index=None, earlier_text="", era_year=None):
     """Story mode's simplicity gate. A counting check (names outside the
     cast, places outside the list, unit names, figures, long sentences) and
     a model reading as a viewer with no background; if either finds
     something, ONE rewrite with those exact points. The rewrite is kept only
     if it is a sound chapter that is no harder than the first; out of quota,
     the chapter stays as it was."""
-    from story_mode import simplicity_issues, viewer_check
+    from story_mode import simplicity_issues, viewer_check, structure_issues
     plan, sheet = story["plan"], story["sheet"]
     text = " ".join(x["narration"] for x in data["segments"])
     issues = simplicity_issues(text, plan, sheet)
+    # the agreed structure (docs/VIDEO_SPEC.md 1-3): teaser, cast chapter,
+    # a spoken bridge when a chapter goes back in time
+    shape = (structure_issues(c_index, plan, data["segments"], earlier_text, era_year)
+             if c_index is not None else [])
+    for pt in shape:
+        print(f"   📐 Structure: {pt[:150]}")
     try:
         confusing = viewer_check(pool, text, " ".join(said_lines), _call)
     except QuotaExhausted:
         print("   🛑 Quota gone — simplicity check skipped, chapter kept.")
         return data
-    if not issues and not confusing:
+    if not issues and not confusing and not shape:
         print("   🧒 Simplicity check: clear to a viewer with no background.")
         return data
-    points = issues + [f"A viewer would be lost here: {c}" for c in confusing]
+    points = shape + issues + [f"A viewer would be lost here: {c}" for c in confusing]
     print(f"   🧒 Simplicity check flagged {len(points)} point(s):")
     for pt in points:
         print(f"      - {pt[:140]}")
     feedback = (
-        "Your previous attempt is too hard to follow for a viewer with no "
-        "historical or political background. Write the chapter again, telling "
-        "the same events, and fix exactly these points:\n"
+        "Your previous attempt needs changes. Write the chapter again, telling "
+        "the same events, for a viewer with no historical or political "
+        "background, and fix exactly these points:\n"
         + "\n".join(f"- {pt}" for pt in points)
         + "\n\nYOUR PREVIOUS ATTEMPT:\n" + text)
     try:
@@ -2250,10 +2260,17 @@ def _simplify_chapter(pool, story, data, heading, words, said_lines,
         return data
     new_text = " ".join(x["narration"] for x in candidate["segments"])
     left = simplicity_issues(new_text, plan, sheet)
-    if len(left) > len(issues):
-        print("   ↩️  Rewrite was no simpler — keeping the first version.")
+    shape_left = (structure_issues(c_index, plan, candidate["segments"], earlier_text, era_year)
+                  if c_index is not None else [])
+    # structure first: a rewrite that fixes the structure is kept even if it
+    # is no simpler; one that breaks it is never kept
+    if len(shape_left) > len(shape) or (len(shape_left) == len(shape) and len(left) > len(issues)):
+        print("   ↩️  Rewrite was no better — keeping the first version.")
         return data
-    print(f"   ✅ Simplified: {len(issues)} counted issue(s) -> {len(left)}.")
+    for pt in shape_left:
+        print(f"   ⚠️ Structure still off: {pt[:150]}")
+    print(f"   ✅ Rewritten: structure {len(shape)} -> {len(shape_left)}, "
+          f"simplicity {len(issues)} -> {len(left)}.")
     return candidate
 
 
@@ -2294,10 +2311,14 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     # Story mode (story_mode.py): the arc, the roles and the hooks come from
     # the researched outline, and the writer works under the story voice.
     story_roles = story_hooks = None
+    story_segments = []
+    story_text = ""
     system_prompt = SYSTEM_PROMPT
     if story:
         from story_mode import story_arc, STORY_SYSTEM_PROMPT
         arc, story_roles, story_hooks = story_arc(story["plan"], story["sheet"])
+        from story_mode import segment_plans
+        story_segments = segment_plans(story["plan"])
         system_prompt = STORY_SYSTEM_PROMPT.format(style=STYLE_SUFFIX)
         print(f"📖 Story mode: {len(arc)} chapters, "
               f"~{sum(w for _, _, w in arc)} words — {story['plan']['question']}")
@@ -2317,6 +2338,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                           pacing)
         # The last chapter closes the video; every other one hands off.
         next_heading = arc[c_index + 1][0] if c_index + 1 < len(arc) else None
+        seg_plan = story_segments[c_index] if c_index < len(story_segments) else None
+        seg_rule = seg_plan[1] if seg_plan else None
         print(f"✍️  Chapter: {heading} (~{words} words, {pacing['role']}, "
               f"cut every ~{pacing['words_per_image']} words)...")
         data, best, feedback = None, None, ""
@@ -2342,7 +2365,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                                   next_heading=next_heading,
                                                   words_per_image=pacing["words_per_image"],
                                                   story_hook=(story_hooks[c_index]
-                                                              if story_hooks else None)),
+                                                              if story_hooks else None),
+                                                  segment_rule=seg_rule),
                                   max_tokens=CHAPTER_MAX_TOKENS)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
@@ -2463,9 +2487,12 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                     covered=said_lines, episode_format=episode_format,
                     next_heading=next_heading,
                     words_per_image=pacing["words_per_image"],
-                    story_hook=story_hooks[c_index] if story_hooks else None),
+                    story_hook=story_hooks[c_index] if story_hooks else None,
+                    segment_rule=seg_rule),
                     max_tokens=CHAPTER_MAX_TOKENS),
-                is_open=heading == opening_heading)
+                is_open=heading == opening_heading,
+                c_index=c_index, earlier_text=story_text, era_year=era_year)
+            story_text += " " + " ".join(x["narration"] for x in data["segments"])
 
         segs = data["segments"]
         for s in segs:
@@ -2650,11 +2677,13 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print("🛑 Quota gone before the date stamps; publishing without them.")
     except Exception as e:
         print(f"⚠️ Date stamps skipped ({type(e).__name__}: {e}).")
-    if story:
+    # Cast cards never depend on that request: without it (quota) they are
+    # still placed, the decision maker read from the decision chapter.
+    if story and not any(s.get("dossier") for c in chapters for s in c["scenes"]):
         try:
-            _place_front_stamps(chapters, story["plan"].get("places"))
+            _place_dossier("", chapters, cast=story["plan"].get("cast"))
         except Exception as e:
-            print(f"   ↩️  Front stamps skipped ({type(e).__name__}: {e}).")
+            print(f"   ↩️  Cast cards skipped ({type(e).__name__}: {e}).")
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
@@ -2898,7 +2927,7 @@ def _named_in(name, text):
         for w in words)
 
 
-def _place_map(plan, chapters, topic, after_decision=False):
+def _place_map(plan, chapters, topic, after_decision=False, first=1):
     """Attaches scene["map"] to the first scene that speaks the map's
     target: before the decision for the first map, after it (in the chain,
     not the verdict) for the second. Every name must be in that part's
@@ -2912,7 +2941,7 @@ def _place_map(plan, chapters, topic, after_decision=False):
                  len(chapters))
     # Chapter 0 is the cold open: the hook stays photos. The verdict is the
     # narrator speaking now: no map there either.
-    span = chapters[pivot + 1:-1] if after_decision else chapters[1:pivot]
+    span = chapters[pivot + 1:-1] if after_decision else chapters[first:pivot]
     candidates = [(c, s) for c in span for s in c["scenes"]
                   if not s.get("map") and not s.get("chain")]
     if after_decision and any(s.get("map", {}).get("target", "").lower()
@@ -3168,42 +3197,31 @@ def _place_front_stamps(chapters, places):
         print(f"📍 Front stamps: {'; '.join(placed)}.")
 
 
-CAST_CARD_GAP_WORDS = 130      # ~45-50 s of narration between two cards
 MAX_CAST_CARDS = 5
 
 
 def _place_cast(cast, decision_name, chapters):
-    """Story mode: one cast card per main person, on the first scene after
-    the cold open that speaks their surname — never a chapter's first scene
-    (its title sits where the name lands), a map or a chain, and never two
-    cards within CAST_CARD_GAP_WORDS of each other; a person whose first
-    mention falls too close gets the card at a later mention. Only the
-    decision-maker's card says DECISION MAKER; the others carry their role.
-    The photo swaps sides and the file number counts up."""
+    """Story mode: every cast member's card sits in the cast chapter (the
+    video's second chapter, docs/VIDEO_SPEC.md 2), on the segment that
+    introduces them — one card per segment, never the chapter's first
+    segment (it carries the chapter title), nowhere else in the video. Only
+    the decision-maker's card reads DECISION MAKER; the others carry their
+    role. The photo swaps sides and the file number counts up."""
     def surname(n):
         parts = re.findall(r"[a-z]+", (n or "").lower())
         return parts[-1] if parts else ""
 
     people = [c for c in cast if surname(c.get("name"))][:MAX_CAST_CARDS]
     decider = surname(decision_name)
-    placed, since = [], CAST_CARD_GAP_WORDS
-    for chapter in chapters[1:]:
-        for i, sc in enumerate(chapter["scenes"]):
-            text = sc["narration"].lower()
-            since += len(text.split())
-            if (i == 0 or sc.get("map") or sc.get("chain") or sc.get("dossier")
-                    or len(text.split()) < 8 or len(placed) >= MAX_CAST_CARDS):
+    placed = []
+    if len(chapters) > 1:
+        for i, sc in enumerate(chapters[1]["scenes"]):
+            if i == 0 or sc.get("map") or len(placed) >= len(people):
                 continue
-            gap = since - len(text.split())
+            text = sc["narration"].lower()
             hits = []
             for c in people:
                 if c["name"] in placed:
-                    continue
-                # the decision maker's card matters most: it only has to
-                # clear the card before it, not the full spacing
-                need = (CAST_CARD_GAP_WORDS // 3 if decider and surname(c["name"]) == decider
-                        else CAST_CARD_GAP_WORDS)
-                if gap < need:
                     continue
                 m = re.search(rf"\b{re.escape(surname(c['name']))}\b", text)
                 if m:
@@ -3217,12 +3235,10 @@ def _place_cast(cast, decision_name, chapters):
                              "decision": bool(decider) and surname(c["name"]) == decider,
                              "file_no": n, "side": "left" if n % 2 else "right"}
             placed.append(c["name"])
-            since = len(text.split())
-    if placed:
-        print(f"🎭 Cast cards planned: {', '.join(placed)}"
-              + (f" (decision maker: {decision_name})" if decision_name else "") + ".")
-    else:
-        print("   ↩️  No cast cards: no cast member is named after the cold open.")
+    missing = [c["name"] for c in people if c["name"] not in placed]
+    print(f"🎭 Cast cards planned in the cast chapter: {', '.join(placed) or 'none'}"
+          + (f" (decision maker: {decision_name})" if decision_name else "")
+          + (f"; not introduced there: {', '.join(missing)}" if missing else "") + ".")
 
 
 def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
@@ -3287,10 +3303,12 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
     maps = (data or {}).get("maps") or [(data or {}).get("map")]
+    # story mode: no map in the teaser or over a cast introduction
+    # (docs/VIDEO_SPEC.md 1-2)
     for i, plan in enumerate(maps[:2]):
         try:
             _place_map(plan, chapters, topic,
-                       after_decision=(i == 1))
+                       after_decision=(i == 1), first=2 if cast else 1)
         except Exception as e:
             print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
     # The chain/timeline cards were dropped after the third Six-Day War cut

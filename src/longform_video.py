@@ -942,6 +942,7 @@ def build_score(acts, total: float, out: str):
 # notices the sound design as sound design, it reads as a template channel.
 IMPACT_GAIN = 0.28
 WHOOSH_GAIN = 0.3           # into a cast card's freeze
+STAMPS_ENABLED = False
 ROLL_GAIN = 0.05            # date ticker: a tick per day rolled past
 DATEHIT_GAIN = 0.4          # date ticker: landing on the spoken date
 RISER_GAIN = 0.16
@@ -1443,8 +1444,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 # the portrait is the one picture on screen: its Commons
                 # credit spans the whole scene
                 s["video_path"], s["_is_map"] = got[0], True
-                keep = list(s.get("credit") or []) if got[1].get("scene_photo") else []
-                s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]] + keep[:1]
+                s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]]
         shots = len(s.get("image_paths") or [1])
         kind = (("map" if s.get("map") else "chain" if s.get("chain")
                  else "cast card" if s.get("dossier") else "graphic")
@@ -1504,7 +1504,10 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 print(f"⚠️ Silence beat skipped ({type(e).__name__}: {e}).")
         prev_chapter_start = cursor
 
-        stamp = (group[0].get("stamp") or "").strip()
+        # The top-left date/place stamps are off (docs/VIDEO_SPEC.md 9): set
+        # once per chapter, they contradicted the date ruler, which follows
+        # every date the narrator says.
+        stamp = (group[0].get("stamp") or "").strip() if STAMPS_ENABLED else ""
         if stamp:
             stamp_cues.append((cursor + 0.6, stamp))
             rhythm_cues.append(("keys", cursor + 0.6, len(stamp) * TYPE_RATE))
@@ -1533,7 +1536,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
             scene_offsets.append((g, cursor + o))
-            front = (g.get("front_stamp") or "").strip()
+            front = (g.get("front_stamp") or "").strip() if STAMPS_ENABLED else ""
             if front:
                 stamp_cues.append((cursor + o + 0.5, front))
                 rhythm_cues.append(("keys", cursor + o + 0.5, len(front) * TYPE_RATE))
