@@ -1895,6 +1895,7 @@ def _names_in(topic, limit=3):
 
 
 _NOT_A_NAME = {"article", "quoted", "quote", "by", "describing", "about", "said",
+               "radio", "broadcast", "television", "tv", "newspaper", "agency",
                "wrote", "according", "the", "unknown", "anonymous", "source",
                "report", "reports", "newspaper", "editorial", "project"}
 _NAME_PARTICLES = {"al", "el", "bin", "ibn", "de", "da", "di", "van", "von", "der", "la", "le", "of", "abu", "ben"}
@@ -1905,6 +1906,8 @@ def _speaker_ok(name):
     "Hussein of Jordan"), not a description of a source. The Six-Day War
     run printed "Quoted by Project Herzl." and "The article describing
     Yitzhak Rabin" under its two cards."""
+    if re.search(r"\d", name or ""):
+        return False      # "Cairo Radio, May 25, 1967" is a broadcast, not a person
     words = re.findall(r"[A-Za-z][A-Za-z'.]*", name or "")
     if not (1 <= len(words) <= 6):
         return False
@@ -1918,7 +1921,10 @@ def _quote_ok(text):
     fragment lifted from the middle of an article sentence ("chose the
     least ostentatious, the Six-Day War...")."""
     t = (text or "").strip().strip('"“”')
-    return bool(t) and (t[0].isupper() or t[0].isdigit()) and t[-1] in ".!?…"
+    # an edited quote ("Millions of Arabs are … preparing") is not what was said
+    if "…" in t or "..." in t:
+        return False
+    return bool(t) and (t[0].isupper() or t[0].isdigit()) and t[-1] in ".!?"
 
 
 def _gather_quote_candidates(pool, topic, sheet_quotes=None):

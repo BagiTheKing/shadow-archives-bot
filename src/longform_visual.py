@@ -277,6 +277,27 @@ MAX_POOL_CLIPS = 6
 POOL_SEGMENT_SECONDS = 9
 
 
+# A newsreel joins the pool only if it is about the fighting: its title and
+# description name combat, and its title names no diplomacy. The fifth
+# Six-Day War run filled five battle scenes with the UN Security Council
+# from the "1967-06-13 Cease-Fire" reel, and opened on a slideshow of the
+# general's announcement.
+POOL_WAR_WORDS = ("battle", "war ", "fighting", "attack", "offensive", "troops",
+                  "tanks", "front", "invasion", "erupts", "air strike", "airstrike",
+                  "bombing", "combat", "army", "soldiers")
+POOL_PEACE_WORDS = ("cease-fire", "ceasefire", "cease fire", "accepts", " un ",
+                    "united nations", "security council", "talks", "peace",
+                    "declaration", "voice", "recording", "announcement", "speech",
+                    "interview", "press conference", "resolution", "aid", "hulpacties")
+
+
+def _pool_ok(c):
+    title = f" {c.get('title', '').lower()} "
+    about = f" {c.get('about', '').lower()} "
+    return (any(w in title + about for w in POOL_WAR_WORDS)
+            and not any(w in title for w in POOL_PEACE_WORDS))
+
+
 class _WarPool:
     """The story's own newsreels, cut into fresh segments for battle
     scenes. Only clips dated to the story's year (or the year after), and
@@ -297,7 +318,7 @@ class _WarPool:
             for c in search_commons_video(q, era=self.era, limit=15):
                 if c["url"] in seen or c.get("year") not in (self.era, self.era + 1):
                     continue
-                if (c.get("duration") or 0) < 20:
+                if (c.get("duration") or 0) < 20 or not _pool_ok(c):
                     continue
                 seen.add(c["url"])
                 self.clips.append(c)
@@ -311,13 +332,18 @@ class _WarPool:
         video_path = os.path.join(output_dir, f"lf_archival_video_{idx:03d}.mp4")
         poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
         for c in self.clips:
+            if c.get("_bad"):
+                continue
             dur = c["duration"]
             lo, hi = (8.0, dur * 0.35) if dur > 150 else (1.5, dur - 2.0)
             pos = self.cursor.get(c["url"], lo)
             while pos + POOL_SEGMENT_SECONDS <= hi:
                 self.cursor[c["url"]] = pos + POOL_SEGMENT_SECONDS
-                if (fetch_commons_video(c, video_path, seconds=POOL_SEGMENT_SECONDS, start=pos)
-                        and extract_poster_frame(video_path, poster, KB_W, KB_H)):
+                got = fetch_commons_video(c, video_path, seconds=POOL_SEGMENT_SECONDS, start=pos)
+                if not got and c.get("_static"):
+                    c["_bad"] = True       # a slideshow: drop the whole clip
+                    break
+                if got and extract_poster_frame(video_path, poster, KB_W, KB_H):
                     self.used += 1
                     return (video_path, poster,
                             format_credit(c) + ", newsreel excerpt", f"{c['title']} @{pos:.0f}s")

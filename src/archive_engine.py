@@ -555,7 +555,7 @@ def format_archival_video_credit(identifier: str, title: str) -> str:
 # ---------------------------------------------------------------------------
 
 # Modern productions about the past, not footage of it.
-VIDEO_JUNK_WORDS = ("interview", "documentary", "trailer", "lecture", "animation",
+VIDEO_JUNK_WORDS = ("voice recording", "announcement", "audio", "interview", "documentary", "trailer", "lecture", "animation",
                     "animated", "game", "tutorial", "podcast", "wikipedia",
                     "slideshow", "timelapse", "time-lapse", "reenactment",
                     "re-enactment", "museum", "memorial", "anniversary",
@@ -756,6 +756,7 @@ def fetch_commons_video(candidate: dict, output_path: str,
                 os.remove(tmp)
     if ok and is_static(output_path):
         print(f"   ↩️  {candidate.get('title')!r}: still photographs, not footage — skipped.")
+        candidate["_static"] = True
         ok = False
     if not ok and os.path.exists(output_path):
         os.remove(output_path)
