@@ -1,0 +1,141 @@
+{
+  "images": [],
+  "people": [
+    {
+      "name": "Gamal Abdel Nasser",
+      "photo": "people/00/lf_dossier_photo.jpg",
+      "lines": [
+        "PRESIDENT OF EGYPT FROM 1956 TO 1970"
+      ],
+      "credit": "Stevan Kragujevic, Gamal Abdel Naser u Beogradu, 1962.jpg — Stevan Kragujević — CC BY-SA 3.0 (via Wikimedia Commons)"
+    },
+    {
+      "name": "Hussein of Jordan",
+      "photo": "people/01/lf_dossier_photo.jpg",
+      "lines": [
+        "KING OF JORDAN FROM 1952 TO 1999"
+      ],
+      "credit": "King Hussein 1963.jpg — André Cros — CC BY-SA 4.0 (via Wikimedia Commons)"
+    },
+    {
+      "name": "Moshe Dayan",
+      "photo": "people/02/lf_dossier_photo.jpg",
+      "lines": [
+        "ISRAELI MILITARY LEADER AND POLITICIAN",
+        "1915 – 1981"
+      ],
+      "credit": "Moshe Dayan, Chief of General Staff.jpg — IDF Spokesperson's Unit photographer — CC BY-SA 3.0 (via Wikimedia Commons)"
+    },
+    {
+      "name": "Nureddin al-Atassi",
+      "photo": "people/03/lf_dossier_photo.jpg",
+      "lines": [
+        "PRESIDENT OF SYRIA",
+        "1966 – 1970"
+      ],
+      "credit": "Nureddin Atassi (cropped)(b).jpg — Unknown authorUnknown author — Public domain (via Wikimedia Commons)"
+    }
+  ],
+  "footage": [
+    {
+      "name": "Six-Day War",
+      "file": "footage/00.webm",
+      "title": "Six-Day War. General Yeshayahu Gavish announcement about Sinai Campaign",
+      "year": 1967,
+      "duration": 70.759,
+      "license": "CC BY-SA 3.0",
+      "artist": "IDFA Israel Defense Forces &amp; Defense Establishment Archi"
+    },
+    {
+      "name": "Six-Day War",
+      "file": "footage/01.webm",
+      "title": "1967-06-13 Cease-Fire",
+      "year": 1967,
+      "duration": 290.66739229024944,
+      "license": "Public domain",
+      "artist": "Universal"
+    },
+    {
+      "name": "Six-Day War",
+      "file": "footage/02.webm",
+      "title": "1967-06-09 Egypt Accepts UN Cease-Fire",
+      "year": 1967,
+      "duration": 274.25088435374147,
+      "license": "Public domain",
+      "artist": "Universal Newsreels"
+    },
+    {
+      "name": "Six-Day War",
+      "file": "footage/03.webm",
+      "title": "1967-06-06 Mid-East",
+      "year": 1967,
+      "duration": 278.2679365079365,
+      "license": "Public domain",
+      "artist": "Universal"
+    },
+    {
+      "name": "Israel 1967",
+      "file": "footage/04.webm",
+      "title": "1967-06-06 Mid-East",
+      "year": 1967,
+      "duration": 278.2679365079365,
+      "license": "Public domain",
+      "artist": "Universal"
+    },
+    {
+      "name": "Israel 1967",
+      "file": "footage/05.webm",
+      "title": "1967-06-13 Cease-Fire",
+      "year": 1967,
+      "duration": 290.66739229024944,
+      "license": "Public domain",
+      "artist": "Universal"
+    },
+    {
+      "name": "Israel 1967",
+      "file": "footage/06.webm",
+      "title": "1967-06-09 Egypt Accepts UN Cease-Fire",
+      "year": 1967,
+      "duration": 274.25088435374147,
+      "license": "Public domain",
+      "artist": "Universal Newsreels"
+    },
+    {
+      "name": "Israel 1967",
+      "file": "footage/07.webm",
+      "title": "Hulpacties voor Israël-513920",
+      "year": 1967,
+      "duration": 129.38448979591837,
+      "license": "CC BY-SA 3.0 nl",
+      "artist": "Polygoon-Profilti (producent) / Nederlands Instituut voor Be"
+    }
+  ],
+  "lines": [
+    {
+      "file": "line0.mp3",
+      "text": "In Cairo, Egypt's president, Gamal Abdel Nasser, closed the Straits of Tiran to Israeli ships.",
+      "duration": 6.336
+    },
+    {
+      "file": "line1.mp3",
+      "text": "In Amman, Jordan's King Hussein made his choice. He flew to Cairo.",
+      "duration": 4.488
+    },
+    {
+      "file": "line2.mp3",
+      "text": "In Israel, the new defence minister, Moshe Dayan, wanted to strike first.",
+      "duration": 4.56
+    },
+    {
+      "file": "line3.mp3",
+      "text": "On the twenty-second of May, Egypt closed the straits. On the fifth of June, Israel struck first. On the seventh, the Old City of Jerusalem fell. And on the tenth, the guns went quiet.",
+      "duration": 10.344
+    },
+    {
+      "file": "line4.mp3",
+      "text": "On the twenty-second of May, Egypt closed the straits. For two weeks, the world held its breath. Then, at seven forty-five on the morning of the fifth of June, Israeli jets crossed into Egypt. On the seventh, the Old City of Jerusalem fell. And on the tenth, the guns went quiet.",
+      "duration": 14.52
+    }
+  ],
+  "voice": "am_onyx"
+}
