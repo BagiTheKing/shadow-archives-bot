@@ -72,7 +72,7 @@ Never three long sentences in a row.
 - Plain language for a general audience: explain any military, political or technical \
 term in the same sentence.
 - Speak to the viewer at turning points, the way a storyteller does ("Remember \
-Nasser's gamble?", "Now watch what happens next", "Let's go back to that morning") \
+that promise?", "Now watch what happens next", "Let's go back to that morning") \
 — once or twice a chapter, never in every sentence. No jokes. No fake \
 suspense lines. The events supply the drama.
 - Do not take sides between present-day states. Narrate what people did and what it \
@@ -343,8 +343,8 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "follows 1-2 people from the cast (pov), and has 3-5 beats: concrete "
         "things that happen, taken from the timeline. A chapter may go BACK "
         "in time only to follow another front or side; then its \"bridge\" "
-        "says so in one sentence (e.g. \"While the desert burned, a second war "
-        "began in Jerusalem that same morning\"); otherwise bridge is empty.\n"
+        "says so in one sentence naming where and when we go back to; "
+        "otherwise bridge is empty.\n"
         "- The viewer has NO background. Keep it SIMPLE:\n"
         f"  * cast: at most {MAX_CAST} people for the whole video, each with a "
         "plain role (\"Egypt's president\"). Pick the leaders on EVERY side "
@@ -414,7 +414,7 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
     if len(chapters) > 1 and cast:
         # the cast chapter's length follows its shape: a setting, one short
         # introduction per person, a closing
-        chapters[1]["words"] = 35 + 18 * len(cast) + 35
+        chapters[1]["words"] = 35 + 22 * len(cast) + 35
     for c in chapters:
         c["bridge"] = (c.get("bridge") or "").strip() if isinstance(c.get("bridge"), str) else ""
     chapters[0]["bridge"] = ""
@@ -466,10 +466,12 @@ def chapter_brief(plan, i, sheet):
         note = CAST_NOTE
     elif (c.get("bridge") or "").strip():
         note = (f"This chapter goes BACK in time: {c['bridge'].strip()}\n"
-                "Open it with one or two sentences spoken to the viewer that say "
-                "so plainly — where we are going back to and why (\"While all "
-                "eyes were on the desert, a second war was starting in "
-                "Jerusalem. Let's go back to that same Monday morning.\").\n")
+                "Open it with one or two sentences of your own, spoken to the "
+                "viewer, that say so plainly: what was happening elsewhere at "
+                "the same time, and that we are going back to that moment "
+                "(the shape is \"While <the earlier events>, <something else> "
+                "was starting in <place>. Let's go back to <that moment>.\" — "
+                "fill it from THIS story only).\n")
     else:
         note = ""
     return (
@@ -517,10 +519,13 @@ def segment_plan(plan, i):
     rule = (
         f"Split it into exactly {n} consecutive segments: first a scene-setting "
         f"segment that names no one (25-40 words); then ONE segment for EACH cast "
-        f"member, in the order they enter the story ({names}), 14-22 words each, "
-        f"that names that person (with their role) and no other cast member; then "
-        f"a closing segment (25-45 words) that shows how they stand toward each "
-        f"other. Each segment gets its own image prompt.")
+        f"member, in the order they enter the story ({names}), 16-26 words each: "
+        f"it introduces that person (name and role) through what they want and "
+        f"how they stand toward the people ALREADY introduced — ally, rival, "
+        f"enemy — and introduces no one new; then a closing segment (25-45 "
+        f"words) that shows the sides as they stand. It reads as one story, each "
+        f"segment leading into the next, never a list. Each segment gets its own "
+        f"image prompt.")
     return n, rule
 
 
@@ -663,7 +668,7 @@ def viewer_check(pool, text, earlier, call):
 BRIDGE_WORDS = ("back", "meanwhile", "earlier", "same day", "same morning",
                 "same night", "same time", "same hour", "while", "rewind",
                 "at the same", "that same", "hours before", "days before")
-CAST_SEGMENT_MAX_WORDS = 26
+CAST_SEGMENT_MAX_WORDS = 30
 
 
 def _dates_in(text, year):
@@ -677,14 +682,32 @@ def _sn(name):
     return parts[-1] if parts else ""
 
 
-def structure_issues(i, plan, segments, earlier_text, era_year):
+def quote_issues(text, sheet):
+    """A quote in the narration must be word for word one of the sheet's
+    (docs/VIDEO_SPEC.md 6), and nothing may dangle after its closing mark
+    (the sixth script had: "...bloodied us." crushing them under our treads)."""
+    issues = []
+    known = [_norm(q.get("text")) for q in (sheet or {}).get("quotes") or []]
+    for m in re.finditer(r'["“]([^"”]{8,}?)["”]', text or ""):
+        said = _norm(m.group(1)).strip(" .,;:!?")
+        if known and not any(said in k for k in known):
+            issues.append(f"The quote \"{m.group(1)[:60]}\" is not word for word from "
+                          f"the fact sheet. Quote it exactly, or tell it without quote marks.")
+        tail = (text[m.end():m.end() + 40] or "")
+        if re.match(r"\s+[a-z]", tail) and not re.match(r"\s+(he|she|they|said|says|wrote|recalled|added|noted)\b", tail):
+            issues.append(f"Words run on after the quote \"{m.group(1)[:40]}\" without "
+                          f"a sentence of their own. Fix that sentence.")
+    return issues
+
+
+def structure_issues(i, plan, segments, earlier_text, era_year, sheet=None):
     """What breaks the agreed structure in chapter i, as plain instructions
     for a rewrite. [] when it is right."""
     texts = [s.get("narration", "") for s in segments]
     text = " ".join(texts)
     low = text.lower()
     cast = plan.get("cast") or []
-    issues = []
+    issues = quote_issues(text, sheet)
     if i == 0:
         dated = [d["label"] for d in _dates_in(text, era_year) if d["kind"] != "year"]
         if dated or re.search(r"\b\d{1,2}:\d{2}\b|\bo'clock\b", low):
@@ -705,14 +728,19 @@ def structure_issues(i, plan, segments, earlier_text, era_year):
                               f"Give them a segment of their own.")
                 continue
             k = hits[0]
+            # two people introduced (first named) in the same segment; naming
+            # someone already introduced is how relationships are told
+            def first_seg(o):
+                return next((j for j, t in enumerate(seg_low)
+                             if re.search(rf"\b{_sn(o['name'])}\b", t)), None)
             others = [o["name"] for o in cast if o is not c and _sn(o["name"])
-                      and re.search(rf"\b{_sn(o['name'])}\b", seg_low[k])]
+                      and first_seg(o) == k]
             n = len(texts[k].split())
             if others:
                 issues.append(f"{c['name']} is introduced in the same segment as "
                               f"{', '.join(others)}. Each person gets a segment of their own.")
             if n > CAST_SEGMENT_MAX_WORDS:
-                issues.append(f"{c['name']}'s introduction is {n} words; keep it to 14-22.")
+                issues.append(f"{c['name']}'s introduction is {n} words; keep it to 16-26.")
         if re.search(r"\b(first|then|next|finally)\s*,?\s+(there\s+(is|was)|we\s+have)\b", low):
             issues.append("The cast is presented as a list (\"first there is... then...\"). "
                           "Tell it as one flowing story.")
@@ -726,6 +754,6 @@ def structure_issues(i, plan, segments, earlier_text, era_year):
                     f"This chapter goes back in time (to {here[0]['label']}, after the "
                     f"previous chapter reached {before[-1]['label']}) without saying so. "
                     f"Open with one or two sentences spoken to the viewer that take them "
-                    f"back (\"While all eyes were on the desert, a second war was "
-                    f"starting elsewhere. Let's go back to that same morning.\").")
+                    f"back (the shape: \"While <earlier events>, <something else> "
+                    f"was starting in <place>. Let's go back to <that moment>.\").")
     return issues

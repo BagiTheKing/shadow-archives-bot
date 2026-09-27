@@ -2224,7 +2224,7 @@ def _simplify_chapter(pool, story, data, heading, words, said_lines,
     issues = simplicity_issues(text, plan, sheet)
     # the agreed structure (docs/VIDEO_SPEC.md 1-3): teaser, cast chapter,
     # a spoken bridge when a chapter goes back in time
-    shape = (structure_issues(c_index, plan, data["segments"], earlier_text, era_year)
+    shape = (structure_issues(c_index, plan, data["segments"], earlier_text, era_year, sheet)
              if c_index is not None else [])
     for pt in shape:
         print(f"   📐 Structure: {pt[:150]}")
@@ -2260,7 +2260,7 @@ def _simplify_chapter(pool, story, data, heading, words, said_lines,
         return data
     new_text = " ".join(x["narration"] for x in candidate["segments"])
     left = simplicity_issues(new_text, plan, sheet)
-    shape_left = (structure_issues(c_index, plan, candidate["segments"], earlier_text, era_year)
+    shape_left = (structure_issues(c_index, plan, candidate["segments"], earlier_text, era_year, sheet)
                   if c_index is not None else [])
     # structure first: a rewrite that fixes the structure is kept even if it
     # is no simpler; one that breaks it is never kept
@@ -2532,7 +2532,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # above) so it never counts as narrated fact a later chapter must
         # avoid repeating, and never becomes the "previous chapter ended
         # with" continuity anchor for THE CHAIN.
-        if heading == "The Decision":
+        # The old arc's one joke; never in story mode, where a pivot chapter
+        # may also be titled "The Decision" (the sixth script got one).
+        if heading == "The Decision" and not story:
             joke = _generate_joke_beat(pool, topic, chapter_text, era_year=era_year)
             if joke:
                 segs.append(joke)
