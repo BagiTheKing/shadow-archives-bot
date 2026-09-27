@@ -451,6 +451,17 @@ def live_upcoming(avoid_titles):
 
     Never raises: a dead feed, a quota wall or an anchor that clears no gate
     returns None and the promise comes from the pool as before.
+
+    The long-form "timely" lane runs this exact same channel-watch call on
+    its own schedule and always takes the single top-ranked candidate
+    (ranked=True below takes "the highest one it can anchor" — see
+    select_historical_anchor). Left alone, this run could independently
+    land on that same top candidate before the long-form video is even
+    published: avoid_titles is read back from the channel, and a video
+    that has not gone out yet is invisible to it. Dropping the top
+    candidate here is a stateless way to make the two lanes structurally
+    prefer different subjects — no new file, no cross-run coordination,
+    just never contesting the one pick the other lane always makes first.
     """
     if SHORTS_LIVE_MODE == "off" or not os.getenv("WATCH_CHANNEL_HANDLE"):
         return None
@@ -460,6 +471,8 @@ def live_upcoming(avoid_titles):
         from longform_llm import select_historical_anchor
         pool = get_pool()
         candidates = get_watch_candidates(pool=pool, avoid_titles=avoid_titles)
+        if len(candidates) > 1:
+            candidates = candidates[1:]
         anchor = select_historical_anchor(candidates, pool=pool,
                                           avoid_titles=avoid_titles, ranked=True)
     except Exception as e:
