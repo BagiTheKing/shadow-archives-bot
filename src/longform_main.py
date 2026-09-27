@@ -129,7 +129,11 @@ def build_credit_block(scenes):
     return "\n\n".join(parts)
 
 
-def check_visual_quality(workers_ai_generated: int, total_generated: int) -> None:
+GENERATED_SHARE_TO_GATE = 0.3
+
+
+def check_visual_quality(workers_ai_generated: int, total_generated: int,
+                         total_shots: int = 0) -> None:
     """Halts before the render when the generated frames did not come from
     the good generator. Ported from main.py's check_visual_quality — see the
     comment on MIN_PREFERRED_FRAMES above for why.
@@ -144,6 +148,15 @@ def check_visual_quality(workers_ai_generated: int, total_generated: int) -> Non
         return
     if not total_generated:
         return  # every frame was archival or b-roll — nothing to gate on
+    if total_shots and total_generated / total_shots < GENERATED_SHARE_TO_GATE:
+        # A video that is mostly real archive: a handful of fallback frames
+        # does not make it "visibly worse". The fourth Six-Day War run was
+        # halted over 20 generated frames in a video of real photos and
+        # footage, after an hour of work.
+        print(f"🖼️  {total_generated} generated frame(s) of {total_shots} shots "
+              f"({workers_ai_generated} from Workers AI) — mostly real archive, "
+              f"no quality halt.")
+        return
 
     share = workers_ai_generated / total_generated
     if share >= MIN_PREFERRED_FRAMES:
@@ -244,11 +257,39 @@ def build_story(topic, build_dir):
         return None
     print(f"📚 Research: {article['title']} ({len(article['text']):,} chars)")
     pool = _pool()
-    sheet = sm.fact_sheet(pool, topic, article, _call)
+    # A weak model's sheet (the fourth run's had no figures and no quotes)
+    # gets one more try on another model; the richer sheet is kept.
+    import longform_llm as _llm
+    sheet, tried_sheet = None, set()
+    for attempt in range(2):
+        def scall(p, system, user, max_tokens):
+            return _call(p, system, user, max_tokens=max_tokens, skip=tried_sheet)
+        got = sm.fact_sheet(pool, topic, article, scall)
+        if _llm._last_model:
+            tried_sheet.add(_llm._last_model)
+        size = lambda sh: (len(sh["timeline"]) + 2 * len(sh["quotes"]) + len(sh["numbers"])) if sh else -1
+        if size(got) > size(sheet):
+            sheet = got
+        if sheet and sheet["quotes"] and sheet["numbers"]:
+            break
+        if attempt == 0:
+            print("   ↩️  Thin fact sheet — trying once more on another model.")
     if not sheet:
         print("⚠️ Story mode: the fact sheet came back too thin to tell a story.")
         return None
-    plan = sm.outline(pool, topic, sheet, _call)
+    # Three tries, each on a different model: one weak model's malformed
+    # outline must not cost the whole story (it did on the fourth run).
+    tried, plan = set(), None
+    for attempt in range(3):
+        def call(p, system, user, max_tokens):
+            return _call(p, system, user, max_tokens=max_tokens, skip=tried)
+        plan = sm.outline(pool, topic, sheet, call)
+        if _llm._last_model:
+            tried.add(_llm._last_model)
+        if plan:
+            break
+        print(f"   ↩️  Outline attempt {attempt + 1}/3 unusable "
+              f"({_llm._last_model or 'no model'}) — trying another model.")
     if not plan:
         print("⚠️ Story mode: the outline did not come back usable.")
         return None
@@ -396,8 +437,13 @@ def main():
             story = build_story(topic, BUILD_DIR)
             if story:
                 era_year = era_year or story.get("era_year")
-            elif stage != "full":
-                print("❌ Story mode could not build a fact sheet and outline.")
+            elif stage != "full" or story_topic:
+                # A story topic asked for by name is never written in the old
+                # six-chapter arc: the fourth Six-Day War run did exactly that
+                # when its outline failed, and the courtroom format is what
+                # story mode replaced. No video beats that video.
+                print("❌ Story mode could not build a fact sheet and outline — "
+                      "stopping rather than writing it in the standard arc.")
                 raise SystemExit(1)
             else:
                 print("↩️  Story mode unavailable — writing with the standard arc.")
@@ -461,7 +507,8 @@ def main():
 
     # Before spending the render, not after: a video nobody should publish is
     # not worth an hour of Actions time either.
-    check_visual_quality(workers_ai_generated, total_generated)
+    check_visual_quality(workers_ai_generated, total_generated,
+                         total_shots=sum(len(s.get("image_paths") or [1]) for s in usable))
 
     # Phase 3: render
     video_path, total, chapter_marks, music_attribution = generate_longform_video(

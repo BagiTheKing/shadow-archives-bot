@@ -383,7 +383,8 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
     data = call(pool, "You plan documentary stories. Output only JSON.",
                 prompt, max_tokens=5000)
     chapters = (data or {}).get("chapters") if isinstance(data, dict) else None
-    if not chapters or not (5 <= len(chapters) <= 7):
+    if not chapters or not (5 <= len(chapters) <= 8):
+        print(f"   ↩️  Outline had {len(chapters or [])} chapter(s); 5-8 needed.")
         return None
     cast = [c for c in (data.get("cast") or [])
             if isinstance(c, dict) and c.get("name")][:MAX_CAST]
