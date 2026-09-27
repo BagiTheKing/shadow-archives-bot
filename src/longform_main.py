@@ -452,7 +452,7 @@ def main():
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
-        scenes, BUILD_DIR)
+        scenes, BUILD_DIR, topic=script.get("topic"))
 
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
     if len(usable) < 8:

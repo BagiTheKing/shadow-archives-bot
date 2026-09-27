@@ -243,13 +243,72 @@ def person_file(name, out_dir):
     return {"photo": photo, "lines": lines, "credit": credit}
 
 
+CARD_MAX = 7.0          # every card runs about the same length
+CARD_LEAD = 2.4         # the card starts this long before the name
+CARD_XFADE = 0.35
+
+
+def _ken_burns(image, seconds, out):
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", image,
+         "-vf", "scale=2400:1350:force_original_aspect_ratio=increase,crop=2400:1350,"
+                "zoompan=z='min(zoom+0.0006,1.08)':d=1:x='iw/2-(iw/zoom/2)':"
+                "y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,format=yuv420p",
+         "-t", f"{seconds:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+         "-r", "30", out], check=True)
+
+
+def _compose(head_img, head_s, card, card_s, tail_s, out):
+    """The scene's own photo, then the card, then the photo again: the card
+    keeps its length whatever the scene's."""
+    parts, fc, n = [], [], 0
+    tmp = []
+    if head_s > 0.2:
+        h = out + ".head.mp4"
+        _ken_burns(head_img, head_s, h)
+        parts.append(h)
+        tmp.append(h)
+    parts.append(card)
+    if tail_s > 0.2:
+        t = out + ".tail.mp4"
+        _ken_burns(head_img, tail_s + CARD_XFADE, t)
+        parts.append(t)
+        tmp.append(t)
+    args = []
+    for p in parts:
+        args += ["-i", p]
+    # same frame rate, timebase and pixel format for every piece, or the
+    # crossfade refuses them
+    norm = ";".join(f"[{i}:v]fps=30,settb=AVTB,setsar=1,format=yuv420p,"
+                    f"scale=1920:1080[n{i}]" for i in range(len(parts)))
+    if tail_s > 0.2:
+        body = len(parts) - 1
+        fc = (f"{norm};{''.join(f'[n{i}]' for i in range(body))}concat=n={body}:v=1[b];"
+              f"[b][n{body}]xfade=transition=fade:duration={CARD_XFADE}:"
+              f"offset={(head_s if head_s > 0.2 else 0) + card_s - CARD_XFADE:.3f},format=yuv420p[v]")
+    else:
+        fc = f"{norm};{''.join(f'[n{i}]' for i in range(len(parts)))}concat=n={len(parts)}:v=1,format=yuv420p[v]"
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args, "-filter_complex", fc,
+                        "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                        "-r", "30", out], check=True)
+    finally:
+        for f in tmp:
+            if os.path.exists(f):
+                os.remove(f)
+    return out
+
+
 def render_dossier_scene(scene, out_mp4, duration, build_dir, era=None):
     """(path, info) for one scene's card, or None. The scene carries
     "dossier" ({"name", and in story mode "shown", "role", "decision",
     "file_no", "side"}) and "words" (narration timings).
 
     The cast card (cast_engine: footage or cut-out portrait, freeze on the
-    name) is tried first; the case-file card is the fallback."""
+    name) is tried first; the case-file card is the fallback. Either way the
+    card itself runs at most about CARD_MAX seconds: in a longer scene the
+    scene's own photo plays before and after it (the first Six-Day War cut
+    held Nasser's card for 13.5 s against 6-8 s for the others)."""
     d = scene.get("dossier") or {}
     name = (d.get("name") or "").strip()
     if not name:
@@ -268,21 +327,40 @@ def render_dossier_scene(scene, out_mp4, duration, build_dir, era=None):
         if at is None:
             at = spoken_at(scene.get("words") or [], name)
         at = min(at if at is not None else 1.3, max(0.5, duration - 3.0))
+
+        # the card's window inside the scene
+        scene_img = (scene.get("image_paths") or [scene.get("image_path")])[0]
+        start, card_s = 0.0, duration
+        if duration > CARD_MAX + 0.6 and scene_img and os.path.exists(scene_img):
+            start = max(0.0, at - CARD_LEAD)
+            card_s = min(duration - start, CARD_MAX)
+        tail_s = duration - start - card_s
+        render_s = card_s + (CARD_XFADE if tail_s > 0.2 else 0.0)
+        card_out = out_mp4 + ".card.mp4" if (start > 0.2 or tail_s > 0.2) else out_mp4
+        local_at = at - start
+
+        got, kind = None, None
         try:
             from cast_engine import render_cast_scene
-            got = render_cast_scene(scene, out_mp4, duration, build_dir, info, at, era)
+            got = render_cast_scene(scene, card_out, render_s, build_dir, info, local_at, era)
         except Exception as e:
             print(f"   ↩️  Cast card unavailable ({type(e).__name__}: {e}).")
             got = None
         if got:
-            path, credit, kind = got
+            _, credit, kind = got
+            info = {**info, "credit": credit}
             scene["_cast_freeze"] = at
             print(f"🎭 Cast card ({kind}): {d.get('shown') or name} — "
-                  f"{'DECISION MAKER' if d.get('decision') else d.get('role') or ''}.")
-            return path, {**info, "credit": credit}
-        render(d.get("shown") or name, info["lines"], info["photo"], out_mp4, duration,
-               name_at=at, file_no=d.get("file_no") or 1)
-        print(f"🗂️  Case-file card: {name} — {' · '.join(info['lines'])}.")
+                  f"{'DECISION MAKER' if d.get('decision') else d.get('role') or ''}"
+                  f" ({card_s:.1f}s of a {duration:.1f}s scene).")
+        else:
+            render(d.get("shown") or name, info["lines"], info["photo"], card_out, render_s,
+                   name_at=local_at, file_no=d.get("file_no") or 1)
+            print(f"🗂️  Case-file card: {name} — {' · '.join(info['lines'])}.")
+        if card_out != out_mp4:
+            _compose(scene_img, start, card_out, card_s, tail_s, out_mp4)
+            os.remove(card_out)
+            info = {**info, "scene_photo": scene_img}
         return out_mp4, info
     except Exception as e:
         print(f"⚠️ Card for {name!r} skipped ({type(e).__name__}: {e}) — "

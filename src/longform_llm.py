@@ -2644,6 +2644,11 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print("🛑 Quota gone before the date stamps; publishing without them.")
     except Exception as e:
         print(f"⚠️ Date stamps skipped ({type(e).__name__}: {e}).")
+    if story:
+        try:
+            _place_front_stamps(chapters, story["plan"].get("places"))
+        except Exception as e:
+            print(f"   ↩️  Front stamps skipped ({type(e).__name__}: {e}).")
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
     title = (meta.get("title") or topic[:70]).strip()
@@ -3125,6 +3130,38 @@ def _place_dossier(name, chapters, cast=None):
     print(f"🗂️  Decision-maker card planned: {name}.")
 
 
+CHAIN_ENABLED = False
+
+
+def _place_front_stamps(chapters, places):
+    """Story mode: a place stamp ("JERUSALEM") on the scene where the story
+    moves to another of its named places mid-chapter, so a viewer following
+    several fronts always knows where they are (the owner was lost in the
+    fourth and fifth chapters of the third cut). Only when the place opens
+    the scene's narration ("In Jerusalem, ...", "On the Golan Heights, ..."),
+    at most one per chapter, never on the chapter's first scene (it has the
+    chapter stamp), a map or a card."""
+    keys = []
+    for p in places or []:
+        words = [w for w in re.findall(r"[a-z]+", p.lower()) if len(w) >= 5]
+        if words:
+            keys.append((p, words))
+    placed = []
+    for ch in chapters[1:]:
+        current = (ch.get("stamp") or "").split("·")[0].strip().lower()
+        for i, sc in enumerate(ch["scenes"]):
+            if i == 0 or sc.get("map") or sc.get("dossier") or sc.get("chain"):
+                continue
+            opening = " ".join(re.findall(r"[a-z]+", sc["narration"].lower())[:9])
+            hit = next((p for p, ws in keys if any(re.search(rf"\b{w}", opening) for w in ws)), None)
+            if hit and hit.lower() not in current and not any(w in current for w in hit.lower().split()):
+                sc["front_stamp"] = hit.upper()
+                placed.append(f"{ch['heading']}: {hit}")
+                break
+    if placed:
+        print(f"📍 Front stamps: {'; '.join(placed)}.")
+
+
 CAST_CARD_GAP_WORDS = 130      # ~45-50 s of narration between two cards
 MAX_CAST_CARDS = 5
 
@@ -3250,11 +3287,15 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
                        after_decision=(i == 1))
         except Exception as e:
             print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
-    try:
-        _place_chain((data or {}).get("chain"), chapters, topic,
-                     dates=(data or {}).get("chain_dates"), era_year=era_year)
-    except Exception as e:
-        print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
+    # The chain/timeline cards were dropped after the third Six-Day War cut
+    # (too quick to read, and they did not track the video's own time);
+    # the date ticker (date_ticker.py) does that job now.
+    if CHAIN_ENABLED:
+        try:
+            _place_chain((data or {}).get("chain"), chapters, topic,
+                         dates=(data or {}).get("chain_dates"), era_year=era_year)
+        except Exception as e:
+            print(f"   ↩️  Chain skipped ({type(e).__name__}: {e}).")
     try:
         _place_dossier((data or {}).get("decision_maker"), chapters, cast=cast)
     except Exception as e:

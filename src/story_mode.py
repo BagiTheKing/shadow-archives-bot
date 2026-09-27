@@ -60,7 +60,11 @@ STORYTELLING:
 what they do, what happens next. Action verbs, not mental-state verbs — show what \
 people DID, and let what they thought come through what they did and said.
 - Follow the named people of this chapter. Give each one a reason we should care.
-- Move forward in time. Anchor the viewer with dates and times from the sheet as you go.
+- Move forward in time. Anchor the viewer with dates and times from the sheet as you go: \
+whenever the story reaches a new day, say its date the way a narrator speaks it \
+("On the fifth of June", "On the twenty-second of May, 1967"), and say the clock time \
+when the sheet gives one ("at seven forty-five that morning"). An on-screen time bar \
+follows every date you say, so the viewer always knows when they are.
 - Never restate what an earlier chapter already told. Every sentence adds something new.
 - Rhythm: mix sentence lengths deliberately. Mostly medium sentences, a long one when \
 the moment needs room, and short hard ones — three to six words — for impact. \

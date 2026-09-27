@@ -89,8 +89,8 @@ BROLL_MIN_GAP = 4
 # only ever looked for when no photo existed, which is almost never, so not
 # one clip reached a video. Real moving pictures of the actual events (the
 # war, a leader speaking) now get first refusal on a spaced set of scenes.
-MAX_ARCHIVAL_VIDEO_CLIPS = 6
-ARCHIVAL_VIDEO_MIN_GAP = 3
+MAX_ARCHIVAL_VIDEO_CLIPS = 12
+ARCHIVAL_VIDEO_MIN_GAP = 2
 
 # Photography exists from roughly here; before it, a Commons "photo" of the
 # subject is by definition a modern anachronism.
@@ -264,7 +264,73 @@ def _archival_footage(query, era, idx, output_dir, used_urls):
     return None
 
 
-def generate_longform_visuals(scenes: list, output_dir: str = "build"):
+# Scenes about the fighting itself: when their own footage search finds
+# nothing, the story's own war newsreels stand in (see _WarPool).
+WAR_WORDS = {"tank", "tanks", "strike", "strikes", "jet", "jets", "aircraft",
+             "airstrike", "bomb", "bombing", "bombers", "soldiers", "troops",
+             "army", "artillery", "battle", "attack", "fighter", "fighters",
+             "airfield", "airfields", "paratroopers", "front", "convoy",
+             "military", "shelling", "offensive", "infantry", "warship",
+             "destroyed", "fighting", "trenches", "trench", "assault", "war",
+             "air", "force", "combat", "guns", "gunfire", "frontline"}
+MAX_POOL_CLIPS = 6
+POOL_SEGMENT_SECONDS = 9
+
+
+class _WarPool:
+    """The story's own newsreels, cut into fresh segments for battle
+    scenes. Only clips dated to the story's year (or the year after), and
+    only the first third of a long reel — a newsreel leads with its titled
+    story and moves on to others (the 6 June 1967 "Mid-East" reel turns to
+    Vietnam and American riots after about 100 seconds)."""
+
+    def __init__(self, topic, era):
+        self.topic, self.era = topic, era
+        self.clips, self.cursor, self.used = None, {}, 0
+
+    def _load(self):
+        self.clips = []
+        if not (self.topic and self.era):
+            return
+        seen = set()
+        for q in (self.topic, f"{self.topic} newsreel"):
+            for c in search_commons_video(q, era=self.era, limit=15):
+                if c["url"] in seen or c.get("year") not in (self.era, self.era + 1):
+                    continue
+                if (c.get("duration") or 0) < 20:
+                    continue
+                seen.add(c["url"])
+                self.clips.append(c)
+        print(f"🎞️  War footage pool: {len(self.clips)} newsreel(s) for {self.topic!r}.")
+
+    def segment(self, idx, output_dir, used_urls):
+        if self.used >= MAX_POOL_CLIPS:
+            return None
+        if self.clips is None:
+            self._load()
+        video_path = os.path.join(output_dir, f"lf_archival_video_{idx:03d}.mp4")
+        poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
+        for c in self.clips:
+            dur = c["duration"]
+            lo, hi = (8.0, dur * 0.35) if dur > 150 else (1.5, dur - 2.0)
+            pos = self.cursor.get(c["url"], lo)
+            while pos + POOL_SEGMENT_SECONDS <= hi:
+                self.cursor[c["url"]] = pos + POOL_SEGMENT_SECONDS
+                if (fetch_commons_video(c, video_path, seconds=POOL_SEGMENT_SECONDS, start=pos)
+                        and extract_poster_frame(video_path, poster, KB_W, KB_H)):
+                    self.used += 1
+                    return (video_path, poster,
+                            format_credit(c) + ", newsreel excerpt", f"{c['title']} @{pos:.0f}s")
+                pos += POOL_SEGMENT_SECONDS
+        return None
+
+
+def _is_war_scene(scene):
+    words = set(re.findall(r"[a-z]+", (scene.get("archive_query") or "").lower()))
+    return bool(words & WAR_WORDS)
+
+
+def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: str = None):
     """Fills each scene with image_paths (1-3 frames), possibly a video_path
     (muted b-roll), and a credit string when a real archival photo was used.
 
@@ -295,6 +361,8 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
     # archival image stands in — infinitely better than the black screen the
     # designed fallback produces.
     real_pool = []
+    era0 = next((sc.get("era_year") for sc in scenes if sc.get("era_year")), None)
+    war_pool = _WarPool(topic, era0)
 
     for idx, scene in enumerate(scenes):
         wanted = _shots_for(scene.get("duration", 0))
@@ -314,6 +382,11 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build"):
                 and idx - last_archival_video_idx > ARCHIVAL_VIDEO_MIN_GAP
                 and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
             got = _archival_footage(vquery, era, idx, output_dir, used_urls)
+            if not got and _is_war_scene(scene) and era == era0:
+                try:
+                    got = war_pool.segment(idx, output_dir, used_urls)
+                except Exception as e:
+                    print(f"   ↩️  War footage pool failed ({type(e).__name__}: {e}).")
             if got:
                 video_path, poster, credit, label = got
                 scene["video_path"] = video_path

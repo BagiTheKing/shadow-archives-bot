@@ -244,7 +244,14 @@ def _shorten_credit(text: str) -> str:
     return text if len(text) <= CREDIT_MAX_CHARS else text[:CREDIT_MAX_CHARS - 1].rstrip() + "…"
 
 
-def _credit_events(scene: dict, offset: float):
+LIFTED_MARGIN_V = 250       # captions sit above the date ticker
+
+
+def _overlaps(start, end, periods):
+    return any(start < b and end > a for a, b in (periods or ()))
+
+
+def _credit_events(scene: dict, offset: float, lift_periods=None):
     """One event per real photo/footage credit this scene actually has,
     timed to roughly track which shot is on screen. A scene with two real
     photos and one generated fill-in (longform_visual fills gaps with AI
@@ -274,7 +281,8 @@ def _credit_events(scene: dict, offset: float):
         if end - start < CREDIT_MIN_SECONDS:
             continue
         text = _shorten_credit(credit).replace("{", "").replace("}", "")
-        fx = (f"{{\\an1\\pos({CREDIT_MARGIN_X},{H - CREDIT_MARGIN_Y})\\fad(200,200)"
+        cy = H - CREDIT_MARGIN_Y - (210 if _overlaps(start, end, lift_periods) else 0)
+        fx = (f"{{\\an1\\pos({CREDIT_MARGIN_X},{cy})\\fad(200,200)"
               f"\\fs{CREDIT_FONT_SIZE}\\c&HD8D8D8&\\bord2\\shad1}}")
         events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,{fx}{text}")
     return events
@@ -464,7 +472,7 @@ def _stamp_events(start: float, text: str):
 
 def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
                        chapter_titles=None, total_duration=0.0,
-                       stamp_cues=None):
+                       stamp_cues=None, lift_periods=None):
     """offsets[i] is the global start time of scene i on the final timeline.
     punch_cues is [(start_seconds, end_spoken_seconds, phrase), ...] for the
     punch-phrase callouts.
@@ -482,8 +490,10 @@ def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
                 end = (offset + chunks[c + 1][0]["start"]) if c + 1 < len(chunks) \
                     else (offset + scene["duration"])
                 text = " ".join(w["word"] for w in chunk)
+                # above the date ticker while it is showing
+                mv = LIFTED_MARGIN_V if _overlaps(start, end, lift_periods) else 0
                 events.append(
-                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,"
+                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,{mv},,"
                     f"{_style_chunk(text)}")
         else:
             dur, sentence = scene["duration"], scene.get("narration", "")
@@ -494,7 +504,7 @@ def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
                     f"Dialogue: 0,{_ass_time(offset + p * step)},"
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
-        events.extend(_credit_events(scene, offset))
+        events.extend(_credit_events(scene, offset, lift_periods))
 
     # Punch-phrase callouts, top of frame. _punch_phrase_event returns
     # [rule, text] — two events, since the accent rule and the phrase are
@@ -932,6 +942,8 @@ def build_score(acts, total: float, out: str):
 # notices the sound design as sound design, it reads as a template channel.
 IMPACT_GAIN = 0.28
 WHOOSH_GAIN = 0.3           # into a cast card's freeze
+ROLL_GAIN = 0.05            # date ticker: a tick per day rolled past
+DATEHIT_GAIN = 0.4          # date ticker: landing on the spoken date
 RISER_GAIN = 0.16
 
 # The bed, and how far it moves. All five lowered ~30% (same ratio as the
@@ -1042,6 +1054,23 @@ def _sfx_sources(cues):
                 f"aevalsrc='{expr}':s=44100:d={span:.3f},highpass=f=1500[{label}r];"
                 f"[{label}r]aformat=channel_layouts=stereo,"
                 f"adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "roll":
+            # the ticker rolling day by day: a soft tick per day passed
+            count = max(1, int(cue[3] if len(cue) > 3 else 10))
+            period = max(0.035, span / count)
+            frags.append(
+                f"aevalsrc='(random(0)*2-1)*exp(-400*mod(t,{period:.4f}))*{ROLL_GAIN}'"
+                f":s=44100:d={span:.3f},highpass=f=2500,"
+                f"aformat=channel_layouts=stereo,adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "datehit":
+            frags.append(
+                f"aevalsrc='(sin(2*PI*70*t)*0.6+(random(0)*2-1)*exp(-80*t)*0.3)*exp(-9*t)'"
+                f":s=44100:d=0.6,volume={DATEHIT_GAIN},"
+                f"aformat=channel_layouts=stereo,adelay={delay}|{delay}[{label}]")
             labels.append(label)
             continue
         if kind == "whoosh":
@@ -1414,7 +1443,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 # the portrait is the one picture on screen: its Commons
                 # credit spans the whole scene
                 s["video_path"], s["_is_map"] = got[0], True
-                s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]]
+                keep = list(s.get("credit") or []) if got[1].get("scene_photo") else []
+                s["image_paths"], s["credit"] = [got[1]["photo"]], [got[1]["credit"]] + keep[:1]
         shots = len(s.get("image_paths") or [1])
         kind = (("map" if s.get("map") else "chain" if s.get("chain")
                  else "cast card" if s.get("dossier") else "graphic")
@@ -1448,6 +1478,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     next_chapter_mark_start = None
     n_chapters = len(chapters)
     stamp_cues, rhythm_cues, silence = [], [], None
+    scene_offsets = []
     prev_chapter_start = 0.0
     for pos, (c_idx, group) in enumerate(chapters):
         reel = os.path.join(build_dir, f"lf_reel_{c_idx:02d}.mp4")
@@ -1501,6 +1532,11 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             pivot_start = cursor
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
+            scene_offsets.append((g, cursor + o))
+            front = (g.get("front_stamp") or "").strip()
+            if front:
+                stamp_cues.append((cursor + o + 0.5, front))
+                rhythm_cues.append(("keys", cursor + o + 0.5, len(front) * TYPE_RATE))
             # a cast card's freeze: a short whoosh into it, a low hit on it
             if g.get("_cast_freeze") is not None:
                 hit_at = cursor + o + g["_cast_freeze"]
@@ -1590,6 +1626,23 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
 
     total_duration = cursor
 
+    # ---- Date ticker: every date the narrator says, on the video's clock ----
+    ticker_clips, lift_periods = [], []
+    try:
+        from date_ticker import collect, render_overlays
+        era = next((sc.get("era_year") for sc, _ in scene_offsets if sc.get("era_year")), None)
+        date_events = collect(scene_offsets, era_year=era)
+        if date_events:
+            ticker_clips, tk = render_overlays(date_events, build_dir)
+            lift_periods = tk.periods()
+            rhythm_cues.extend(tk.sound_cues())
+            print(f"📅 Date ticker: {len(date_events)} date(s) — "
+                  + ", ".join(f"{e['label']}{' ' + e['time'] if e['time'] else ''} "
+                              f"@{e['at']:.0f}s" for e in date_events[:20]))
+    except Exception as e:
+        ticker_clips, lift_periods = [], []
+        print(f"⚠️ Date ticker skipped ({type(e).__name__}: {e}).")
+
     # ---- Phase 3: join chapters with stream copy (chapters butt-join) ----
     merged = os.path.join(build_dir, "lf_merged.mp4")
     if len(reels) == 1:
@@ -1607,7 +1660,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     ass_path = os.path.join(build_dir, "lf_subtitles.ass")
     generate_subtitles(usable, ass_path, global_offsets, punch_cues=punch_cues,
                        chapter_titles=chapter_titles,
-                       total_duration=total_duration, stamp_cues=stamp_cues)
+                       total_duration=total_duration, stamp_cues=stamp_cues,
+                       lift_periods=lift_periods)
 
     # The uploadable copy of the same words. Seven minutes of narration is the
     # most indexable thing this channel produces and none of it has ever been
@@ -1679,6 +1733,22 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         inputs += ["-i", sfx]
         mix_labels.append(f"[{idx}:a]")
 
+    # Date ticker clips ride on top of the graded picture, under the
+    # captions; with them the video goes through the filter graph too.
+    vmap = "0:v"
+    vargs = ["-vf", vf]
+    if ticker_clips:
+        base_vf, ass_vf = vf.split(f"ass='", 1)
+        chain = [f"[0:v]{base_vf.rstrip(',')}[tk0]"]
+        for k, (start, clip) in enumerate(ticker_clips):
+            idx = len(inputs) // 2
+            inputs += ["-i", clip]
+            chain.append(f"[{idx}:v]setpts=PTS-STARTPTS+{start:.3f}/TB[tc{k}]")
+            chain.append(f"[tk{k}][tc{k}]overlay=0:{H - 200}:eof_action=pass[tk{k + 1}]")
+        chain.append(f"[tk{len(ticker_clips)}]ass='{ass_vf}[vout]")
+        mix_parts = chain + mix_parts
+        vmap, vargs = "[vout]", []
+
     if len(mix_labels) > 1:
         # No separate muting needed for the intro card: the merged track's
         # own audio is already silent there (the card's clip carries a
@@ -1691,9 +1761,14 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             f"duration=first:normalize=0,"
             f"afade=t=out:st={max(total_duration - 1.2, 0):.2f}:d=1.2[aout]")
         cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(mix_parts),
-               "-map", "0:v", "-map", "[aout]", "-vf", vf,
+               "-map", vmap, "-map", "[aout]", *vargs,
                "-c:v", "libx264", "-preset", "medium", "-crf", "21",
                "-c:a", "aac", "-b:a", "192k", final_output]
+    elif ticker_clips:
+        cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(mix_parts),
+               "-map", vmap, "-map", "0:a",
+               "-c:v", "libx264", "-preset", "medium", "-crf", "21",
+               "-c:a", "copy", final_output]
     else:
         cmd = ["ffmpeg", "-y", "-i", merged, "-vf", vf,
                "-c:v", "libx264", "-preset", "medium", "-crf", "21",

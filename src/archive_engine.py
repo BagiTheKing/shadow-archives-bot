@@ -525,7 +525,11 @@ def fetch_archival_video(identifier: str, output_path: str) -> bool:
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
              output_path],
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
-        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        ok = os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        if ok and is_static(output_path):
+            os.remove(output_path)
+            return False
+        return ok
     except Exception as e:
         print(f"⚠️ Could not trim Internet Archive clip ({identifier}): {e}")
         return False
@@ -678,8 +682,28 @@ def footage_matches(query: str, about: str) -> bool:
     return hits >= (len(words) if len(words) <= 2 else len(words) - 1)
 
 
+def is_static(path) -> bool:
+    """True for a "video" that is really still photographs (a slideshow over
+    an audio recording, like the general's announcement in the Six-Day War
+    run): almost no frame differs from the one before it."""
+    try:
+        import numpy as np
+        raw = subprocess.run(
+            ["ffmpeg", "-loglevel", "error", "-i", path, "-vf",
+             "fps=4,scale=64:36,format=gray", "-f", "rawvideo", "-"],
+            capture_output=True, timeout=120).stdout
+        n = len(raw) // (64 * 36)
+        if n < 6:
+            return False
+        f = np.frombuffer(raw[: n * 64 * 36], np.uint8).reshape(n, 36, 64).astype(np.float32)
+        diffs = np.abs(np.diff(f, axis=0)).mean(axis=(1, 2))
+        return float(np.percentile(diffs, 70)) < 1.2
+    except Exception:
+        return False
+
+
 def fetch_commons_video(candidate: dict, output_path: str,
-                        seconds: float = ARCHIVAL_CLIP_SECONDS) -> bool:
+                        seconds: float = ARCHIVAL_CLIP_SECONDS, start=None) -> bool:
     """Cuts `seconds` of silent footage out of a Commons video. Streams
     straight from Commons first, so only the seconds used are fetched; if
     that fails (some transcodes do not seek over HTTP) the file is downloaded
@@ -687,8 +711,9 @@ def fetch_commons_video(candidate: dict, output_path: str,
     opening; long ones (a full newsreel, a whole speech) a fifth of the way
     in, clear of title cards and leader."""
     dur = candidate.get("duration") or 0
-    start = 1.0 if dur <= seconds + 4 else min(dur * 0.2, dur - seconds - 2)
-    length = min(seconds, max(4.0, dur - 1))
+    if start is None:
+        start = 1.0 if dur <= seconds + 4 else min(dur * 0.2, dur - seconds - 2)
+    length = min(seconds, max(4.0, dur - 1 - start))
 
     def cut(src, extra=()):
         r = subprocess.run(
@@ -729,6 +754,9 @@ def fetch_commons_video(candidate: dict, output_path: str,
         finally:
             if os.path.exists(tmp):
                 os.remove(tmp)
+    if ok and is_static(output_path):
+        print(f"   ↩️  {candidate.get('title')!r}: still photographs, not footage — skipped.")
+        ok = False
     if not ok and os.path.exists(output_path):
         os.remove(output_path)
     return ok
