@@ -26,7 +26,7 @@ PER_QUERY = 2
 PEOPLE = ["Gamal Abdel Nasser", "Hussein of Jordan", "Moshe Dayan",
           "Nureddin al-Atassi"]
 
-FOOTAGE = []
+FOOTAGE = [("Six-Day War", 1967), ("Israel 1967", 1967)]
 FOOTAGE_PER_PERSON = 4
 
 LINES = [
@@ -38,6 +38,11 @@ LINES = [
     "On the twenty-second of May, Egypt closed the straits. On the fifth of "
     "June, Israel struck first. On the seventh, the Old City of Jerusalem "
     "fell. And on the tenth, the guns went quiet.",
+    # date-ticker preview
+    "On the twenty-second of May, Egypt closed the straits. For two weeks, "
+    "the world held its breath. Then, at seven forty-five on the morning of "
+    "the fifth of June, Israeli jets crossed into Egypt. On the seventh, the "
+    "Old City of Jerusalem fell. And on the tenth, the guns went quiet.",
 ]
 
 
