@@ -126,8 +126,39 @@ _GEMINI_SKIP = ("embedding", "aqa", "imagen", "image", "vision", "tts",
 GEMINI_MAX_MODELS = 4
 
 
+# Days (UTC) on which this run leaves Gemini alone. Gemini's free tier is 20
+# requests a day per model, about 80 across the chain, and a story-mode
+# long-form video needs about 62 of them on its own (trending lane run #48,
+# 2026-09-28). The daily Shorts workflow sets this to the long-form lanes'
+# days, so on those days the Short is written by Groq, Cerebras and the rest
+# of the chain, and the whole Gemini allowance is the long-form video's. The
+# long-form workflows never set it. Empty: Gemini is used every day.
+GEMINI_RESERVED_DAYS = [d.strip().lower()[:3] for d in
+                        os.getenv("GEMINI_RESERVED_DAYS", "").split(",")
+                        if d.strip()]
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+_reserved_notice_shown = False
+
+
+def gemini_reserved() -> bool:
+    """Whether today (UTC) is one of GEMINI_RESERVED_DAYS."""
+    import datetime
+    today = _WEEKDAYS[datetime.datetime.now(datetime.timezone.utc).weekday()]
+    return today in GEMINI_RESERVED_DAYS
+
+
 def gemini_available() -> bool:
-    return bool(os.getenv("GEMINI_API_KEY"))
+    global _reserved_notice_shown
+    if not os.getenv("GEMINI_API_KEY"):
+        return False
+    if gemini_reserved():
+        if not _reserved_notice_shown:
+            print("🔒 Gemini is reserved for today's long-form video "
+                  "(GEMINI_RESERVED_DAYS) — this run writes with the rest "
+                  "of the chain.")
+            _reserved_notice_shown = True
+        return False
+    return True
 
 
 def openrouter_available() -> bool:
