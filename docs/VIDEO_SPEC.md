@@ -36,6 +36,10 @@ without the owner's say-so.
    most 5 named places, no unit names, few rounded figures, short sentences
    (see story_mode.py). Checked per chapter.
 6. Facts, names, dates, figures and quotes only from the verified fact sheet.
+6a. **The ending reaches forward.** The last chapter ends on what the event
+   led to in the years after (one or two things, each with its year), from
+   the article's own aftermath/legacy, never later than 2010 and never
+   "today" or "nowadays". Checked by code.
 
 ## On screen
 7. **Cast cards** keep the approved look (freeze, duotone, cut-out, outline,
@@ -60,6 +64,12 @@ without the owner's say-so.
     verdict; a map only where the narration speaks its place.
 13. Footage must match its scene (title and categories), never still
     photographs; war newsreels only for combat scenes, never diplomacy reels.
+
+12a. **Claim sources.** A line that clearly matches a cited sentence of the
+    Wikipedia article shows that footnote's source at the bottom right
+    ("SOURCE" in yellow, then the work in grey, look B), not over maps or
+    cast cards. No model decides this, and no match means no tag, never a
+    guessed source. The description lists the article and every work shown.
 
 ## Process
 14. Check a change against this list before pushing. Test writing with a

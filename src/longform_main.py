@@ -173,6 +173,27 @@ def check_visual_quality(workers_ai_generated: int, total_generated: int,
     raise SystemExit(1)
 
 
+def build_sources_block(script, budget):
+    """"Sources:" for the description: the Wikipedia article the story was
+    checked against, then each work cited on screen, within `budget`
+    characters ("" when there is nothing to list or no room)."""
+    article = script.get("source_article") or {}
+    works = script.get("claim_sources") or []
+    if not article.get("url") and not works:
+        return ""
+    lines = ["Sources:"]
+    if article.get("url"):
+        lines.append(f"• Wikipedia, \"{article.get('title') or ''}\": {article['url']}")
+    for w in works:
+        line = f"• {w['full']}"
+        if len("\n".join(lines + [line, "…and others."])) > budget:
+            lines.append("…and others.")
+            break
+        lines.append(line)
+    block = "\n".join(lines)
+    return block if len(block) <= budget and len(lines) > 1 else ""
+
+
 def build_metadata(script, chapter_marks, total_duration, scenes=None,
                    music_attribution=""):
     title = sanitize_title(script.get("title") or script.get("topic", "")[:90])
@@ -217,6 +238,16 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None,
     # credit text is in the description. See music_attribution.py.
     if (music_attribution or "").strip():
         parts.append(music_attribution.strip())
+
+    # Sources of the claims (story mode): the article, then every cited work
+    # a scene showed. Placed before the image credits and sized to what is
+    # left, so it can never push the required music credit past YouTube's
+    # 5,000-character limit.
+    sources = build_sources_block(script, 4900 - len("\n\n".join(parts)) - 2)
+    if sources:
+        at = next((i for i, p in enumerate(parts)
+                   if p.startswith("Archival imagery")), len(parts))
+        parts.insert(at, sources)
 
     description = "\n\n".join(parts)
     if len(description) > 4950:          # YouTube rejects past 5,000
@@ -329,7 +360,7 @@ def build_story(topic, build_dir):
     sm.save(build_dir, sheet=sheet, plan=plan)
     years = Counter(int(y) for t in sheet["timeline"]
                     for y in re.findall(r"\b(1\d{3}|20\d{2})\b", t.get("date", "")))
-    return {"sheet": sheet, "plan": plan,
+    return {"sheet": sheet, "plan": plan, "sources": article.get("sources"),
             "era_year": years.most_common(1)[0][0] if years else None}
 
 
@@ -504,6 +535,17 @@ def main():
         json.dump(script, f, indent=2, ensure_ascii=False)
 
     scenes = flatten_scenes(script)
+    if story and story.get("sources"):
+        # per-claim sources (docs/VIDEO_SPEC.md): each line that clearly
+        # matches a cited sentence of the article carries that footnote's
+        # source on screen; all of them are listed in the description
+        from claim_sources import attach
+        script["claim_sources"] = attach(scenes, story["sources"])
+        script["source_article"] = {"title": story["sources"].get("title"),
+                                    "url": story["sources"].get("url")}
+        print(f"📎 {sum(1 for s in scenes if s.get('claim_source'))} of "
+              f"{len(scenes)} scenes carry a source; "
+              f"{len(script['claim_sources'])} distinct works cited.")
     print(f"🎬 {len(scenes)} scenes across {len(script['chapters'])} chapters")
 
     # Asked out loud at the end, not only in the comment field. Same reasoning

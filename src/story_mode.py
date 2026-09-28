@@ -40,6 +40,9 @@ WIKI_API = "https://en.wikipedia.org/w/api.php"
 # The whole article, not its first third: at 45,000 characters the Six-Day
 # War outline lost the Syrian front and Nasser's resignation entirely.
 ARTICLE_CHARS = 150000
+# The latest year the video may reach when it tells what the event led to
+# (docs/VIDEO_SPEC.md): the same cutoff as the history rule in longform_llm.
+LEGACY_CUTOFF = int(os.getenv("HISTORY_CUTOFF_YEAR", "2010"))
 _DROP_SECTIONS = ("See also", "References", "Notes", "Further reading",
                   "External links", "Bibliography", "Sources", "Citations",
                   "Footnotes")
@@ -127,8 +130,12 @@ def research(topic):
             text = text[:m.start()]
     if len(text) < 2000:
         return None
-    return {"title": title, "text": text[:ARTICLE_CHARS],
-            "url": "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")}
+    url = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
+    # the article's footnotes, for the per-claim sources on screen and in
+    # the description (claim_sources.py); a failure only costs those
+    from claim_sources import fetch as fetch_sources
+    return {"title": title, "text": text[:ARTICLE_CHARS], "url": url,
+            "sources": fetch_sources(title, url)}
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +190,11 @@ def verify_beats(plan, article_text):
     return dropped
 
 
+def _legacy_year(item):
+    m = re.search(r"\b(1\d{3}|20\d{2})\b", str((item or {}).get("year") or ""))
+    return int(m.group(1)) if m else None
+
+
 def verify_sheet(sheet, article_text):
     """Drops every quote that is not verbatim in the article, every figure
     whose digits are not in it, and every person, place or timeline entry
@@ -206,7 +218,11 @@ def verify_sheet(sheet, article_text):
             ("people", lambda p: names_ok(p.get("name")) and p.get("name")),
             ("places", lambda p: names_ok(p if isinstance(p, str) else p.get("name"))),
             ("timeline", lambda t: digits_ok(t.get("date")) and names_ok(t.get("event"))
-             and names_ok(" ".join(t.get("people") or [])))):
+             and names_ok(" ".join(t.get("people") or []))),
+            ("legacy", lambda l: _legacy_year(l) is not None
+             and _legacy_year(l) <= LEGACY_CUTOFF
+             and digits_ok(str(l.get("year"))) and names_ok(l.get("what"))
+             and digits_ok(l.get("what")))):
         kept = []
         for item in sheet.get(key) or []:
             try:
@@ -241,11 +257,15 @@ def fact_sheet(pool, topic, article, call):
         "- quotes: every direct quotation the article contains that a "
         "narrator could use, copied EXACTLY character for character, with "
         "its speaker. None if the article has none.\n"
+        f"- legacy: 3-6 things this event led to in the years and decades "
+        f"after it (treaties, borders, later wars, trials, rebuilt towns, "
+        f"memorials, changed laws), each with the year it happened, only "
+        f"up to {LEGACY_CUTOFF}, as the article states them.\n"
         "Do not add anything the article does not state.\n\n"
         'Output ONLY JSON: {"timeline": [{"date": "", "event": "", "place": "", '
         '"people": [""]}], "people": [{"name": "", "role": ""}], "places": [""], '
         '"numbers": [{"value": "", "what": ""}], "quotes": [{"text": "", '
-        '"speaker": ""}]}')
+        '"speaker": ""}], "legacy": [{"year": "", "what": ""}]}')
     data = call(pool, "You extract facts from a source text. Never add "
                 "anything. Output only JSON.", prompt, max_tokens=8000)
     if not isinstance(data, dict) or not data.get("timeline"):
@@ -283,6 +303,9 @@ def sheet_text(sheet, chapter_span=None, cast=None):
     if quotes:
         lines.append("QUOTES (use only word for word):")
         lines += [f"- \"{q['text']}\" — {q['speaker']}" for q in quotes]
+    if sheet.get("legacy"):
+        lines.append(f"LEGACY (what it led to, up to {LEGACY_CUTOFF}):")
+        lines += [f"- {l['year']}: {l['what']}" for l in sheet["legacy"]]
     return "\n".join(lines)
 
 
@@ -362,6 +385,10 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "and do not change the outcome.\n"
         "  * The leaders of the losing side come back in the last chapter: "
         "what they did and said afterwards.\n"
+        f"- The last chapter ENDS on what the event led to in the years "
+        f"after, up to {LEGACY_CUTOFF}, taken only from LEGACY (if the "
+        f"sheet has it): one or two things, each with its year. Never a "
+        f"year after {LEGACY_CUTOFF}, never \"today\" or \"nowadays\".\n"
         "- The turning point (role \"pivot\") is its OWN SHORT chapter, "
         "150-250 words: the decisive choice itself — the room, the people, "
         "the vote or the order — and nothing else. The climax chapter comes "
@@ -506,6 +533,8 @@ def chapter_brief(plan, i, sheet):
                 "fill it from THIS story only).\n")
     else:
         note = ""
+    if i == len(plan["chapters"]) - 1 and sheet.get("legacy"):
+        note += LEGACY_NOTE
     if i >= 2 and c.get("moment"):
         note += MOMENT_NOTE.format(moment=c["moment"],
                                    when="started" if c["moment"] == "begins" else "ended")
@@ -531,6 +560,13 @@ TEASER_NOTE = (
     "any specific day, date or clock time, and do NOT name or introduce any "
     "individual person (say \"Egypt\", \"Israel's leaders\", never a name). "
     "Make a stranger want the details without giving them.\n")
+
+LEGACY_NOTE = (
+    "This is the LAST chapter. After the aftermath, end on what the event "
+    "led to in the years after: one or two things from LEGACY in the fact "
+    "sheet, each with its year (\"By 1979, ...\", \"In 2005, ...\"). "
+    f"Nothing after {LEGACY_CUTOFF}, and never \"today\", \"now\" or "
+    "\"nowadays\".\n")
 
 MOMENT_NOTE = (
     "The main event {moment} in this chapter. Right after the beat where it "
@@ -803,6 +839,18 @@ def structure_issues(i, plan, segments, earlier_text, era_year, sheet=None):
                     f"Open with one or two sentences spoken to the viewer that take them "
                     f"back (the shape: \"While <earlier events>, <something else> "
                     f"was starting in <place>. Let's go back to <that moment>.\").")
+    legacy = (sheet or {}).get("legacy") or []
+    if i == len(plan["chapters"]) - 1 and legacy:
+        years = {str(_legacy_year(l)) for l in legacy}
+        said = set(re.findall(r"\b(1\d{3}|20\d{2})\b", text))
+        late = sorted(y for y in said if int(y) > LEGACY_CUTOFF)
+        if late:
+            issues.append(f"The chapter mentions {', '.join(late)}, after "
+                          f"{LEGACY_CUTOFF}. End at {LEGACY_CUTOFF} at the latest.")
+        elif not said & years:
+            issues.append("The chapter never says what the event led to. End on "
+                          "one or two things from LEGACY, each with its year "
+                          "(\"By 1979, ...\").")
     moment = (plan["chapters"][i].get("moment") or "") if i < len(plan["chapters"]) else ""
     if i >= 2 and moment and not any(w in text.lower() for w in MOMENT_WORDS):
         when = "started" if moment == "begins" else "ended"

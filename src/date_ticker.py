@@ -337,6 +337,9 @@ class Ticker:
             # long jumps: a ruler of months and years instead of days
             y0 = dt.date.fromordinal(int(cur)).year
             span_y = int(W / 2 / (ppd * 365)) + 2
+            # label every year only while the labels fit (a jump of decades
+            # squeezes years to ~45px); otherwise every 2nd, 5th, 10th...
+            step = next((k for k in (1, 2, 5, 10, 20, 50) if k * ppd * 365 >= 80), 100)
             for yy in range(y0 - span_y, y0 + span_y + 1):
                 for mo in range(1, 13):
                     try:
@@ -347,10 +350,12 @@ class Ticker:
                     if not (0 <= x <= W):
                         continue
                     fade = max(0.0, 1 - abs(x - cx) / (W / 2)) ** 0.6
-                    if mo == 1:
+                    if mo == 1 and yy % step == 0:
                         d.line([(x, base - 36), (x, base)], fill=INK + (int(255 * fade),), width=3)
                         d.text((x + 8, base - 38), str(yy), font=self.f_mon,
                                fill=INK + (int(235 * fade),))
+                    elif mo == 1:
+                        d.line([(x, base - 20), (x, base)], fill=INK + (int(190 * fade),), width=2)
                     elif ppd * 30 >= 6:
                         d.line([(x, base - 10), (x, base)], fill=INK + (int(150 * fade),), width=2)
         d.polygon([(cx - 11, strip_top - 4), (cx + 11, strip_top - 4), (cx, strip_top + 12)],

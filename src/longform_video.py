@@ -288,6 +288,25 @@ def _credit_events(scene: dict, offset: float, lift_periods=None):
     return events
 
 
+def _source_events(scene: dict, offset: float, lift_periods=None):
+    """The claim's source, bottom right (docs/VIDEO_SPEC.md): "SOURCE" in the
+    accent colour, then the work in the image credit's grey, for the whole
+    scene. Not over a map or a cast card, whose looks were approved as they
+    are."""
+    src = scene.get("claim_source") or {}
+    label = (src.get("label") or "").replace("{", "").replace("}", "")
+    duration = float(scene.get("duration") or 0.0)
+    if (not label or duration < 1.5 or scene.get("_is_map") or scene.get("map")
+            or scene.get("dossier")):
+        return []
+    start, end = offset, offset + duration
+    cy = H - CREDIT_MARGIN_Y - (210 if _overlaps(start, end, lift_periods) else 0)
+    fx = (f"{{\\an3\\pos({W - CREDIT_MARGIN_X},{cy})\\fad(250,250)"
+          f"\\fs{CREDIT_FONT_SIZE}\\bord2\\shad1}}")
+    return [f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Body,,0,0,0,,"
+            f"{fx}{{\\c{ACCENT_ASS}}}SOURCE {{\\c&HD8D8D8&}}{label}"]
+
+
 _PART_WORDS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT"]
 
 
@@ -505,6 +524,7 @@ def generate_subtitles(scenes, output_ass, offsets, punch_cues=None,
                     f"{_ass_time(offset + (p + 1) * step)},Body,,0,0,0,,{part.strip()}")
 
         events.extend(_credit_events(scene, offset, lift_periods))
+        events.extend(_source_events(scene, offset, lift_periods))
 
     # Punch-phrase callouts, top of frame. _punch_phrase_event returns
     # [rule, text] — two events, since the accent rule and the phrase are
