@@ -27,9 +27,13 @@ if os.getenv("PROBE_GEMINI") == "1":
 def call(client, model):
     try:
         r = client.chat.completions.create(
-            model=model, max_tokens=20, temperature=0,
+            # Room to think: reasoning models (gpt-oss, GLM) spend a small
+            # budget on reasoning and answer with empty text.
+            model=model, max_tokens=300, temperature=0,
             messages=[{"role": "user", "content": "Reply with the word OK."}])
         text = (r.choices[0].message.content or "").strip()
+        if not text:
+            return "⚠️ reachable, but the answer was empty"
         return f"✅ answered {text[:30]!r}"
     except Exception as e:
         reason = lp.permanent_failure(e) or ""
