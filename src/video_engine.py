@@ -14,13 +14,20 @@ What changed vs the old version:
    narration, and faded out at the end. Lowered from -17dB (0.14) after the
    owner tested a real render and called it too loud.
 6. Output is true 1080x1920 30fps.
+7. EMPHASIS: figures in the captions are drawn in the accent colour, and the
+   ending's punch phrase slams on screen as it is spoken (punch_timing).
+8. SOUND: a low impact under the hook's figure and under the punch phrase,
+   and the music drawn nearly out for the story's last line (sound_cues,
+   music_volume).
 """
 
 import os
 import random
+import re
 import subprocess
 
 from caption_track import write_srt
+from longform_video import _bump, _find_phrase_time, build_sfx_bed
 from music_attribution import attribution_for
 
 W, H = 1080, 1920
@@ -35,6 +42,43 @@ MUSIC_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "music"
 )
 
+# The ending's punch phrase (the writer's punch_phrase, verbatim from the last
+# line): slammed on screen in the accent colour as the narrator says it, the
+# same reveal the long-form videos use for theirs.
+PUNCH_SIZE = 118
+PUNCH_Y = 560                  # from the top of the frame
+PUNCH_HOLD = 2.4               # at least this long on screen
+PUNCH_TAIL = 0.8               # held this long after the phrase is spoken
+PUNCH_RULE_WIDTH = 520
+ACCENT_ASS = r"&H0000E8FF&"   # the channel's yellow, as the long-form uses
+WHITE_ASS = r"&H00FFFFFF&"
+
+# Figures are the point of this channel, so they read as the point: every
+# number in a caption is drawn in the accent colour. Digits, and number words
+# except "zero" and "one" ("no one" is not a figure).
+_NUMBER_WORD = re.compile(
+    r"^(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|"
+    r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|"
+    r"hundreds?|thousands?|millions?|billions?|dozens?)(-\w+)?$")
+
+
+def _is_figure(word: str) -> bool:
+    bare = re.sub(r"[^\w-]", "", word.lower())
+    return bool(re.search(r"\d", bare) or _NUMBER_WORD.match(bare))
+
+
+def _caption_text(chunk) -> str:
+    """One caption chunk, upper-cased, with its figures in the accent colour."""
+    out = []
+    for w in chunk:
+        word = w["word"].upper().replace("{", "").replace("}", "")
+        if _is_figure(w["word"]):
+            word = f"{{\\c{ACCENT_ASS}}}{word}{{\\c{WHITE_ASS}}}"
+        out.append(word)
+    return " ".join(out)
+
+
 ASS_HEADER = f"""[Script Info]
 Title: Shadow Archives Captions
 ScriptType: v4.00+
@@ -47,10 +91,14 @@ PlayResY: {H}
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Word,{FONT_NAME},96,&H00FFFFFF,&H0000E8FF,&H00000000,&HA0000000,-1,0,0,0,100,100,1,0,1,7,4,2,60,60,430,1
 Style: Cta,{FONT_NAME},60,&H0000E8FF,&H00FFFFFF,&H00000000,&HA0000000,-1,0,0,0,100,100,2,0,1,5,3,2,60,60,880,1
+Style: Punch,{FONT_NAME},{PUNCH_SIZE},&H0000E8FF,&H00FFFFFF,&H00000000,&HB0000000,-1,0,0,0,100,100,2,0,1,7,4,8,70,70,{PUNCH_Y},1
+Style: Rule,{FONT_NAME},10,&H00000000,&H00000000,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+# Punch sits top-centre (Alignment=8) in the upper third, well clear of the
+# narration captions at the bottom and of the Shorts title overlay.
 # Alignment=2 -> bottom-center; MarginV=430 keeps text above the Shorts UI
 # (like/comment buttons, title overlay) but well below screen center.
 # The Cta style sits at MarginV=880, well clear of the narration captions, so the
@@ -123,6 +171,76 @@ def _chunk_words(words, max_words=4):
     return chunks
 
 
+def _last_story_index(scenes):
+    story = [i for i, s in enumerate(scenes) if not s.get("is_outro")]
+    return story[-1] if story else None
+
+
+def punch_timing(script_data: dict, timeline_offsets: list):
+    """(start, end) on the video's timeline where the punch phrase is spoken,
+    or None when there is no phrase or its words cannot be found."""
+    phrase = (script_data.get("punch_phrase") or "").strip()
+    scenes = script_data.get("scenes") or []
+    idx = _last_story_index(scenes)
+    if not phrase or idx is None or idx >= len(timeline_offsets):
+        return None
+    try:
+        found = _find_phrase_time(scenes[idx], phrase)
+    except (KeyError, TypeError, ValueError):
+        found = None
+    if not found:
+        print(f"   ⚠️ Punch phrase {phrase!r} not found in the word timings.")
+        return None
+    return timeline_offsets[idx] + found[0], timeline_offsets[idx] + found[1]
+
+
+def last_line_start(script_data: dict, timeline_offsets: list):
+    """When the story's last sentence begins on the video's timeline."""
+    scenes = script_data.get("scenes") or []
+    idx = _last_story_index(scenes)
+    if idx is None or idx >= len(timeline_offsets):
+        return None
+    words = _repunctuate(scenes[idx].get("words") or [],
+                         scenes[idx].get("narration", ""))
+    if not words:
+        return None
+    start = 0
+    for i, w in enumerate(words[:-1]):
+        if w["word"].rstrip().endswith((".", "!", "?")):
+            start = i + 1
+    return timeline_offsets[idx] + float(words[start]["start"])
+
+
+def hook_figure_time(script_data: dict, timeline_offsets: list):
+    """When the hook's first figure is spoken, or None if it has none."""
+    scenes = script_data.get("scenes") or []
+    if not scenes or not timeline_offsets or scenes[0].get("is_outro"):
+        return None
+    for w in scenes[0].get("words") or []:
+        if _is_figure(w.get("word", "")):
+            return timeline_offsets[0] + float(w["start"])
+    return None
+
+
+def _punch_events(start: float, end_spoken: float, phrase: str):
+    """The long-form punch reveal at Shorts size: small, blurred and clear,
+    punching past full size and settling back in under 300ms, with an accent
+    rule drawing out underneath."""
+    end = start + max(PUNCH_HOLD, (end_spoken - start) + PUNCH_TAIL)
+    fx = (r"{\alpha&HFF&\be8\fscx55\fscy55\frz-3"
+          r"\t(0,180,\alpha&H00&\fscx116\fscy116\frz2\be0)"
+          r"\t(180,260,\fscx100\fscy100\frz0)}")
+    body = phrase.replace("{", "").replace("}", "").upper()
+    text = f"Dialogue: 2,{_ass_time(start)},{_ass_time(end)},Punch,,0,0,0,,{fx}{body}"
+    rule_x = W // 2 - PUNCH_RULE_WIDTH // 2
+    rule_y = PUNCH_Y + PUNCH_SIZE + 24
+    rule = (f"{{\\an7\\pos({rule_x},{rule_y})\\1c{ACCENT_ASS}\\1a&H30&"
+            f"\\bord0\\shad0\\fscx0\\fad(0,300)\\t(60,260,\\fscx100)\\p1}}"
+            f"m 0 0 l {PUNCH_RULE_WIDTH} 0 l {PUNCH_RULE_WIDTH} 7 l 0 7{{\\p0}}")
+    rule_line = f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},Rule,,0,0,0,,{rule}"
+    return [rule_line, text]
+
+
 def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: list,
                        total_duration: float = 0.0):
     """Builds word-synced pop-in captions. timeline_offsets[i] is the global
@@ -130,6 +248,18 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
     length of the crossfaded timeline, used to place the end-card CTA."""
     print("📝 Generating word-synced captions...")
     events = []
+
+    # While the punch phrase is on screen, the bottom captions saying the same
+    # words stand down: the phrase twice at once is noise, not emphasis.
+    punch = punch_timing(script_data, timeline_offsets)
+    quiet = None
+    if punch:
+        punch_lines = _punch_events(
+            punch[0], punch[1], script_data["punch_phrase"])
+        events += punch_lines
+        quiet = (punch[0] - 0.05, punch[1])
+        print(f"💥 Punch phrase at {punch[0]:.1f}s: "
+              f"{script_data['punch_phrase']!r}")
 
     for idx, scene in enumerate(script_data.get("scenes", [])):
         offset = timeline_offsets[idx]
@@ -151,8 +281,9 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
                     end = offset + chunks[c + 1][0]["start"]
                 else:
                     end = offset + scene["duration"]
-                text = " ".join(w["word"] for w in chunk).upper()
-                text = text.replace("{", "").replace("}", "")
+                if quiet and quiet[0] <= start < quiet[1]:
+                    continue
+                text = _caption_text(chunk)
                 # pop-in: scale 70% -> 100% over 90ms
                 fx = r"{\fscx70\fscy70\t(0,90,\fscx100\fscy100)}"
                 events.append(
@@ -326,6 +457,46 @@ def create_scene_clip(shots, audio_path, duration, output_path):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
 
+# Sound design, borrowed from the long-form lanes and held just as low: these
+# are punctuation, and the moment a viewer notices them as effects the video
+# reads as a template. Two impacts (under the hook's figure and under the
+# punch phrase), and the music bed drawn nearly out of the way for the
+# story's last line, so the ending lands on the voice alone.
+MUSIC_LEVEL = 0.10
+MUSIC_LAST_LINE = 0.25         # share of MUSIC_LEVEL left under the last line
+DUCK_LEAD = 0.5                # the duck is complete this long before the line
+
+
+def sound_cues(script_data: dict, offsets: list):
+    """[("impact", t)] for the sfx bed."""
+    cues = []
+    hook = hook_figure_time(script_data, offsets)
+    if hook is not None:
+        cues.append(("impact", hook))
+    punch = punch_timing(script_data, offsets)
+    if punch:
+        cues.append(("impact", punch[0]))
+    return cues
+
+
+def music_volume(script_data: dict, offsets: list, total: float) -> str:
+    """The bed's level over time as an ffmpeg expression: MUSIC_LEVEL, dipping
+    to MUSIC_LAST_LINE of it from just before the last line to the end of the
+    story, and back up for the next-file outro."""
+    start = last_line_start(script_data, offsets)
+    scenes = script_data.get("scenes") or []
+    idx = _last_story_index(scenes)
+    if start is None or idx is None:
+        return f"{MUSIC_LEVEL:.3f}"
+    story_end = offsets[idx] + scenes[idx]["duration"]
+    a, b = max(0.0, start - DUCK_LEAD - 0.3), min(total, story_end + 0.3)
+    if b <= a:
+        return f"{MUSIC_LEVEL:.3f}"
+    print(f"🎚️  Music ducks under the last line at {start:.1f}s.")
+    return (f"{MUSIC_LEVEL:.3f}*(1-{1 - MUSIC_LAST_LINE:.3f}*"
+            f"{_bump(a, b, fade=0.3)})")
+
+
 def _pick_music() -> str | None:
     if not os.path.isdir(MUSIC_DIR):
         return None
@@ -429,6 +600,9 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
         f"fade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6"
     )
 
+    sfx = build_sfx_bed(sound_cues(script_data, offsets), total,
+                        os.path.join(build_dir, "sfx.wav"))
+
     music = _pick_music()
     # Most tracks need nothing here (YouTube Audio Library, "Attribution not
     # required"), but a Creative Commons track only stays license-compliant
@@ -436,22 +610,35 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     script_data["music_attribution"] = attribution_for(music) if music else ""
     if music:
         print(f"🎵 Mixing background music: {os.path.basename(music)}")
+        level = music_volume(script_data, offsets, total)
+        sfx_in = "[2:a]" if sfx else ""
         af = (
             f"[1:a]aloop=loop=-1:size=2e9,atrim=0:{total:.3f},"
-            f"volume=0.10,afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bg];"
-            f"[0:a][bg]amix=inputs=2:duration=first:normalize=0,"
+            f"volume=eval=frame:volume='{level}',"
+            f"afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bg];"
+            f"[0:a][bg]{sfx_in}amix=inputs={3 if sfx else 2}:duration=first:"
+            f"normalize=0,"
             f"afade=t=out:st={max(total - 0.8, 0):.2f}:d=0.8[aout]"
         )
         cmd = ["ffmpeg", "-y", "-i", merged, "-i", music,
+               *(["-i", sfx] if sfx else []),
                "-filter_complex", af, "-map", "0:v", "-map", "[aout]",
                "-vf", vf,
                "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                "-c:a", "aac", "-b:a", "192k", final_output]
     else:
         print("🎵 No track in music/ — rendering without background music.")
-        cmd = ["ffmpeg", "-y", "-i", merged, "-vf", vf,
-               "-c:v", "libx264", "-preset", "medium", "-crf", "19",
-               "-c:a", "copy", final_output]
+        if sfx:
+            cmd = ["ffmpeg", "-y", "-i", merged, "-i", sfx,
+                   "-filter_complex",
+                   "[0:a][1:a]amix=inputs=2:duration=first:normalize=0[aout]",
+                   "-map", "0:v", "-map", "[aout]", "-vf", vf,
+                   "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+                   "-c:a", "aac", "-b:a", "192k", final_output]
+        else:
+            cmd = ["ffmpeg", "-y", "-i", merged, "-vf", vf,
+                   "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+                   "-c:a", "copy", final_output]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
     print(f"✅ Video pipeline complete: {final_output}")
