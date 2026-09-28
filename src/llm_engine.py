@@ -93,6 +93,11 @@ STRUCTURE (non-negotiable, this is what drives retention):
 - Scenes 3-4: escalate. Each scene must end on a mini-cliffhanger or a turn.
 - Scene 5: the cost, in numbers, then ONE final line that lingers (dark irony or the \
 detail that makes it worse). Do not end on a moral or a lesson.
+- THE TURN: once, in scene 3 or 4, just before the moment everything goes wrong, \
+the narrator speaks straight to the viewer in one short line (at most 8 words): \
+"Now watch what the captain does next.", "Remember that order?", "Here is the \
+part nobody planned for." It must point at something that really happens in \
+the next line. Once only, never in the hook, never a fake cliffhanger.
 - Total spoken length: 110-130 words (about 45 seconds of narration — the pipeline \
 adds a short closing tease after your last line). 5 scenes.
 
@@ -916,7 +921,10 @@ def generate_video_script(topic: str = None, avoid_titles=(),
         from shorts_facts import prompt_block
         facts_block = prompt_block(facts)
     else:
-        facts_block = "Stick to established facts about this event.\n"
+        # No source to check a quote against, so no quotes: a remembered
+        # quote is the likeliest thing a model invents.
+        facts_block = ("Stick to established facts about this event. Do not "
+                       "quote anyone.\n")
 
     user_prompt = (
         f"Write today's YouTube Short script about this specific true story:\n\n{topic}\n\n"
