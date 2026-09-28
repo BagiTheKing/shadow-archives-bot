@@ -12,7 +12,9 @@ on:
     #
     # This lane normally picks its topic from the channel's own numbers, so the
     # day does not matter. LONGFORM_TOPIC_OFFSET only feeds the fallback.
-    - cron: '0 9 * * 2'
+    # Wednesdays since 2026-09-28 (owner): Tuesday is a trend-lane day now,
+    # and two story videos on one day share one free quota.
+    - cron: '0 9 * * 3'
   workflow_dispatch:
     inputs:
       skip_upload:
