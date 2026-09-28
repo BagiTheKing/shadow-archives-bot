@@ -812,6 +812,49 @@ def normalize_next_tease(data: dict, next_topic: str) -> dict:
 
 MIN_PUNCH_WORDS, MAX_PUNCH_WORDS = 2, 6
 
+# The turn (docs/SHORTS_SPEC.md 5): one short line spoken to the viewer, in a
+# middle scene. A sentence counts when it is short and speaks to the viewer:
+# "you", or one of the storyteller's imperatives.
+TURN_MAX_WORDS = 10
+MAX_TURN_LINES = 2
+_ADDRESS = re.compile(r"\b(you|your|watch|remember|here'?s|here is|look at|"
+                      r"listen)\b", re.IGNORECASE)
+_QUOTED = re.compile(r"[\"“][^\"”]*[\"”]")
+
+
+def _turn_lines(narration: str):
+    text = _QUOTED.sub("", narration or "")
+    return [x for x in re.split(r"(?<=[.!?])\s+", text.strip())
+            if x and len(x.split()) <= TURN_MAX_WORDS and _ADDRESS.search(x)]
+
+
+def spec_issues(data: dict, has_facts: bool) -> list:
+    """The writing rules of docs/SHORTS_SPEC.md that the prompt asks for and
+    _validate does not already check. Each problem is one short sentence,
+    handed back to the writer on the next attempt."""
+    scenes = [s.get("narration") or "" for s in data.get("scenes") or []]
+    problems = []
+    if len(scenes) >= 3:
+        middle = [t for s in scenes[1:-1] for t in _turn_lines(s)]
+        everywhere = middle + _turn_lines(scenes[-1])
+        if _turn_lines(scenes[0]):
+            problems.append("the hook speaks to the viewer; the line to the "
+                            "viewer belongs in scene 3 or 4")
+        elif not middle:
+            problems.append("there is no line spoken to the viewer at the "
+                            "turn (one line of at most 8 words in scene 3 or "
+                            "4, like \"Now watch what the captain does next.\")")
+        elif len(everywhere) > MAX_TURN_LINES:
+            problems.append("the narrator speaks to the viewer "
+                            f"{len(everywhere)} times; once is the rule")
+    if not has_facts:
+        # With no source to check a quote against, there are no quotes.
+        for s in scenes:
+            for q in re.findall(r"[\"“]([^\"”]{12,})[\"”]", s):
+                problems.append(f"the quote \"{q[:50]}\" has no source to "
+                                "be checked against; do not quote anyone")
+    return problems
+
 
 def _tokens(text: str):
     return [re.sub(r"[^a-z0-9]", "", w.lower()) for w in (text or "").split()]
@@ -1008,18 +1051,22 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                 if not _validate(data, title_max, avoid_titles, series_name):
                     print("⚠️ Script failed validation, retrying...")
                     continue
+                problems = spec_issues(data, bool(facts))
+                for problem in problems:
+                    print(f"⚠️ Spec check: {problem}.")
                 if facts:
                     from shorts_facts import unsupported_claims
-                    problems = unsupported_claims(data, facts["text"])
-                    if problems:
-                        for problem in problems[:6]:
-                            print(f"⚠️ Fact check: {problem}.")
-                        fact_feedback = (
-                            "\n\nYOUR LAST SCRIPT WAS REJECTED because it "
-                            "states things the source article does not: "
-                            + "; ".join(problems[:6]) + ". Use only the fact "
-                            "sheet's names and figures.")
-                        continue
+                    found = unsupported_claims(data, facts["text"])
+                    for problem in found[:6]:
+                        print(f"⚠️ Fact check: {problem}.")
+                    problems += found[:6]
+                if problems:
+                    fact_feedback = (
+                        "\n\nYOUR LAST SCRIPT WAS REJECTED: "
+                        + "; ".join(problems) + ". Fix exactly these; use "
+                        "only the fact sheet's names, figures and quotes.")
+                    continue
+                if facts:
                     data["source_title"] = facts["title"]
                     data["source_url"] = facts["url"]
                     print("✅ Fact check: every figure and name is in "

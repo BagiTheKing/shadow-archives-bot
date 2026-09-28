@@ -21,6 +21,7 @@ What changed vs the old version:
    music_volume).
 """
 
+import math
 import os
 import random
 import re
@@ -379,7 +380,11 @@ def _static_filter(duration: float) -> str:
 # the scene has one (shorts_archive.py), and a punch-in on the painting. Cuts
 # inside a scene are hard; scenes still dissolve into each other.
 SHOT_SECONDS = float(os.getenv("SHORTS_SHOT_SECONDS", "3.5"))
-MAX_SHOTS = 3
+# docs/SHORTS_SPEC.md 9: no shot is held longer than this, whatever the
+# scene's length. A 14-second scene gets four shots, not three; past four
+# the shots cycle (wide, archive, punch-in, ...) with new motion each time.
+MAX_SHOT_SECONDS = 4.0
+MAX_SHOTS = 8
 PUNCH = "punch"
 PUNCH_ZOOM = 1.38
 # Archive pictures sit over a blurred copy of themselves; a pan would slide
@@ -399,14 +404,26 @@ def plan_shots(scene: dict, clip_len: float, idx: int):
         # The generator failed this scene: the real picture takes its place.
         image, archive, base = archive, None, _ARCHIVE_MOTIONS[idx % 2]
 
-    n = max(1, min(MAX_SHOTS, round(clip_len / SHOT_SECONDS)))
+    n = max(1, min(MAX_SHOTS, max(round(clip_len / SHOT_SECONDS),
+                                  math.ceil(clip_len / MAX_SHOT_SECONDS))))
     if archive and n < 2 and clip_len >= 2.4:
         n = 2                     # a real picture is worth a quick cut
     if archive:
         pool = [(image, base), (archive, _ARCHIVE_MOTIONS[idx % 2]),
-                (image, PUNCH)]
+                (image, PUNCH), (archive, PUNCH)]
     else:
-        pool = [(image, base), (image, PUNCH), (image, (base + 2) % 4)]
+        pool = [(image, base), (image, PUNCH), (image, (base + 2) % 4),
+                (image, PUNCH)]
+    # A scene longer than four shots: go round again, each wide shot with a
+    # different move from the one it repeats.
+    while len(pool) < n:
+        k = len(pool)
+        shot, motion = pool[k % 4]
+        if shot == archive and motion != PUNCH:
+            motion = _ARCHIVE_MOTIONS[(_ARCHIVE_MOTIONS.index(motion) + 1) % 2]
+        elif motion != PUNCH:
+            motion = (motion + 1) % 4
+        pool.append((shot, motion))
     return pool[:n]
 
 
