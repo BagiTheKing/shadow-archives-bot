@@ -147,6 +147,11 @@ def search_commons(query: str, limit: int = 10) -> list:
         print(f"⚠️ Commons search failed for {query!r}: {e}")
         return []
 
+    return _candidates(pages)
+
+
+def _candidates(pages: dict) -> list:
+    """Usable Commons pages (with imageinfo) as candidates, best first."""
     scored = []
     for page in pages.values():
         infos = page.get("imageinfo") or []
@@ -168,6 +173,35 @@ def search_commons(query: str, limit: int = 10) -> list:
         }))
     scored.sort(key=lambda t: t[0], reverse=True)
     return [c for _, c in scored]
+
+
+def article_lead_image(article_title: str):
+    """The free lead image of a Wikipedia article, as a Commons candidate, or
+    None. The lead image is the one picture an editor chose to stand for the
+    whole event, which makes it the most reliably relevant real image there
+    is. pilicense=free keeps out the fair-use files English Wikipedia hosts
+    itself, which this channel may not reuse."""
+    try:
+        r = _polite_get("https://en.wikipedia.org/w/api.php", params={
+            "action": "query", "format": "json", "titles": article_title,
+            "prop": "pageimages", "piprop": "name", "pilicense": "free",
+            "redirects": 1}, timeout=25)
+        r.raise_for_status()
+        pages = (r.json().get("query") or {}).get("pages") or {}
+        name = next((p.get("pageimage") for p in pages.values()
+                     if p.get("pageimage")), None)
+        if not name:
+            return None
+        r = _polite_get(COMMONS_API, params={
+            "action": "query", "format": "json", "titles": f"File:{name}",
+            "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": 1600}, timeout=25)
+        r.raise_for_status()
+        found = _candidates((r.json().get("query") or {}).get("pages") or {})
+    except Exception as e:
+        print(f"⚠️ Lead image lookup failed for {article_title!r}: {e}")
+        return None
+    return found[0] if found else None
 
 
 def _fit_frame(img: Image.Image, w: int, h: int) -> Image.Image:
@@ -205,9 +239,40 @@ def _fit_frame(img: Image.Image, w: int, h: int) -> Image.Image:
     return bg
 
 
+def fit_vertical(img: Image.Image, w: int, h: int) -> Image.Image:
+    """Fills a tall w x h frame (the Shorts' 9:16). Cropping a landscape photo
+    to 9:16 keeps a third of it, so anything wider than tall is cut to at most
+    a square and sits across the full width over a blurred, darkened copy of
+    itself; a tall photo fills the width; only a photo taller than the frame
+    is cover-cropped."""
+    ratio = img.width / img.height
+    if ratio <= w / h:
+        new_h = int(img.width * h / w)
+        y = max(0, (img.height - new_h) // 3)      # keep the top: faces, masts
+        return img.crop((0, y, img.width, y + new_h)).resize((w, h), Image.LANCZOS)
+
+    fg = img
+    if ratio > 1.0:
+        side = img.height
+        x = (img.width - side) // 2
+        fg = img.crop((x, 0, x + side, side))
+    fg = fg.resize((w, int(w * fg.height / fg.width)), Image.LANCZOS)
+
+    scale = max(w / img.width, h / img.height)
+    bg = img.resize((int(img.width * scale) + 1, int(img.height * scale) + 1),
+                    Image.LANCZOS)
+    bg = bg.crop(((bg.width - w) // 2, (bg.height - h) // 2,
+                  (bg.width - w) // 2 + w, (bg.height - h) // 2 + h))
+    bg = bg.filter(ImageFilter.GaussianBlur(w // 25))
+    bg = ImageEnhance.Brightness(bg).enhance(0.4)
+    bg.paste(fg, (0, (h - fg.height) // 2))
+    return bg
+
+
 def download_archival_image(candidate: dict, output_path: str,
-                            width: int, height: int) -> bool:
-    """Downloads one Commons candidate and saves it fitted to width x height."""
+                            width: int, height: int, fit=None) -> bool:
+    """Downloads one Commons candidate and saves it fitted to width x height
+    (by `fit`, the 16:9 treatment unless told otherwise)."""
     try:
         r = _polite_get(candidate["url"])
         r.raise_for_status()
@@ -217,7 +282,7 @@ def download_archival_image(candidate: dict, output_path: str,
     except Exception as e:
         print(f"⚠️ Archival download failed ({candidate.get('title', '?')}): {e}")
         return False
-    _fit_frame(img, width, height).save(output_path, "JPEG", quality=92)
+    (fit or _fit_frame)(img, width, height).save(output_path, "JPEG", quality=92)
     return True
 
 

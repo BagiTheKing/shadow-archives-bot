@@ -6,6 +6,8 @@ What changed vs the old version:
    animation, instead of a full paragraph parked in the center of the screen.
 2. MOTION: each scene gets a different Ken Burns move (zoom in / zoom out /
    pan left / pan right), with the source upscaled first to kill zoompan jitter.
+   Scenes are cut into shots of ~3.5s (painting, archive picture, punch-in),
+   see plan_shots.
 3. TRANSITIONS: 0.4s crossfades between scenes instead of hard cuts.
 4. GRADE: subtle vignette + film grain for a cohesive cinematic look.
 5. MUSIC: if a track exists in music/, it's looped, ducked -20dB under the
@@ -219,6 +221,17 @@ def _ken_burns_filter(duration: float, style: int) -> str:
     return f"{up},{zp}"
 
 
+def _punch_filter(duration: float) -> str:
+    """A tight crop of the same frame, drifting in slowly: the cut from a wide
+    shot to this reads as a new shot without spending another generation.
+    Aimed a little above centre, where the single figure's face sits."""
+    frames = max(int(duration * FPS), 1)
+    up = f"scale={W * 2}:{H * 2}:flags=lanczos"
+    return (f"{up},zoompan=z='{PUNCH_ZOOM}+{0.06 / frames:.6f}*on'"
+            f":x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*0.42'"
+            f":d={frames}:s={W}x{H}:fps={FPS}")
+
+
 def _static_filter(duration: float) -> str:
     """No motion. The next-file card is typography, and Ken Burns on
     typography either crops the headline or drifts it off-centre — the whole
@@ -226,8 +239,53 @@ def _static_filter(duration: float) -> str:
     return f"scale={W}:{H}:flags=lanczos,fps={FPS}"
 
 
-def create_scene_clip(image_path, audio_path, duration, output_path, style):
-    """One scene, rendered XFADE seconds longer than its narration.
+# A still held for nine seconds is where a Short loses people: every scene was
+# one image for its whole narration, about 9s each. Scenes are now cut into
+# shots of about SHOT_SECONDS: the painting wide, a real archive picture when
+# the scene has one (shorts_archive.py), and a punch-in on the painting. Cuts
+# inside a scene are hard; scenes still dissolve into each other.
+SHOT_SECONDS = float(os.getenv("SHORTS_SHOT_SECONDS", "3.5"))
+MAX_SHOTS = 3
+PUNCH = "punch"
+PUNCH_ZOOM = 1.38
+# Archive pictures sit over a blurred copy of themselves; a pan would slide
+# the picture off centre, so they only zoom.
+_ARCHIVE_MOTIONS = (0, 1)
+
+
+def plan_shots(scene: dict, clip_len: float, idx: int):
+    """[(image_path, motion)] for one scene: motion is a Ken Burns style
+    (0-3), PUNCH, or None for the static next-file card."""
+    image = scene["image_path"]
+    if scene.get("is_outro"):
+        return [(image, None)]
+    archive = scene.get("archive_path")
+    base = idx % 4
+    if archive and scene.get("image_source") == "designed-fallback":
+        # The generator failed this scene: the real picture takes its place.
+        image, archive, base = archive, None, _ARCHIVE_MOTIONS[idx % 2]
+
+    n = max(1, min(MAX_SHOTS, round(clip_len / SHOT_SECONDS)))
+    if archive and n < 2 and clip_len >= 2.4:
+        n = 2                     # a real picture is worth a quick cut
+    if archive:
+        pool = [(image, base), (archive, _ARCHIVE_MOTIONS[idx % 2]),
+                (image, PUNCH)]
+    else:
+        pool = [(image, base), (image, PUNCH), (image, (base + 2) % 4)]
+    return pool[:n]
+
+
+def _shot_frames(clip_len: float, n: int):
+    """Frames per shot, summing exactly to the clip's frame count."""
+    total = max(int(round(clip_len * FPS)), n)
+    each = total // n
+    return [each] * (n - 1) + [total - each * (n - 1)]
+
+
+def create_scene_clip(shots, audio_path, duration, output_path):
+    """One scene, rendered XFADE seconds longer than its narration, as one or
+    more shots cut together.
 
     The extra tail is silence, and it exists so the picture has something to
     dissolve across that is not speech. Consecutive clips overlap by exactly
@@ -237,17 +295,31 @@ def create_scene_clip(image_path, audio_path, duration, output_path, style):
     died because a harbour had..." still fading while the next line started.
     """
     clip_len = duration + XFADE
-    vf = (_static_filter(clip_len) if style is None
-          else _ken_burns_filter(clip_len, style))
+    frames = _shot_frames(clip_len, len(shots))
+    inputs, graph = [], []
+    for k, ((image, motion), n) in enumerate(zip(shots, frames)):
+        inputs += ["-loop", "1", "-framerate", str(FPS), "-i", image]
+        seconds = n / FPS
+        if motion is None:
+            vf = _static_filter(seconds)
+        elif motion == PUNCH:
+            vf = _punch_filter(seconds)
+        else:
+            vf = _ken_burns_filter(seconds, motion)
+        graph.append(f"[{k}:v]{vf},trim=end_frame={n},setpts=PTS-STARTPTS,"
+                     f"setsar=1[s{k}]")
+    a = len(shots)
+    graph.append("".join(f"[s{k}]" for k in range(a))
+                 + f"concat=n={a}:v=1:a=0,format=yuv420p[v]")
+    graph.append(f"[{a}:a]apad=pad_dur={XFADE:.3f}[a]")
     cmd = [
-        "ffmpeg", "-y",
-        "-loop", "1", "-framerate", str(FPS), "-i", image_path,
+        "ffmpeg", "-y", *inputs,
         "-i", audio_path,
-        "-vf", vf,
-        "-af", f"apad=pad_dur={XFADE:.3f}",
+        "-filter_complex", ";".join(graph),
+        "-map", "[v]", "-map", "[a]",
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
-        "-pix_fmt", "yuv420p",
+        "-pix_fmt", "yuv420p", "-r", str(FPS),
         "-t", f"{clip_len:.3f}",
         output_path,
     ]
@@ -273,11 +345,16 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
     clips, durations = [], []
     for idx, scene in enumerate(scenes):
         clip_path = os.path.join(build_dir, f"clip_{idx}.mp4")
-        style = None if scene.get("is_outro") else idx % 4
+        shots = plan_shots(scene, scene["duration"] + XFADE, idx)
+        described = ", ".join(
+            "static card" if m is None else
+            ("archive" if img == scene.get("archive_path") else "painting")
+            + (" punch-in" if m == PUNCH else "")
+            for img, m in shots)
         print(f"🎞️ Rendering scene {idx} ({scene['duration']:.1f}s, "
-              f"motion {'static card' if style is None else style})...")
-        create_scene_clip(scene["image_path"], scene["audio_path"],
-                          scene["duration"], clip_path, style=style)
+              f"{len(shots)} shot(s): {described})...")
+        create_scene_clip(shots, scene["audio_path"], scene["duration"],
+                          clip_path)
         clips.append(clip_path)
         durations.append(scene["duration"])
 
