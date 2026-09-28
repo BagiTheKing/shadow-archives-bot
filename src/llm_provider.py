@@ -214,14 +214,20 @@ def _discover_openai_models(client, provider: str, limit: int = 3) -> list:
         raw = list(client.models.list())
         ids = []
         for model in raw:
-            mid = (getattr(model, "id", "") or "").split("/")[-1]
-            if not mid or any(s in mid.lower() for s in _CHAT_SKIP):
+            # The whole ID, owner prefix included: Groq lists and serves
+            # "openai/gpt-oss-20b", and the bare "gpt-oss-20b" this used to
+            # keep (a split meant for Gemini's "models/..." names) answers
+            # 404 "does not exist", which made every Groq model look like a
+            # bad key.
+            mid = getattr(model, "id", "") or ""
+            name = mid.split("/")[-1].lower()
+            if not mid or any(s in name for s in _CHAT_SKIP):
                 continue
             ids.append(mid)
         if ids:
             # Longest name last: providers tend to suffix the specialised
             # variants, and the plain name is the general-purpose one.
-            ids.sort(key=lambda m: (len(m), m))
+            ids.sort(key=lambda m: (len(m.split("/")[-1]), m))
             chosen = ids[:limit]
             print(f"   🔍 {provider}: {len(raw)} model(s) in the catalogue, "
                   f"{len(ids)} usable, using {chosen}")

@@ -1,0 +1,38 @@
+name: Probe writer keys
+
+# One tiny request per writer model (Groq, Cerebras, Zhipu; Gemini only when
+# asked, to keep its small daily allowance for the videos), so a broken key
+# shows up here in a minute instead of halfway through a video. See
+# tools/probe_llm.py. Prints model IDs and errors, never a key.
+on:
+  workflow_dispatch:
+    inputs:
+      include_gemini:
+        description: 'Also probe Gemini (spends a few of its daily requests)'
+        type: boolean
+        default: false
+  push:
+    branches: [ccr-b0c9a2a9-0flg2p]
+    paths:
+      - tools/probe_llm.py
+      - .github/workflows/probe_llm.yml
+      - src/llm_provider.py
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install openai requests
+      - name: Probe
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PROBE_GEMINI: ${{ inputs.include_gemini && '1' || '0' }}
+        run: python tools/probe_llm.py
