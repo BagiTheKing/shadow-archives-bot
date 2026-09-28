@@ -93,6 +93,11 @@ STRUCTURE (non-negotiable, this is what drives retention):
 - Scenes 3-4: escalate. Each scene must end on a mini-cliffhanger or a turn.
 - Scene 5: the cost, in numbers, then ONE final line that lingers (dark irony or the \
 detail that makes it worse). Do not end on a moral or a lesson.
+- THE TURN: once, in scene 3 or 4, just before the moment everything goes wrong, \
+the narrator speaks straight to the viewer in one short line (at most 8 words): \
+"Now watch what the captain does next.", "Remember that order?", "Here is the \
+part nobody planned for." It must point at something that really happens in \
+the next line. Once only, never in the hook, never a fake cliffhanger.
 - Total spoken length: 110-130 words (about 45 seconds of narration — the pipeline \
 adds a short closing tease after your last line). 5 scenes.
 
@@ -182,6 +187,14 @@ return the grammatical shape those titles use. A channel whose every title reads
 interchangeable, and they stop reading past the third word. Question-led, \
 number-led, a plain declarative or a two-part title are all available.
 
+PUNCH PHRASE:
+- punch_phrase: 2-6 words copied EXACTLY, word for word, from the last sentence \
+of scene 5 — the words that land the ending (the number, the irony, the detail \
+that makes it worse). It is slammed on screen as the narrator says it, so it \
+must be words the narration actually speaks, in that order.
+- GOOD: "illegal to wear the medals", "twenty minutes"
+- BAD: a summary of the ending that is not in the narration.
+
 COMMENT QUESTION:
 - One question, posted as the first comment under the video. It must be answerable by someone who just watched THIS video and has an opinion — who was actually at fault, which moment was the point of no return, what they would have done. Name the people or the choice; never ask "what do you think?" on its own.
 - GOOD: "Nolan carried the order and Lucan read it. Which of them do you blame?"
@@ -211,6 +224,7 @@ OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
   "thumbnail_text": "three or four words, no punctuation",
   "thumbnail_badge": "the year",
   "comment_question": "one specific question naming someone or something from the story",
+  "punch_phrase": "2-6 words copied exactly from the last sentence of scene 5",
   "next_tease": "only when the user message names a NEXT story: at most 12 words teasing it",
   "tags": ["8-12 specific search tags, including the proper nouns from the story"],
   "scenes": [
@@ -796,6 +810,81 @@ def normalize_next_tease(data: dict, next_topic: str) -> dict:
     return data
 
 
+MIN_PUNCH_WORDS, MAX_PUNCH_WORDS = 2, 6
+
+# The turn (docs/SHORTS_SPEC.md 5): one short line spoken to the viewer, in a
+# middle scene. A sentence counts when it is short and speaks to the viewer:
+# "you", or one of the storyteller's imperatives.
+TURN_MAX_WORDS = 10
+MAX_TURN_LINES = 2
+_ADDRESS = re.compile(r"\b(you|your|watch|remember|here'?s|here is|look at|"
+                      r"listen)\b", re.IGNORECASE)
+_QUOTED = re.compile(r"[\"“][^\"”]*[\"”]")
+
+
+def _turn_lines(narration: str):
+    text = _QUOTED.sub("", narration or "")
+    return [x for x in re.split(r"(?<=[.!?])\s+", text.strip())
+            if x and len(x.split()) <= TURN_MAX_WORDS and _ADDRESS.search(x)]
+
+
+def spec_issues(data: dict, has_facts: bool) -> list:
+    """The writing rules of docs/SHORTS_SPEC.md that the prompt asks for and
+    _validate does not already check. Each problem is one short sentence,
+    handed back to the writer on the next attempt."""
+    scenes = [s.get("narration") or "" for s in data.get("scenes") or []]
+    problems = []
+    if len(scenes) >= 3:
+        middle = [t for s in scenes[1:-1] for t in _turn_lines(s)]
+        everywhere = middle + _turn_lines(scenes[-1])
+        if _turn_lines(scenes[0]):
+            problems.append("the hook speaks to the viewer; the line to the "
+                            "viewer belongs in scene 3 or 4")
+        elif not middle:
+            problems.append("there is no line spoken to the viewer at the "
+                            "turn (one line of at most 8 words in scene 3 or "
+                            "4, like \"Now watch what the captain does next.\")")
+        elif len(everywhere) > MAX_TURN_LINES:
+            problems.append("the narrator speaks to the viewer "
+                            f"{len(everywhere)} times; once is the rule")
+    if not has_facts:
+        # With no source to check a quote against, there are no quotes.
+        for s in scenes:
+            for q in re.findall(r"[\"“]([^\"”]{12,})[\"”]", s):
+                problems.append(f"the quote \"{q[:50]}\" has no source to "
+                                "be checked against; do not quote anyone")
+    return problems
+
+
+def _tokens(text: str):
+    return [re.sub(r"[^a-z0-9]", "", w.lower()) for w in (text or "").split()]
+
+
+def normalize_punch_phrase(data: dict) -> dict:
+    """Keeps punch_phrase only if the last scene really speaks it, in place.
+
+    The phrase is timed from the scene's word timings, so a phrase the
+    narration never says cannot be placed at all. A writer that ignored the
+    field, or paraphrased, falls back to the last sentence when that sentence
+    is short enough to be the phrase itself, and otherwise to no card.
+    """
+    scenes = data.get("scenes") or []
+    last = (scenes[-1].get("narration") or "") if scenes else ""
+    spoken = _tokens(last)
+    supplied = (data.get("punch_phrase") or "").strip().strip('"“”')
+    wanted = [t for t in _tokens(supplied) if t]
+    ok = MIN_PUNCH_WORDS <= len(wanted) <= MAX_PUNCH_WORDS and any(
+        spoken[i:i + len(wanted)] == wanted
+        for i in range(len(spoken) - len(wanted) + 1))
+    if not ok:
+        sentences = [x for x in re.split(r"(?<=[.!?])\s+", last.strip()) if x]
+        tail = sentences[-1].rstrip(".!?") if sentences else ""
+        supplied = tail if MIN_PUNCH_WORDS <= len(tail.split()) <= MAX_PUNCH_WORDS \
+            else ""
+    data["punch_phrase"] = supplied.strip(" .,;:!?")
+    return data
+
+
 def generate_video_script(topic: str = None, avoid_titles=(),
                          title_max: int = 80, max_retries_per_model: int = 2,
                          series_name: str = "", next_topic: str = "",
@@ -875,7 +964,10 @@ def generate_video_script(topic: str = None, avoid_titles=(),
         from shorts_facts import prompt_block
         facts_block = prompt_block(facts)
     else:
-        facts_block = "Stick to established facts about this event.\n"
+        # No source to check a quote against, so no quotes: a remembered
+        # quote is the likeliest thing a model invents.
+        facts_block = ("Stick to established facts about this event. Do not "
+                       "quote anyone.\n")
 
     user_prompt = (
         f"Write today's YouTube Short script about this specific true story:\n\n{topic}\n\n"
@@ -959,18 +1051,22 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                 if not _validate(data, title_max, avoid_titles, series_name):
                     print("⚠️ Script failed validation, retrying...")
                     continue
+                problems = spec_issues(data, bool(facts))
+                for problem in problems:
+                    print(f"⚠️ Spec check: {problem}.")
                 if facts:
                     from shorts_facts import unsupported_claims
-                    problems = unsupported_claims(data, facts["text"])
-                    if problems:
-                        for problem in problems[:6]:
-                            print(f"⚠️ Fact check: {problem}.")
-                        fact_feedback = (
-                            "\n\nYOUR LAST SCRIPT WAS REJECTED because it "
-                            "states things the source article does not: "
-                            + "; ".join(problems[:6]) + ". Use only the fact "
-                            "sheet's names and figures.")
-                        continue
+                    found = unsupported_claims(data, facts["text"])
+                    for problem in found[:6]:
+                        print(f"⚠️ Fact check: {problem}.")
+                    problems += found[:6]
+                if problems:
+                    fact_feedback = (
+                        "\n\nYOUR LAST SCRIPT WAS REJECTED: "
+                        + "; ".join(problems) + ". Fix exactly these; use "
+                        "only the fact sheet's names, figures and quotes.")
+                    continue
+                if facts:
                     data["source_title"] = facts["title"]
                     data["source_url"] = facts["url"]
                     print("✅ Fact check: every figure and name is in "
@@ -979,6 +1075,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                 data["format"] = episode_format
                 normalize_thumbnail_fields(data)
                 normalize_next_tease(data, next_topic)
+                normalize_punch_phrase(data)
                 print(f"✅ Script generated by {response.model}")
                 return data
             except Exception as e:

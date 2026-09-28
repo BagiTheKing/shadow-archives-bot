@@ -98,7 +98,12 @@ def prompt_block(facts):
         "digits exactly as the sheet gives them; you may round a large one "
         "down or up in speech (\"over 57,000\" for 57,470), never invent one. "
         "The detail most viewers do not know is in this sheet: find it there, "
-        "never from memory. Quotes only word for word, with their speaker.\n")
+        "never from memory.\n"
+        "QUOTE: if the sheet has a quote from a person in this story that is "
+        "short enough to say in one breath (about 20 words at most), use one: "
+        "copy it word for word inside double quotes and say who said it "
+        "(\"The captain wrote: \"...\"\"). Words in quotes that are not in "
+        "the sheet will be rejected. No quote is better than an altered one.\n")
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +239,14 @@ def unsupported_claims(script, article_text):
             if word not in art:
                 problems.append(f"the name {m.group(0)!r} is not in the source "
                                 "article")
+
+    # Anything the script puts in quotation marks is a quote, and a quote is
+    # only real if the article carries it word for word.
+    for text in spoken:
+        for q in re.findall(r"[\"“]([^\"”]{12,})[\"”]", text):
+            if sm._norm(q).strip(" .,!?") not in art:
+                problems.append(f"the quote \"{q[:70]}\" is not word for word "
+                                "in the source article")
 
     # One report per problem, in the order found.
     return list(dict.fromkeys(problems))

@@ -61,6 +61,20 @@ def _published_at(video):
         return None
 
 
+# Written at the top of every Short cut from a long-form video
+# (longform_clips.py). Kept here as a literal so this module needs nothing
+# from the long-form side.
+CLIP_MARKER = "From the full documentary:"
+
+
+def is_clip(video) -> bool:
+    """A Short cut from a long-form video, not an episode of the daily lane.
+    Clips carry no "Next file" promise and are uploaded by the long-form
+    lanes on their own schedule, so the daily lane's guard and promise
+    ignore them."""
+    return CLIP_MARKER in ((video or {}).get("description") or "")
+
+
 def published_within(videos, hours: float = None):
     """Uploads newer than `hours`, newest first. The same-day duplicate guard."""
     hours = GUARD_HOURS if hours is None else hours
@@ -115,7 +129,8 @@ def promised_topic(videos):
     anchored and vetted when it was promised, so it is kept as written.
     """
     from topics import ALL_TOPICS
-    dated = [(t, v) for v in (videos or []) for t in [_published_at(v)] if t]
+    dated = [(t, v) for v in (videos or []) for t in [_published_at(v)]
+             if t and not is_clip(v)]
     if not dated:
         return None
     newest = max(dated, key=lambda p: p[0])[1]

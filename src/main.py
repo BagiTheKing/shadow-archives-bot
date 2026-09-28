@@ -13,7 +13,7 @@ from thumbnail_engine import make_thumbnail, pick_source_scene
 from topics import ALL_TOPICS, pick_topic
 from channel_insights import _is_short
 from published_history import (FORCE, GUARD_HOURS, _published_at,
-                               covered_topics, describe,
+                               covered_topics, describe, is_clip,
                                load_published, next_episode_number,
                                LIVE_PROMISE_MARKER, promised_topic,
                                published_within, recent_titles, series_suffix)
@@ -536,7 +536,10 @@ def plan_run():
     # Short, while the actual proven failure — this pipeline repeating
     # itself — stays covered.
     recent_all = published_within(history)
-    recent = [v for v in recent_all if _is_short(v.get("duration", ""))]
+    # Clips cut from the long-form videos are Shorts too, but they are the
+    # long-form lanes' uploads on their own schedule, not this lane's.
+    recent = [v for v in recent_all if _is_short(v.get("duration", ""))
+              and not is_clip(v)]
     if recent and not FORCE:
         newest = recent[0]
         # Kept from the earlier diagnostic pass: the real publishedAt and
