@@ -1,0 +1,42 @@
+name: Probe Wikipedia
+
+# Manual only. Saves the rendered HTML of a few Wikipedia articles to the
+# `preview-wiki` branch, so the per-claim source parser (story_mode.py) can
+# be tested on real pages where Wikipedia is not reachable. Never touches
+# main and never uploads anything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "Article titles, separated by |"
+        default: "Six-Day War|Vajont Dam|Chernobyl disaster"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch
+        env:
+          PAGES: ${{ inputs.pages }}
+        run: |
+          mkdir out && cd out
+          IFS='|' read -ra P <<< "$PAGES"
+          for p in "${P[@]}"; do
+            f=$(echo "$p" | tr ' ' '_')
+            curl -sSL -A "ShadowArchivesBot/1.0 (probe)" -G "https://en.wikipedia.org/w/api.php" \
+              --data-urlencode "action=parse" --data-urlencode "page=$p" \
+              --data-urlencode "prop=text" --data-urlencode "format=json" \
+              --data-urlencode "formatversion=2" --data-urlencode "redirects=1" -o "$f.json"
+            ls -la "$f.json"
+          done
+          git init -q -b preview-wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Wikipedia probe (run ${{ github.run_number }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-wiki
