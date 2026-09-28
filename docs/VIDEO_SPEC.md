@@ -9,6 +9,8 @@ without the owner's say-so.
 0. **Story mode is the only long-form format**, on every lane (named
    topics, trends, encore). A run whose story cannot be built stops; the old
    six-chapter arc is never used.
+   A run that loses a chapter, or gets one back at under half its length,
+   stops instead of uploading half a story.
 1. **Chapter 1 is a teaser.** The big picture only: what happened, who
    stood against whom (sides and countries, not individuals), and why it still
    matters. No specific days, dates or clock times, no individual introduced.
@@ -50,6 +52,8 @@ without the owner's say-so.
 11. Quote cards: real quotes only, a named person as speaker, whole
     sentences, no ellipsis; two different people, cast members first, the
     second card from the other side of the story when one has a quote.
+    Only people in the story speak: a cast member or someone the fact
+    sheet names; no card rather than an outsider's quote.
     Every card ends on a red phrase (the person's own words).
 12. **Maps** for each front or turning point the story moves to (up to 4,
     one per chapter, each a different place), never in chapters 1-2 or the

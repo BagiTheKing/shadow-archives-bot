@@ -1986,7 +1986,8 @@ _TITLE_WORDS = {"king", "queen", "president", "prime", "minister", "general",
                 "field", "marshal", "chief", "staff", "defense", "defence",
                 "foreign", "military", "army", "the", "of", "and", "leader",
                 "commander", "premier", "emperor", "chancellor", "secretary",
-                "state", "admiral", "colonel", "sir", "lord", "pope", "shah"}
+                "state", "admiral", "colonel", "sir", "lord", "pope", "shah",
+                "jr", "sr", "ii", "iii"}
 
 
 def _cast_member(attribution, cast):
@@ -2538,11 +2539,22 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             got = _chapter_words(best)
             if got < words * 0.8:
                 short_chapters += 1
+            if story and got < words * 0.5:
+                print(f"❌ Story mode: {heading!r} came back at {got} of ~{words} "
+                      f"words — stopping rather than publishing a gutted story.")
+                return None
             print(f"   ⚠️ Accepting the best attempt at {heading!r} ({got} "
                   f"words) rather than losing the run.")
 
         if not data:
             print(f"❌ Chapter {heading!r} could not be generated.")
+            if story:
+                # A story cannot lose a chapter: the 2026-09-28 Vajont run lost
+                # its turning point, climax and aftermath to spent quotas and
+                # still uploaded a 4-minute video that stopped mid-story.
+                print("❌ Story mode: a chapter is missing — stopping rather "
+                      "than publishing half a story.")
+                return None
             if heading == opening_heading:
                 # The cold open is the only chapter the format cannot do
                 # without: it is the hook, and everything after it is written
@@ -2645,7 +2657,24 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         quote_candidates = _gather_quote_candidates(
             pool, topic, sheet_quotes=(story or {}).get("sheet", {}).get("quotes")
             if story else None, cast=story_cast)
-        real_only = bool(story) and bool(quote_candidates)
+        if story:
+            # Only people who belong to this story may speak on its cards:
+            # a cast member, or someone the fact sheet names. The Vajont run
+            # opened on Martin Luther King Jr and a line of 18th-century
+            # love poetry, because the search had found them.
+            sheet_words = set(re.findall(r"[a-z'-]+", json.dumps(
+                story.get("sheet") or {}, ensure_ascii=False).lower()))
+            def _belongs(c):
+                if _cast_member(c.get("attribution"), story_cast):
+                    return True
+                key = _speaker_key(c.get("attribution"))
+                return bool(key) and key in sheet_words
+            kept = [c for c in quote_candidates if _belongs(c)]
+            if len(kept) < len(quote_candidates):
+                print(f"   ↩️  {len(quote_candidates) - len(kept)} quote(s) dropped: "
+                      f"speaker not in this story.")
+            quote_candidates = kept
+        real_only = bool(story)
 
         # The owner's brief for the two cards: both dark, mysterious and
         # disturbing; the second one sad as well, because by then the story

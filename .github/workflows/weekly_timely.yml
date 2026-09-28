@@ -27,7 +27,11 @@ on:
     # run (see llm_engine.py), so a collision degrades quality/cost, it does
     # not break anything — but it is a real tradeoff of this schedule, not a
     # free change.
-    - cron: '0 15 */2 * *'
+    # 07:40 UTC Mon/Wed/Fri: right after the free Gemini quota resets
+    # (~07:00 UTC), before the Shorts (15:23) spend it, and never on Tuesday,
+    # the encore lane's day. The 15:00 slot left the 2026-09-28 run with
+    # every model spent and half a story.
+    - cron: '40 7 * * 1,3,5'
   workflow_dispatch:
     inputs:
       skip_upload:
