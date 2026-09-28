@@ -181,6 +181,13 @@ jobs:
           # that promise by publishing exactly that story. This is the
           # channel's subscribe reason; set to 0 to end on the story alone.
           SPEAK_TEASE: '1'
+          # The long-form lanes' days (trending Tue/Thu/Sat, encore Wed; see
+          # weekly_timely.yml and weekly_longform.yml). On these days this
+          # workflow skips Gemini and writes with Groq, Cerebras, Zhipu and
+          # OpenRouter, leaving Gemini's ~80 free requests to the long-form
+          # video (~62 a run). On Mon, Fri and Sun the Short uses Gemini first
+          # as before. Update this when the long-form schedules change.
+          GEMINI_RESERVED_DAYS: 'tue,wed,thu,sat'
           # The script is written from the story's Wikipedia fact sheet and
           # checked against the article (src/shorts_facts.py). prefer = write
           # from memory when no article is found; require = stop instead;
