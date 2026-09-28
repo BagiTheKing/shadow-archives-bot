@@ -329,7 +329,8 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "stranger cannot stop watching.\n"
         "RULES:\n"
         "- Chapter 1 is a TEASER, 100-140 words: the big picture only — what "
-        "happened, which countries or sides fought whom, the scale of it, and "
+        "happened, which countries, sides or groups stood against whom, the "
+        "scale of it, and "
         "why it still matters — ending on the question the video answers. "
         "No specific days, dates or clock times, and no individual named or "
         "introduced (sides and countries only). It makes a stranger want the "
@@ -382,6 +383,10 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         "claim or threat in a beat is attributed to whoever held it "
         "(\"Israel's leaders feared...\", \"Nasser declared...\"), never "
         "narrated as fact.\n"
+        "- moment: mark the chapter in which the main event (the war, the "
+        "disaster, the crisis) BEGINS with \"begins\" and the chapter in "
+        "which it ENDS with \"ends\"; every other chapter \"\". Never "
+        "chapter 1 or 2.\n"
         "- hook: at most TWO chapters end on a hook, and only where the next "
         "chapter pays it off. Every other hook is empty.\n"
         "- Titles are story beats (\"The Bluff\", \"7:45 a.m.\"), never "
@@ -389,7 +394,7 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         f"- Words across all chapters add up to {total_words}.\n\n"
         'Output ONLY JSON: {"question": "", "cast": [{"name": "", "role": ""}], '
         '"places": [""], "chapters": [{"title": "", '
-        '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", "bridge": "", '
+        '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", "bridge": "", "moment": "", '
         '"beats": [""], "words": 0, "hook": ""}]}')
     data = call(pool, "You plan documentary stories. Output only JSON.",
                 prompt, max_tokens=5000)
@@ -420,6 +425,7 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
     chapters[0]["bridge"] = ""
     if len(chapters) > 1:
         chapters[1]["bridge"] = ""
+    set_moments(chapters)
     hooks = 0
     for c in chapters:
         c["hook"] = (c.get("hook") or "").strip()
@@ -429,6 +435,30 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
                 c["hook"] = ""
     return {"question": (data.get("question") or "").strip(), "cast": cast,
             "places": places, "chapters": chapters}
+
+
+def set_moments(chapters):
+    """chapter["moment"]: "begins" on the chapter where the main event starts,
+    "ends" on the one where it is over, "" elsewhere; each at most once and
+    never in the teaser or the cast chapter. When the outline marks none,
+    the chapter after the turning point begins it and the last chapter
+    before the aftermath ends it. There, the narrator tells the viewer so
+    in one short line (docs/VIDEO_SPEC.md 4)."""
+    seen = set()
+    for i, c in enumerate(chapters):
+        m = str(c.get("moment") or "").strip().lower()
+        m = m if m in ("begins", "ends") and i >= 2 and m not in seen else ""
+        c["moment"] = m
+        if m:
+            seen.add(m)
+    n = len(chapters)
+    pivot = next((i for i, c in enumerate(chapters) if c.get("role") == "pivot"), None)
+    if "begins" not in seen and pivot is not None and 2 <= pivot + 1 < n - 1:
+        if not chapters[pivot + 1]["moment"]:
+            chapters[pivot + 1]["moment"] = "begins"
+    if "ends" not in seen and n >= 4 and not chapters[n - 2]["moment"]:
+        chapters[n - 2]["moment"] = "ends"
+    return chapters
 
 
 def print_plan(sheet, plan):
@@ -447,6 +477,8 @@ def print_plan(sheet, plan):
             print(f"   - {b}")
         if c["hook"]:
             print(f"   HOOK -> {c['hook']}")
+        if c.get("moment"):
+            print(f"   MOMENT -> the main event {c['moment']} here")
     print("=" * 70)
 
 
@@ -474,6 +506,9 @@ def chapter_brief(plan, i, sheet):
                 "fill it from THIS story only).\n")
     else:
         note = ""
+    if i >= 2 and c.get("moment"):
+        note += MOMENT_NOTE.format(moment=c["moment"],
+                                   when="started" if c["moment"] == "begins" else "ended")
     return (
         f"{note}"
         f"The video's story question: {plan['question']}\n"
@@ -490,11 +525,23 @@ def chapter_brief(plan, i, sheet):
 
 TEASER_NOTE = (
     "This is the TEASER that opens the video: the big picture only — what "
-    "happened, which countries or sides fought whom, the scale, and why it "
+    "happened, which countries, sides or groups stood against whom, the "
+    "scale, and why it "
     "still matters — ending on the question the video answers. Do NOT give "
     "any specific day, date or clock time, and do NOT name or introduce any "
     "individual person (say \"Egypt\", \"Israel's leaders\", never a name). "
     "Make a stranger want the details without giving them.\n")
+
+MOMENT_NOTE = (
+    "The main event {moment} in this chapter. Right after the beat where it "
+    "{when}, the narrator marks it in one short line spoken to the viewer "
+    "(the shape: \"And this is where <it> {when}.\" or \"This was the "
+    "moment <it> {when}.\" — in this story's own words).\n")
+
+MOMENT_WORDS = ("this is where", "this is when", "this is how", "this was where",
+                "this was when", "this was the moment", "this is the moment",
+                "that was the moment", "that is where", "that was where",
+                "and so began", "and so ended", "and that is how", "and that was how")
 
 CAST_NOTE = (
     "This chapter INTRODUCES THE CAST as a story: who each person is, what "
@@ -756,4 +803,11 @@ def structure_issues(i, plan, segments, earlier_text, era_year, sheet=None):
                     f"Open with one or two sentences spoken to the viewer that take them "
                     f"back (the shape: \"While <earlier events>, <something else> "
                     f"was starting in <place>. Let's go back to <that moment>.\").")
+    moment = (plan["chapters"][i].get("moment") or "") if i < len(plan["chapters"]) else ""
+    if i >= 2 and moment and not any(w in text.lower() for w in MOMENT_WORDS):
+        when = "started" if moment == "begins" else "ended"
+        issues.append(
+            f"The main event {moment} in this chapter, but the narrator never "
+            f"marks it. Right after that beat, add one short line to the viewer "
+            f"(\"And this is where <it> {when}.\").")
     return issues

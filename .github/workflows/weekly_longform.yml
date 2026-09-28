@@ -34,7 +34,7 @@ jobs:
     # The repo is private, so minutes are metered against 2,000/month. A healthy
     # run is ~60 min; this ceiling stops a hung ffmpeg or a Pollinations
     # rate-limit spiral from quietly eating a fifth of the monthly budget.
-    timeout-minutes: 150
+    timeout-minutes: 240
 
     steps:
       - name: Check out repository code

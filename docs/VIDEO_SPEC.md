@@ -6,8 +6,11 @@ before it is pushed. Add to it when a new rule is agreed; never drop a rule
 without the owner's say-so.
 
 ## Structure
+0. **Story mode is the only long-form format**, on every lane (named
+   topics, trends, encore). A run whose story cannot be built stops; the old
+   six-chapter arc is never used.
 1. **Chapter 1 is a teaser.** The big picture only: what happened, who
-   fought whom (sides and countries, not individuals), and why it still
+   stood against whom (sides and countries, not individuals), and why it still
    matters. No specific days, dates or clock times, no individual introduced.
    It ends on the question the video answers. On screen: no cast cards, no
    date ruler, no maps.
@@ -24,6 +27,9 @@ without the owner's say-so.
 4. **The narrator may speak to the viewer** at turning points ("Remember
    Nasser's gamble?", "Now watch what happens next"), sparingly, not in every
    sentence.
+4a. **Signposts.** Where the main event (war, disaster, crisis) begins and
+   where it ends, the narrator says so in one short line ("And this is
+   where the war began."). Checked by code.
 5. Simplicity: at most 5 named people (each introduced with their role), at
    most 5 named places, no unit names, few rounded figures, short sentences
    (see story_mode.py). Checked per chapter.

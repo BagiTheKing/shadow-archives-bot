@@ -244,6 +244,27 @@ def build_first_comment(script: dict) -> str:
             "it already too late?")
 
 
+def _article_queries(pool, topic, call):
+    """What to search Wikipedia for. A short topic ("Six-Day War") is its own
+    query; the automatic lanes hand over 30-40 word sentences, which a wiki
+    search does badly on, so a model names the event's article first."""
+    if len(topic.split()) <= 6:
+        return [topic]
+    queries = []
+    try:
+        data = call(pool, "You name Wikipedia articles. Output only JSON.",
+                    f"Topic: {topic}\n\nGive up to 3 exact English Wikipedia "
+                    "article titles for the main event this topic is about, best "
+                    "first (e.g. \"Six-Day War\", \"Chernobyl disaster\").\n"
+                    'Output ONLY JSON: {"titles": ["..."]}', max_tokens=800)
+        queries = [t.strip() for t in (data or {}).get("titles") or []
+                   if isinstance(t, str) and 3 <= len(t.strip()) <= 80
+                   and "..." not in t][:3]
+    except Exception as e:
+        print(f"⚠️ Article lookup failed ({type(e).__name__}: {e}).")
+    return queries + [topic]
+
+
 def build_story(topic, build_dir):
     """Research + fact sheet + outline (story_mode.py), printed for review.
     Returns {"sheet", "plan", "era_year"} or None."""
@@ -251,12 +272,16 @@ def build_story(topic, build_dir):
     from llm_provider import get_pool as _pool
     from longform_llm import _call
     import story_mode as sm
-    article = sm.research(topic)
+    pool = _pool()
+    article = None
+    for query in _article_queries(pool, topic, _call):
+        article = sm.research(query)
+        if article:
+            break
     if not article:
         print(f"⚠️ Story mode: no Wikipedia article found for {topic!r}.")
         return None
     print(f"📚 Research: {article['title']} ({len(article['text']):,} chars)")
-    pool = _pool()
     # A weak model's sheet (the fourth run's had no figures and no quotes)
     # gets one more try on another model; the richer sheet is kept.
     import longform_llm as _llm
@@ -432,24 +457,18 @@ def main():
             print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
             print(f"   enforce_history={enforce_history} era_year={era_year}")
             return
-        story = None
-        if story_topic or os.getenv("STORY_MODE", "0") == "1":
-            story = build_story(topic, BUILD_DIR)
-            if story:
-                era_year = era_year or story.get("era_year")
-            elif stage != "full" or story_topic:
-                # A story topic asked for by name is never written in the old
-                # six-chapter arc: the fourth Six-Day War run did exactly that
-                # when its outline failed, and the courtroom format is what
-                # story mode replaced. No video beats that video.
-                print("❌ Story mode could not build a fact sheet and outline — "
-                      "stopping rather than writing it in the standard arc.")
-                raise SystemExit(1)
-            else:
-                print("↩️  Story mode unavailable — writing with the standard arc.")
-            if story and stage == "outline":
-                print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")
-                return
+        # Story mode is the only long-form format (owner, 2026-09-28): every
+        # lane, every topic. The old six-chapter arc is never a fallback — a
+        # run whose story cannot be built stops instead.
+        story = build_story(topic, BUILD_DIR)
+        if not story:
+            print("❌ Story mode could not build a fact sheet and outline — "
+                  "stopping rather than writing it in the old arc.")
+            raise SystemExit(1)
+        era_year = era_year or story.get("era_year")
+        if stage == "outline":
+            print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")
+            return
         script = generate_longform_script(topic=topic,
                                           enforce_history=enforce_history,
                                           era_year=era_year, story=story)
