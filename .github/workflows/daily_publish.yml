@@ -18,6 +18,10 @@ on:
         type: choice
         options: [public, private, unlisted]
         default: public
+      skip_gemini:
+        description: 'Skip Gemini today (write with Groq and the rest of the chain)'
+        type: boolean
+        default: false
 
 # Two runs writing to the same channel on the same day is never wanted.
 #
@@ -187,7 +191,8 @@ jobs:
           # OpenRouter, leaving Gemini's ~80 free requests to the long-form
           # video (~62 a run). On Mon, Fri and Sun the Short uses Gemini first
           # as before. Update this when the long-form schedules change.
-          GEMINI_RESERVED_DAYS: 'tue,wed,thu,sat'
+          # A manual run can also skip Gemini any day (the skip_gemini input).
+          GEMINI_RESERVED_DAYS: ${{ inputs.skip_gemini && 'mon,tue,wed,thu,fri,sat,sun' || 'tue,wed,thu,sat' }}
           # The script is written from the story's Wikipedia fact sheet and
           # checked against the article (src/shorts_facts.py). prefer = write
           # from memory when no article is found; require = stop instead;
