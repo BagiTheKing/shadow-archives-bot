@@ -13,6 +13,11 @@ on:
         description: 'Render only, do not upload (dry run)'
         type: boolean
         default: false
+      privacy:
+        description: 'Privacy of the upload (private: review it, then publish it yourself)'
+        type: choice
+        options: [public, private, unlisted]
+        default: public
 
 # Two runs writing to the same channel on the same day is never wanted.
 #
@@ -135,7 +140,8 @@ jobs:
           # voice instead; see their own workflow files.
           KOKORO_VOICE_ROTATION: 'am_onyx,am_santa'
           RUN_NUMBER: ${{ github.run_number }}
-          PRIVACY_STATUS: public
+          # The schedule always publishes; a manual run may choose.
+          PRIVACY_STATUS: ${{ inputs.privacy || 'public' }}
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           # The channel's recurring format. Every Short is published as
           # "Catastrophe Files #N — ...", numbered from what is already on the
