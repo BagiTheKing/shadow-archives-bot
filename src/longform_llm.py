@@ -1930,7 +1930,7 @@ def _quote_ok(text):
     return bool(t) and (t[0].isupper() or t[0].isdigit()) and t[-1] in ".!?"
 
 
-def _gather_quote_candidates(pool, topic, sheet_quotes=None):
+def _gather_quote_candidates(pool, topic, sheet_quotes=None, cast=None):
     """Every real, sourced quote candidate Wikiquote has for this topic —
     searched once and shared by every card this video needs (the opening
     card and the pre-verdict card draw from the same pool, since they're
@@ -1939,6 +1939,13 @@ def _gather_quote_candidates(pool, topic, sheet_quotes=None):
         search_terms = _extract_search_terms(pool, topic)
     except QuotaExhausted:
         raise
+    # Story mode: every cast member is searched too, so each side of the
+    # story has a chance to speak on the cards, not only whoever the topic
+    # sentence happens to name.
+    for c in cast or []:
+        name = (c.get("name") or "").strip()
+        if name and not any(_speaker_key(name) == _speaker_key(t) for t in search_terms):
+            search_terms.append(name)
 
     candidates, seen = [], set()
     # Story mode: the fact sheet's quotes come first. Each one is verbatim
@@ -1975,9 +1982,68 @@ def _gather_quote_candidates(pool, topic, sheet_quotes=None):
     return candidates
 
 
+_TITLE_WORDS = {"king", "queen", "president", "prime", "minister", "general",
+                "field", "marshal", "chief", "staff", "defense", "defence",
+                "foreign", "military", "army", "the", "of", "and", "leader",
+                "commander", "premier", "emperor", "chancellor", "secretary",
+                "state", "admiral", "colonel", "sir", "lord", "pope", "shah"}
+
+
+def _cast_member(attribution, cast):
+    """The cast member a quote's speaker is, matched on a distinctive word of
+    the name ("Hussein of Jordan" is King Hussein), or None."""
+    words = set(re.findall(r"[a-z'-]+", (attribution or "").lower()))
+    for c in cast or []:
+        own = [w for w in re.findall(r"[a-z'-]+", c.get("name", "").lower())
+               if len(w) > 3 and w not in _TITLE_WORDS]
+        if own and own[-1] in words:
+            return c
+    return None
+
+
+def _side_of(member):
+    """The country or camp a cast member stands for, read from the first
+    proper name in their role ("Egypt's president" -> "egypt", "King of
+    Jordan" -> "jordan"); "" when the role names none."""
+    for w in re.findall(r"[A-Z][A-Za-z-]+", (member or {}).get("role") or ""):
+        if w.lower() not in _TITLE_WORDS:
+            return w.lower()
+    return ""
+
+
+def _speaker_key(attribution, cast=None):
+    """One key per person, so "Gamal Abdel Nasser" and "Nasser" count as the
+    same speaker."""
+    member = _cast_member(attribution, cast)
+    if member:
+        return member["name"].lower()
+    words = [w for w in re.findall(r"[a-z'-]+", (attribution or "").lower())
+             if len(w) > 2 and w not in _TITLE_WORDS]
+    return words[-1] if words else ""
+
+
+def _default_keyword(text):
+    """The red phrase when no model marked one: the last clause of the quote
+    (after its last comma, semicolon or dash), cut to its final six words.
+    Always words the person really said, so the card always ends on red."""
+    last = re.split(r"(?<=[.!?])\s+", text.strip())[-1]
+    clause = re.split(r"[,;:\u2014\u2013]|\s-\s", last)[-1]
+    words = clause.strip().rstrip(".!?\"'\u201d").split()
+    if len(words) < 3:
+        # too short to carry the card ("were brilliant"): the sentence's
+        # last five words instead, commas and all, still exactly as said
+        words = last.strip().rstrip(".!?\"'\u201d").split()[-5:]
+    if len(words) > MAX_KEYWORD_WORDS:
+        words = words[-MAX_KEYWORD_WORDS:]
+    while words and words[0].lower() in ("and", "but", "or", "that", "which", "so"):
+        words = words[1:]
+    return " ".join(words) if len(words) >= 2 else ""
+
+
 def _source_intro_quote(pool, topic, tone, context_before, context_after,
                         candidates, era_year=None, exclude_texts=None,
-                        exclude_speakers=None, real_only=False):
+                        exclude_speakers=None, real_only=False, cast=None,
+                        exclude_sides=None):
     """One black-screen title card's content: a real, sourced quote from
     `candidates` when one actually fits this spot, an original
     unattributed line (see _generate_intro_epigraph) otherwise. Search
@@ -1992,10 +2058,19 @@ def _source_intro_quote(pool, topic, tone, context_before, context_after,
     def _key(t):
         return " ".join(re.findall(r"[a-z0-9']+", (t or "").lower()))
     texts = {_key(t) for t in (exclude_texts or ())}
-    speakers = {_key(a) for a in (exclude_speakers or ()) if a}
+    speakers = {_speaker_key(a, cast) for a in (exclude_speakers or ()) if a}
     usable = [c for c in candidates
               if _key(c["text"]) not in texts
-              and _key(c.get("attribution")) not in speakers]
+              and _speaker_key(c.get("attribution"), cast) not in speakers]
+    # Story mode: the cast speaks first, and the second card goes to the
+    # other side of the story (docs/VIDEO_SPEC.md 11). Each tier is used
+    # only when it has quotes; otherwise the next wider one.
+    if cast and usable:
+        sides = {s for s in (exclude_sides or ()) if s}
+        in_cast = [c for c in usable if _cast_member(c.get("attribution"), cast)]
+        other_side = [c for c in in_cast
+                      if _side_of(_cast_member(c.get("attribution"), cast)) not in sides]
+        usable = other_side or in_cast or usable
 
     if usable:
         try:
@@ -2005,6 +2080,8 @@ def _source_intro_quote(pool, topic, tone, context_before, context_after,
         except QuotaExhausted:
             raise
         if selected:
+            if not selected.get("keyword"):
+                selected["keyword"] = _default_keyword(" ".join(selected["sentences"]))
             preview = " ".join(selected["sentences"])[:70]
             print(f"   📜 Using a real quote — {selected['attribution']}: "
                   f"{preview!r}")
@@ -2020,7 +2097,8 @@ def _source_intro_quote(pool, topic, tone, context_before, context_after,
                 c = pick[0]
                 print(f"   📜 No quote hit the register — using the closest "
                       f"real one as written — {c['attribution']}: {c['text'][:70]!r}")
-                return {"sentences": [c["text"]], "keyword": "",
+                return {"sentences": [c["text"]],
+                        "keyword": _default_keyword(c["text"]),
                         "attribution": c["attribution"], "attribution_title": ""}
         print("   ↩️  None of the sourced quotes fit — falling back to an "
               "original line.")
@@ -2563,9 +2641,10 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         def _chapter_text(chapter):
             return " ".join(s["narration"] for s in chapter["scenes"])
 
+        story_cast = (story or {}).get("plan", {}).get("cast") or []
         quote_candidates = _gather_quote_candidates(
             pool, topic, sheet_quotes=(story or {}).get("sheet", {}).get("quotes")
-            if story else None)
+            if story else None, cast=story_cast)
         real_only = bool(story) and bool(quote_candidates)
 
         # The owner's brief for the two cards: both dark, mysterious and
@@ -2580,7 +2659,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             pool, topic, opening_tone,
             context_before=_chapter_text(chapters[0])[-700:],
             context_after=_chapter_text(chapters[1])[:500],
-            candidates=quote_candidates, era_year=era_year, real_only=real_only)
+            candidates=quote_candidates, era_year=era_year, real_only=real_only,
+            cast=story_cast)
         if intro_epigraph:
             preview = " ".join(intro_epigraph.get("sentences")
                                or [intro_epigraph.get("text") or ""])
@@ -2604,7 +2684,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                 candidates=quote_candidates, era_year=era_year,
                 exclude_texts=used,
                 exclude_speakers={(intro_epigraph or {}).get("attribution")},
-                real_only=real_only)
+                exclude_sides={_side_of(_cast_member(
+                    (intro_epigraph or {}).get("attribution"), story_cast))},
+                real_only=real_only, cast=story_cast)
             if verdict_epigraph:
                 preview = " ".join(verdict_epigraph.get("sentences")
                                    or [verdict_epigraph.get("text") or ""])
@@ -2929,7 +3011,8 @@ def _named_in(name, text):
         for w in words)
 
 
-def _place_map(plan, chapters, topic, after_decision=False, first=1):
+def _place_map(plan, chapters, topic, after_decision=False, first=1,
+              anywhere=False):
     """Attaches scene["map"] to the first scene that speaks the map's
     target: before the decision for the first map, after it (in the chain,
     not the verdict) for the second. Every name must be in that part's
@@ -2944,9 +3027,15 @@ def _place_map(plan, chapters, topic, after_decision=False, first=1):
     # Chapter 0 is the cold open: the hook stays photos. The verdict is the
     # narrator speaking now: no map there either.
     span = chapters[pivot + 1:-1] if after_decision else chapters[first:pivot]
+    if anywhere:
+        # Story mode: a map for each front or turning point, wherever the
+        # story reaches it (after the teaser and the cast, before the
+        # verdict), at most one per chapter and never the same place twice.
+        span = [c for c in chapters[first:-1]
+                if not any(s.get("map") for s in c["scenes"])]
     candidates = [(c, s) for c in span for s in c["scenes"]
                   if not s.get("map") and not s.get("chain")]
-    if after_decision and any(s.get("map", {}).get("target", "").lower()
+    if (after_decision or anywhere) and any(s.get("map", {}).get("target", "").lower()
                               == str(plan.get("target") or "").lower()
                               for c in chapters for s in c["scenes"]):
         return
@@ -3270,11 +3359,16 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
         "'1958', or one of: " + ", ".join(STAMP_RELATIVE) + ". Empty if the "
         "chapter states no time.\n"
         "- Skip a chapter that names no place.\n\n"
-        "ALSO describe up to TWO maps, as NAMES only (never coordinates), "
-        "all taken from the text above: the first for where the story "
-        "begins (before the decision), the second — only if the text names "
-        "a clearly different place — for where the consequence lands "
-        "(after the decision). Each map has:\n"
+        + (("ALSO describe up to FOUR maps, as NAMES only (never "
+            "coordinates), all taken from the text above: one for each front, "
+            "attack or turning point the story moves to, in story order, each "
+            "a clearly different place, each in a different chapter. Each map "
+            "has:\n") if cast else
+           ("ALSO describe up to TWO maps, as NAMES only (never coordinates), "
+            "all taken from the text above: the first for where the story "
+            "begins (before the decision), the second — only if the text names "
+            "a clearly different place — for where the consequence lands "
+            "(after the decision). Each map has:\n")) +
         "- target: the place where the decisive event happened (a city, "
         "island, strait, base or battlefield);\n"
         "- origin: where the force came from, if the text names it — a "
@@ -3307,10 +3401,12 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
     maps = (data or {}).get("maps") or [(data or {}).get("map")]
     # story mode: no map in the teaser or over a cast introduction
     # (docs/VIDEO_SPEC.md 1-2)
-    for i, plan in enumerate(maps[:2]):
+    for i, plan in enumerate(maps[:4] if cast else maps[:2]):
         try:
-            _place_map(plan, chapters, topic,
-                       after_decision=(i == 1), first=2 if cast else 1)
+            if cast:
+                _place_map(plan, chapters, topic, first=2, anywhere=True)
+            else:
+                _place_map(plan, chapters, topic, after_decision=(i == 1))
         except Exception as e:
             print(f"   ↩️  Map skipped ({type(e).__name__}: {e}).")
     # The chain/timeline cards were dropped after the third Six-Day War cut

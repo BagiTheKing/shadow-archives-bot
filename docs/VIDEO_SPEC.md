@@ -42,11 +42,16 @@ without the owner's say-so.
 10. Names and dates land on the exact spoken word: timings for those words
     are measured, not estimated.
 11. Quote cards: real quotes only, a named person as speaker, whole
-    sentences, no ellipsis; two different speakers.
-12. Footage must match its scene (title and categories), never still
+    sentences, no ellipsis; two different people, cast members first, the
+    second card from the other side of the story when one has a quote.
+    Every card ends on a red phrase (the person's own words).
+12. **Maps** for each front or turning point the story moves to (up to 4,
+    one per chapter, each a different place), never in chapters 1-2 or the
+    verdict; a map only where the narration speaks its place.
+13. Footage must match its scene (title and categories), never still
     photographs; war newsreels only for combat scenes, never diplomacy reels.
 
 ## Process
-13. Check a change against this list before pushing. Test writing with a
+14. Check a change against this list before pushing. Test writing with a
     script-only run, visuals with short sample renders, then one full run,
     and watch the result before sending it to the owner.
