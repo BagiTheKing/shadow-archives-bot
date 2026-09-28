@@ -41,8 +41,8 @@ on:
       story_stage:
         description: 'Story mode stop: outline (plan only), script (text only) or full (render + upload)'
         type: choice
-        options: [outline, script, full]
-        default: outline
+        options: [full, script, outline]
+        default: full
       topic_only:
         description: 'Only choose the topic and print it (no script, render or upload)'
         type: boolean

@@ -160,7 +160,9 @@ jobs:
           # published unlisted, which is why seven of them total ~90 views: they
           # were never visible to anyone who did not have the link. Nothing about
           # the content was the problem. Keep this 'public'.
-          PRIVACY_STATUS: public
+          PRIVACY_STATUS: private
+          # Private again (owner, 2026-09-28) while the first story-mode videos
+          # are checked by hand; back to public once the owner says so.
           # Named in the description so both formats read as one
           # channel. Not put in the long-form title on purpose —
           # these videos live on search, and a prefix pushes the
