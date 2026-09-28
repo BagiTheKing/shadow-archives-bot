@@ -1556,6 +1556,8 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         for g, o in zip(group, offs):
             global_offsets.append(cursor + o)
             scene_offsets.append((g, cursor + o))
+            # where this scene starts in lf_merged.mp4 (longform_clips.py)
+            g["_global_start"] = cursor + o
             front = (g.get("front_stamp") or "").strip() if STAMPS_ENABLED else ""
             if front:
                 stamp_cues.append((cursor + o + 0.5, front))

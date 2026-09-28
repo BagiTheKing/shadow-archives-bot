@@ -242,10 +242,13 @@ def _punch_events(start: float, end_spoken: float, phrase: str):
 
 
 def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: list,
-                       total_duration: float = 0.0):
+                       total_duration: float = 0.0, cta_text: str = None):
     """Builds word-synced pop-in captions. timeline_offsets[i] is the global
     start time of scene i in the final (crossfaded) video. total_duration is the
-    length of the crossfaded timeline, used to place the end-card CTA."""
+    length of the crossfaded timeline, used to place the end-card CTA.
+    cta_text overrides CTA_TEXT; "" draws no end card (longform_clips.py
+    draws its own)."""
+    cta = CTA_TEXT if cta_text is None else cta_text
     print("📝 Generating word-synced captions...")
     events = []
 
@@ -314,15 +317,15 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
     # against the type above it instead.
     has_card = any(s.get("is_outro")
                    for s in script_data.get("scenes", []))
-    if CTA_TEXT and total_duration > CTA_DURATION and not has_card:
+    if cta and total_duration > CTA_DURATION and not has_card:
         cta_start = total_duration - CTA_DURATION
         # \fad(400,0) — fade in, then hold; the video's own 0.6s fade takes it out.
         fx = r"{\fad(400,0)}"
         events.append(
             f"Dialogue: 1,{_ass_time(cta_start)},{_ass_time(total_duration)},"
-            f"Cta,,0,0,0,,{fx}{CTA_TEXT}"
+            f"Cta,,0,0,0,,{fx}{cta}"
         )
-        print(f"📣 End-card CTA added at {cta_start:.1f}s: {CTA_TEXT!r}")
+        print(f"📣 End-card CTA added at {cta_start:.1f}s: {cta!r}")
 
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(ASS_HEADER + "\n".join(events))

@@ -592,19 +592,56 @@ def main():
     if not os.path.exists(caption_path):
         caption_path = None
 
+    video_id = None
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — rendered but not uploaded (dry run).")
         print("--- description ---")
         print(description)
     else:
-        upload_video_to_youtube(video_path, title, description, tags,
-                                thumbnail_path=thumb_path,
-                                first_comment=first_comment,
-                                caption_path=caption_path,
-                                playlist_title=SERIES_NAME,
-                                playlist_description=PLAYLIST_DESCRIPTION)
+        video_id = upload_video_to_youtube(video_path, title, description, tags,
+                                           thumbnail_path=thumb_path,
+                                           first_comment=first_comment,
+                                           caption_path=caption_path,
+                                           playlist_title=SERIES_NAME,
+                                           playlist_description=PLAYLIST_DESCRIPTION)
+
+    # Phase 6: Shorts cut from this video, each linking back to it. After the
+    # upload, because the link is the point; rendered on dry runs too, so
+    # they can be watched in the artifact first.
+    publish_clips(scenes, script, video_id)
 
     print("🎉 Long-form pipeline complete.")
+
+
+def publish_clips(scenes, script, video_id):
+    """Cuts and uploads the long-form Shorts (longform_clips.py). Nothing
+    here may fail the run: the long-form video is already up."""
+    from longform_clips import LONGFORM_CLIPS, clip_metadata, make_clips
+    if LONGFORM_CLIPS <= 0:
+        return
+    try:
+        clips = make_clips(scenes, script, BUILD_DIR)
+    except Exception as e:
+        print(f"⚠️ Clips skipped ({type(e).__name__}: {e}).")
+        return
+    for clip in clips:
+        clip_title, clip_description, comment = clip_metadata(
+            clip, script, video_id, credit_block=build_credit_block(clip["scenes"]))
+        print(f"📋 Clip: {clip_title}")
+        if os.getenv("SKIP_UPLOAD") == "1":
+            print("--- clip description ---")
+            print(clip_description)
+            continue
+        if not video_id:
+            print("⚠️ Clip not uploaded: the long-form upload returned no id "
+                  "to link to.")
+            continue
+        try:
+            upload_video_to_youtube(clip["path"], clip_title, clip_description,
+                                    ["history", "shorts", "documentary"],
+                                    first_comment=comment)
+        except Exception as e:
+            print(f"⚠️ Clip upload failed ({type(e).__name__}: {e}).")
 
 
 if __name__ == "__main__":

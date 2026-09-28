@@ -203,6 +203,10 @@ jobs:
           EXPERIMENT_EVERY: '0'
           SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
           LONGFORM_LANE: timely
+          # Shorts cut from this video after it uploads (src/longform_clips.py):
+          # the teaser and the main event, each linking back to the full
+          # video. Same privacy as the video itself. 0 turns them off.
+          LONGFORM_CLIPS: '2'
           TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
           STORY_TOPIC: ${{ inputs.story_topic }}
           STORY_STAGE: ${{ inputs.story_stage || 'full' }}
@@ -261,7 +265,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: timely-video-${{ github.run_number }}
-          path: build/final_longform.mp4
+          path: |
+            build/final_longform.mp4
+            build/lf_clip_*.mp4
           if-no-files-found: ignore
           compression-level: 0
           retention-days: 1
