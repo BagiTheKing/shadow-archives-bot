@@ -21,6 +21,8 @@ from topic_reach import is_saturated, vet
 from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
 from video_engine import generate_video_pipeline
+from shorts_archive import add_archive_frames, archive_credits
+from shorts_facts import SHORTS_FACTS, research_short
 from youtube_publisher import upload_video_to_youtube
 
 
@@ -156,12 +158,27 @@ def build_metadata(script_data: dict, episode=None):
     # render, so it is not written.
     tags_line = " ".join(
         ["#shorts"] + formats.hashtags_of(script_data.get("format"))[:2])
+    # Where the facts came from, when the script was checked against a source.
+    source_url = (script_data.get("source_url") or "").strip()
+    if source_url:
+        description += (f"\n\nSource: \"{script_data.get('source_title', '')}\""
+                        f", Wikipedia — {source_url}")
+
+    credits = archive_credits(script_data)
+    visuals_note = ("Paintings in this video are AI-generated illustrations of "
+                    "real historical events; the archival images are credited "
+                    "below." if credits else
+                    "Visuals in this video are AI-generated illustrations of "
+                    "real historical events.")
     description += (
         f"\n\n{CHANNEL_NAME} — one catastrophic decision, explained, {UPLOAD_CADENCE}."
         f"\nSubscribe if you want the next one."
-        "\n\nNote: visuals in this video are AI-generated illustrations of real"
-        f" historical events.\n{tags_line}"
+        f"\n\nNote: {visuals_note}\n{tags_line}"
     )
+    # CC BY and CC BY-SA require the credit; public domain is credited anyway.
+    if credits:
+        description += "\n\nArchival images:\n" + "\n".join(
+            f"- {c}" for c in credits)
 
     # Required, not optional, whenever it's non-empty: a Creative Commons
     # track (e.g. Kevin MacLeod) only stays license-compliant if this exact
@@ -619,13 +636,24 @@ def main():
     if episode:
         print(f"🔢 {SERIES_NAME} #{episode}")
 
-    # Phase 1: script
+    # Phase 1: research, then the script written from it. The fact sheet is
+    # the same one the long-form lanes use (see shorts_facts.py).
+    facts = research_short(topic)
+    if not facts and SHORTS_FACTS == "require":
+        print("❌ Pipeline halted: no verified fact sheet for this story, and "
+              "SHORTS_FACTS=require.")
+        raise SystemExit(1)
+    if not facts and SHORTS_FACTS != "off":
+        print("⚠️ No fact sheet: this script is written from the model's "
+              "memory and is NOT checked against a source.")
+
     script_data = generate_video_script(
         topic=topic,
         avoid_titles=avoid_titles,
         title_max=min(80, title_budget(series_suffix(SERIES_NAME, episode))),
         series_name=SERIES_NAME,
-        next_topic=upcoming or "")
+        next_topic=upcoming or "",
+        facts=facts)
     if not script_data:
         print("❌ Pipeline halted: script generation failed.")
         raise SystemExit(1)
@@ -646,6 +674,7 @@ def main():
     script_data = generate_audio_pipeline(script_data, build_dir,
                                           voice=_pick_kokoro_voice())
     script_data = generate_visual_pipeline(script_data, build_dir)
+    add_archive_frames(script_data, build_dir)
     draw_outro_card(script_data, build_dir)
 
     usable = [s for s in script_data["scenes"]

@@ -107,6 +107,27 @@ most. Never hands as the subject.
 # 1. Research
 # ---------------------------------------------------------------------------
 
+def article_queries(pool, topic, call):
+    """What to search Wikipedia for. A short topic ("Six-Day War") is its own
+    query; the automatic lanes hand over 30-40 word sentences, which a wiki
+    search does badly on, so a model names the event's article first."""
+    if len(topic.split()) <= 6:
+        return [topic]
+    queries = []
+    try:
+        data = call(pool, "You name Wikipedia articles. Output only JSON.",
+                    f"Topic: {topic}\n\nGive up to 3 exact English Wikipedia "
+                    "article titles for the main event this topic is about, best "
+                    "first (e.g. \"Six-Day War\", \"Chernobyl disaster\").\n"
+                    'Output ONLY JSON: {"titles": ["..."]}', max_tokens=800)
+        queries = [t.strip() for t in (data or {}).get("titles") or []
+                   if isinstance(t, str) and 3 <= len(t.strip()) <= 80
+                   and "..." not in t][:3]
+    except Exception as e:
+        print(f"⚠️ Article lookup failed ({type(e).__name__}: {e}).")
+    return queries + [topic]
+
+
 def research(topic):
     """{"title", "url", "text"} for the topic's Wikipedia article, or None."""
     from archive_engine import _polite_get

@@ -175,6 +175,17 @@ jobs:
           # that promise by publishing exactly that story. This is the
           # channel's subscribe reason; set to 0 to end on the story alone.
           SPEAK_TEASE: '1'
+          # The script is written from the story's Wikipedia fact sheet and
+          # checked against the article (src/shorts_facts.py). prefer = write
+          # from memory when no article is found; require = stop instead;
+          # off = the old memory-only writer.
+          SHORTS_FACTS: prefer
+          # Real Commons / Library of Congress pictures cut in beside the
+          # paintings, credited in the description (src/shorts_archive.py).
+          SHORTS_ARCHIVE_FRAMES: '2'
+          # A new shot about this often inside each scene (painting wide,
+          # archive picture, punch-in). See plan_shots in src/video_engine.py.
+          SHORTS_SHOT_SECONDS: '3.5'
         run: python src/main.py
 
       # ---- Artifacts, sized for the 0.5 GB Actions storage allowance ----
