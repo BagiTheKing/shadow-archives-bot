@@ -31,7 +31,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # GitHub starts scheduled runs hours late on this repo (the 15:23 Shorts
+  # started between 18:38 and 21:16 in late September), so a late scheduled
+  # run can land after a manual one the same day. Two story videos on one day
+  # share one free quota and publish twice: a scheduled run steps aside when
+  # another run of this workflow started in the last 20 hours and did not
+  # fail.
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          go=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            since=$(date -u -d '20 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            n=$(gh api "repos/${{ github.repository }}/actions/workflows/weekly_longform.yml/runs?per_page=30&created=%3E%3D$since" \
+                  --jq '[.workflow_runs[] | select(.id != ${{ github.run_id }}) | select(.conclusion != "failure" and .conclusion != "cancelled" and .conclusion != "skipped")] | length' || echo 0)
+            if [ "${n:-0}" -gt 0 ]; then
+              echo "Another run of this workflow started in the last 20 hours — skipping this scheduled run."
+              go=false
+            fi
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+
   build-and-publish:
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
     # The repo is private, so minutes are metered against 2,000/month. A healthy
     # run is ~60 min; this ceiling stops a hung ffmpeg or a Pollinations
