@@ -57,7 +57,9 @@ without the owner's say-so.
     sentences, no ellipsis; two different people, cast members first, the
     second card from the other side of the story when one has a quote.
     Only people in the story speak: a cast member or someone the fact
-    sheet names; no card rather than an outsider's quote.
+    sheet names. When no real quote is left for a card, it gets an original
+    line written for that moment, never attributed to anyone (owner,
+    2026-09-29: better than no card).
     Every card ends on a red phrase (the person's own words).
 12. **Maps** for each front or turning point the story moves to (up to 4,
     one per chapter, each a different place), never in chapters 1-2 or the
@@ -70,6 +72,11 @@ without the owner's say-so.
     ("SOURCE" in yellow, then the work in grey, look B), not over maps or
     cast cards. No model decides this, and no match means no tag, never a
     guessed source. The description lists the article and every work shown.
+
+15. **Trend topics come from the watched channel first**: its theme is
+    anchored to a whole event with sides and a turning point (a war, crisis
+    or disaster that ended by 2010); news headlines are only the fallback,
+    and the log says so when it is used.
 
 ## Process
 14. Check a change against this list before pushing. Test writing with a

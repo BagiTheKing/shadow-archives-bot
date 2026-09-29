@@ -1017,15 +1017,38 @@ NICHE_MARKERS = (
 )
 
 
-def _anchor_fits_niche(topic: str, why: str = "") -> bool:
-    """True if the chosen event is a decision-and-consequence story.
+# Story mode (long form) tells a whole event with people on each side and a
+# turning point, not only one decision: a war, a crisis, a disaster. The
+# 2026-09-29 run rejected the 1948 war for its Gaza theme under the Shorts
+# rule and fell back to a news headline the watched channel never covered.
+STORY_MARKERS = NICHE_MARKERS + (
+    "war", "battle", "siege", "invasion", "invaded", "uprising", "revolt",
+    "rebellion", "revolution", "crisis", "coup", "massacre", "intifada",
+    "blockade", "offensive", "occupation", "occupied", "conflict", "attack",
+    "bombing", "evacuation", "famine", "explosion", "meltdown", "sinking")
+
+STORY_ANCHOR_RULE = (
+    "- THE STORY MUST BE A STORY: a war, battle, siege, uprising, crisis, "
+    "coup or disaster, with named people on each side and a turning point, "
+    "that a 12-minute documentary can tell from start to end. Not a law, a "
+    "treaty, a plan or a general overview on its own.\n"
+    "  GOOD: 'the 1948 Arab-Israeli War', 'the 1962 Cuban Missile Crisis', "
+    "'the 1986 Chernobyl disaster'.\n"
+    "  BAD:  'the 1947 UN Partition Plan' — a document, not a story with a "
+    "turning point.\n")
+
+
+def _anchor_fits_niche(topic: str, why: str = "", story: bool = False) -> bool:
+    """True if the chosen event is a decision-and-consequence story (story
+    mode: any war, crisis or disaster, see STORY_MARKERS).
 
     Deliberately checked against the topic sentence rather than the subject: the
     trending subject is a headline and is allowed to be anything. What has to
     fit the channel is the story we tell about it.
     """
     text = f"{topic} {why}".lower()
-    return any(re.search(rf"\b{m}\b", text) for m in NICHE_MARKERS)
+    markers = STORY_MARKERS if story else NICHE_MARKERS
+    return any(re.search(rf"\b{m}\b", text) for m in markers)
 
 
 def extract_channel_subjects(videos, pool=None, avoid_titles=()):
@@ -1141,7 +1164,8 @@ def extract_channel_subjects(videos, pool=None, avoid_titles=()):
 
 
 def select_historical_anchor(candidates, pool=None, avoid_titles=(),
-                             attempts: int = 2, ranked: bool = False):
+                             attempts: int = 2, ranked: bool = False,
+                             story: bool = False):
     """Maps a trending subject onto a historical event old enough to be settled.
 
     Returns {"subject", "topic", "anchor_year", "why"} or None. None is not a
@@ -1212,24 +1236,31 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         "Armada.\n"
         "- Headline about the Strait of Hormuz -> the 1980s tanker war. NOT the "
         "construction of Persepolis.\n"
-        "- Headline about Israel and Gaza or the West Bank -> the 1947 UN "
-        "Partition Plan, the 1949 Armistice Lines, or the 1993 Oslo Accords, "
-        "whichever actually explains the specific thing in the headline (a "
-        "border dispute points at 1949; a settlement or peace-process question "
-        "points at 1993). NOT a Biblical-era episode, which predates the "
-        "modern dispute entirely and explains nothing about why it exists now.\n\n"
+        + (("- Headline about Israel and Gaza or the West Bank -> the 1948 "
+            "Arab-Israeli War, the 1956 Suez Crisis, the 1973 Yom Kippur War "
+            "or the First Intifada, whichever best explains the specific thing "
+            "in the headline. NOT a Biblical-era episode, which predates the "
+            "modern dispute entirely and explains nothing about why it exists "
+            "now.\n\n") if story else
+           ("- Headline about Israel and Gaza or the West Bank -> the 1947 UN "
+            "Partition Plan, the 1949 Armistice Lines, or the 1993 Oslo Accords, "
+            "whichever actually explains the specific thing in the headline (a "
+            "border dispute points at 1949; a settlement or peace-process question "
+            "points at 1993). NOT a Biblical-era episode, which predates the "
+            "modern dispute entirely and explains nothing about why it exists now.\n\n")) +
         "HARD RULES:\n"
         f"- The event must have CONCLUDED in {HISTORY_CUTOFF_YEAR} or earlier. "
         "Anything more recent is rejected.\n"
         "- Pick a settled, documented event, not a live dispute.\n"
-        "- THE STORY MUST BE THIS CHANNEL'S KIND OF STORY: one decision, order, "
-        "refusal or miscalculation, and the disaster that followed it. Not a "
-        "law, not a treaty, not a general overview of a conflict, unless the "
-        "point of the video is the choice someone made and what it cost.\n"
-        "  GOOD: 'the 1918 decision to scuttle the Zeebrugge blockships in the "
-        "wrong position, which left the canal open'.\n"
-        "  BAD:  'the 1963 Swiss law requiring a bunker in every house' — real "
-        "history, but nobody decided anything that went wrong.\n"
+        + (STORY_ANCHOR_RULE if story else
+           ("- THE STORY MUST BE THIS CHANNEL'S KIND OF STORY: one decision, order, "
+            "refusal or miscalculation, and the disaster that followed it. Not a "
+            "law, not a treaty, not a general overview of a conflict, unless the "
+            "point of the video is the choice someone made and what it cost.\n"
+            "  GOOD: 'the 1918 decision to scuttle the Zeebrugge blockships in the "
+            "wrong position, which left the canal open'.\n"
+            "  BAD:  'the 1963 Swiss law requiring a bunker in every house' — real "
+            "history, but nobody decided anything that went wrong.\n")) +
         f"{avoid_block}"
         "- Do not take a side, assign blame between present-day states, or "
         "describe current politics. You are choosing a history topic, not "
@@ -1242,8 +1273,9 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         "is what the headline is actually about. Only a settled public event "
         "with a documented decision behind it qualifies. If nothing in the "
         "candidates clears that bar, say so instead of forcing one.\n"
-        "- The topic must fit this channel: a decision, order or miscalculation "
-        "and what it cost.\n\n"
+        + ("" if story else
+           "- The topic must fit this channel: a decision, order or miscalculation "
+           "and what it cost.\n") + "\n"
         'Output ONLY JSON: {"subject": "the headline you chose", "actor": "the '
         'main group or state at the centre of that headline", "topic": "one '
         'specific sentence describing the historical event", "name": "the '
@@ -1303,7 +1335,8 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
             print("⚠️ Anchor rejected: does not name any actor from the trending "
                   "subject, so it is background about the country rather than an "
                   "explanation of the story.")
-        elif not _anchor_fits_niche(data.get("topic", ""), data.get("why", "")):
+        elif not _anchor_fits_niche(data.get("topic", ""), data.get("why", ""),
+                                    story=story):
             reason = ("the event you chose is not a decision-and-consequence "
                       "story — name the choice someone made and the disaster it "
                       "caused, not a law, a treaty or a general overview")
@@ -2728,11 +2761,39 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
               f"using the channel's own stock lines.")
 
     # Never skip a card: whatever the layers above could not produce comes
-    # from the stock bank, which needs no model and cannot fail. Except in
-    # story mode with real quotes on hand: there an invented line would sit
-    # among real ones, so a card with no real quote left is dropped.
+    # from the stock bank, which needs no model and cannot fail. In story
+    # mode a card with no real quote left gets an original line first
+    # (owner, 2026-09-29: better than no card), written for this moment and
+    # never attributed to anyone, so it can never pass for someone's words.
     if real_only:
-        pass
+        def _original(tone, before, verdict=False, exclude=()):
+            try:
+                got = _generate_intro_epigraph(pool, topic, tone, before,
+                                               era_year=era_year)
+            except Exception as e:
+                print(f"   ↩️  Original line failed ({type(e).__name__}).")
+                got = None
+            if got and got.get("text") not in set(exclude):
+                return got
+            return stock_epigraph(topic, verdict=verdict,
+                                  exclude_texts=set(exclude))
+
+        def _text(e):
+            return " ".join((e or {}).get("sentences") or [(e or {}).get("text") or ""])
+        if not intro_epigraph:
+            intro_epigraph = _original(
+                "dark, mysterious, disturbing and concerning — an omen",
+                " ".join(s["narration"] for s in chapters[0]["scenes"])[-700:])
+            print(f"🖤 Opening card (original line, unattributed): "
+                  f"{_text(intro_epigraph)[:70]!r}")
+        if len(chapters) >= 3 and not verdict_epigraph:
+            verdict_epigraph = _original(
+                "dark and sad — the cost has already been paid and nothing "
+                "reverses it now; a quiet gut-punch",
+                " ".join(s["narration"] for s in chapters[-2]["scenes"])[-700:],
+                verdict=True, exclude={_text(intro_epigraph)})
+            print(f"🖤 Pre-verdict card (original line, unattributed): "
+                  f"{_text(verdict_epigraph)[:70]!r}")
     elif not intro_epigraph:
         intro_epigraph = stock_epigraph(topic)
         print(f"🖤 Opening card (stock line): {intro_epigraph['text'][:70]!r}")

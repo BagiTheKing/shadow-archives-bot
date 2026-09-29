@@ -403,9 +403,11 @@ def resolve_topic(lane: str, history=None):
             watch_candidates = get_watch_candidates(pool=pool,
                                                      avoid_titles=avoid_titles)
             if watch_candidates:
+                # three tries: the watched channel is the point of this lane,
+                # and a news headline is only the fallback
                 anchor = select_historical_anchor(
                     watch_candidates, pool=pool, avoid_titles=avoid_titles,
-                    ranked=True)
+                    ranked=True, story=True, attempts=3)
                 if anchor:
                     print(f"📺 Anchored to a channel-watch theme: "
                           f"{anchor['topic'][:70]}")
@@ -418,8 +420,10 @@ def resolve_topic(lane: str, history=None):
         try:
             from trend_source import get_trending_subjects
             region, candidates = get_trending_subjects()
+            print("↩️  No channel-watch theme could be anchored — using the news "
+                  "headlines instead.")
             anchor = select_historical_anchor(
-                candidates, pool=pool, avoid_titles=avoid_titles)
+                candidates, pool=pool, avoid_titles=avoid_titles, story=True)
             if anchor:
                 return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
