@@ -833,8 +833,16 @@ def normalize_next_tease(data: dict, next_topic: str) -> dict:
     low = supplied.lower()
     if low.startswith("next file"):        # the writer repeated the frame
         supplied = supplied[len("next file"):].lstrip(" :,-—–")
-    if not supplied or len(supplied.split()) > MAX_TEASE_WORDS:
-        supplied = _tease_from_topic(next_topic)
+    # The curated topic line first. The writer's own tease is spoken without
+    # any fact check, and twice in a row it said something false: "a
+    # declaration that started a war lasting a century" (run #123) and "the
+    # memorandum that let Ukraine keep nukes" (run #124; Ukraine gave them
+    # up). A clause cut from the topic line says only what the line says.
+    from_topic = _tease_from_topic(next_topic)
+    if from_topic:
+        supplied = from_topic
+    elif not supplied or len(supplied.split()) > MAX_TEASE_WORDS:
+        supplied = ""
     data["next_tease"] = supplied
     return data
 

@@ -57,6 +57,13 @@ def _groups(items, k):
     return groups
 
 
+def sentence_prompt(sentence: str) -> str:
+    """An image prompt made from the sentence itself, for a sentence the
+    writer gave no picture: the period, the style and "no text" are stamped
+    on at generation (visual_engine.build_generation_prompt)."""
+    return f"medium shot, one clear focal subject, {sentence.strip(' .')}"
+
+
 def normalize_shots(data: dict) -> dict:
     """Gives every story scene a "shots" list, in place: one entry per
     sentence where the writer supplied enough prompts, fewer (covering
@@ -78,9 +85,18 @@ def normalize_shots(data: dict) -> dict:
         if not prompts:
             prompts = [{"image_prompt": scene.get("image_prompt") or "",
                         "archive_query": (scene.get("archive_query") or "").strip()}]
+        # Every sentence gets its own shot. A writer that gave fewer prompts
+        # than sentences (run #124: one or two per scene, so pictures held
+        # for 9 seconds) has its prompts spread over the sentences in order;
+        # a sentence left without one is drawn from its own words, which is
+        # what the picture should show anyway.
         groups = _groups(sents, len(prompts))
-        scene["shots"] = [dict(prompts[i], text=" ".join(g))
-                          for i, g in enumerate(groups)]
+        scene["shots"] = []
+        for prompt, group in zip(prompts, groups):
+            scene["shots"].append(dict(prompt, text=group[0]))
+            for sentence in group[1:]:
+                scene["shots"].append({"image_prompt": sentence_prompt(sentence),
+                                       "archive_query": "", "text": sentence})
         scene["image_prompt"] = scene["shots"][0]["image_prompt"]
     return data
 
