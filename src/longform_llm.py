@@ -543,6 +543,9 @@ def _log_raw_failure(model, content, error, finish_reason):
         pass                            # diagnostics must never break a run
 
 
+GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "3000"))
+
+
 def _max_tokens_for(provider: str, requested: int) -> int:
     """Gemini and Anthropic get real headroom; the free-tier providers keep the
     tight ceiling they need to stay inside a small daily allowance.
@@ -553,6 +556,11 @@ def _max_tokens_for(provider: str, requested: int) -> int:
     """
     if provider in ("gemini", "anthropic"):
         return max(requested, GEMINI_CHAPTER_MAX_TOKENS)
+    if provider == "groq":
+        # Groq's free tier refuses a request whose prompt plus max_tokens is
+        # over the model's per-minute token limit, before writing anything:
+        # the 8,000-token fact sheet came back "Request too large" (run #123).
+        return min(requested, GROQ_MAX_TOKENS)
     return requested
 
 
@@ -598,6 +606,9 @@ def _call(pool, system, user, max_tokens, skip=()):
             )
             if provider == "gemini" and GEMINI_REASONING:
                 kwargs["reasoning_effort"] = GEMINI_REASONING
+            elif "gpt-oss" in model:
+                # thinking and answer share max_tokens; see llm_engine
+                kwargs["reasoning_effort"] = "low"
             try:
                 r = client.chat.completions.create(**kwargs)
             except TypeError:

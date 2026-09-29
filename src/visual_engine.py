@@ -369,6 +369,18 @@ def make_fallback_image(output_path: str, seed: int = 0,
     img.save(output_path, "JPEG", quality=92)
 
 
+def generated_sources(script_data: dict) -> list:
+    """Which generator drew each generated picture of the video (archive
+    pictures excluded: they are real, not drawn)."""
+    out = []
+    for scene in script_data.get("scenes") or []:
+        shots = scene.get("shots")
+        items = shots if shots else [scene]
+        out += [x.get("image_source", "") for x in items
+                if x.get("image_source") and x.get("image_source") != "archive"]
+    return out
+
+
 def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> dict:
     print("🎨 Initializing Visual Engine (flux @ 1080x1920)...")
     os.makedirs(output_dir, exist_ok=True)
@@ -383,10 +395,19 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
     if era_year:
         print(f"🕰️  Era anchor: ~{era_year}")
 
-    for idx, scene in enumerate(scenes):
-        image_path = os.path.join(output_dir, f"scene_{idx}.jpg")
-        prompt = scene.get("image_prompt", "dark atmospheric historical scene, cinematic")
+    def generate(prompt, path, era, seed):
+        source = download_image(prompt, path, era_year=era)
+        if source:
+            print(f"📸 Saved {path} [{source}]")
+        else:
+            print(f"⚠️ {path}: all attempts failed — using designed fallback frame.")
+            make_fallback_image(path, seed=seed)
+            source = "designed-fallback"
+        if source != "workers-ai":
+            time.sleep(6)  # stay under Pollinations' anonymous rate limit
+        return source
 
+    for idx, scene in enumerate(scenes):
         # A scene may date itself. The outro card is the one that does, and it
         # has to: it advertises the NEXT episode, which is a different period
         # from the story just told. Episode 9 was the Iranian hostage crisis
@@ -398,27 +419,38 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
         if scene_era != era_year:
             print(f"   🕰️  scene {idx} dated separately: ~{scene_era}")
 
+        shots = scene.get("shots")
+        if shots:
+            # One picture per shot (shorts_shots.py). Shots that already have
+            # a real archive picture are not painted.
+            for k, shot in enumerate(shots):
+                if shot.get("image_path"):
+                    continue
+                path = os.path.join(output_dir, f"scene_{idx}_{k}.jpg")
+                print(f"🖼️ Generating image for scene {idx}, shot {k + 1}/{len(shots)}...")
+                shot["image_path"] = path
+                shot["image_source"] = generate(
+                    shot.get("image_prompt") or scene.get("image_prompt")
+                    or "dark atmospheric historical scene, cinematic",
+                    path, scene_era, idx * 10 + k)
+            scene["image_path"] = shots[0]["image_path"]
+            scene["image_source"] = shots[0]["image_source"]
+            continue
+
+        image_path = os.path.join(output_dir, f"scene_{idx}.jpg")
         print(f"🖼️ Generating image for scene {idx}...")
-        source = download_image(prompt, image_path, era_year=scene_era)
-        if source:
-            print(f"📸 Saved {image_path} [{source}]")
-        else:
-            print(f"⚠️ Scene {idx}: all attempts failed — using designed fallback frame.")
-            make_fallback_image(image_path, seed=idx)
-            source = "designed-fallback"
         scene["image_path"] = image_path
         # Which generator drew this frame. main.py gates the upload on it: the
         # look of the channel depends on WHICH model rendered the prompt, not
         # merely on whether a frame came back.
-        scene["image_source"] = source
+        scene["image_source"] = generate(
+            scene.get("image_prompt", "dark atmospheric historical scene, cinematic"),
+            image_path, scene_era, idx)
 
-        if idx < len(scenes) - 1:
-            time.sleep(6)  # stay under Pollinations' anonymous rate limit
-
-    sources = [s.get("image_source", "") for s in scenes]
+    sources = generated_sources(script_data)
     preferred = sum(1 for s in sources if s == "workers-ai")
-    if scenes and preferred < len(scenes):
-        print(f"🎨 {preferred}/{len(scenes)} frames from Workers AI; the rest: "
+    if sources and preferred < len(sources):
+        print(f"🎨 {preferred}/{len(sources)} frames from Workers AI; the rest: "
               f"{', '.join(sorted(set(s for s in sources if s != 'workers-ai')))}")
 
     print("✅ Visual pipeline complete.")

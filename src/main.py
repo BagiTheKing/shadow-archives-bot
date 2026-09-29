@@ -22,6 +22,7 @@ from audio_engine import generate_audio_pipeline
 from visual_engine import generate_visual_pipeline
 from video_engine import generate_video_pipeline
 from shorts_archive import add_archive_frames, archive_credits
+from shorts_shots import time_shots
 from shorts_facts import SHORTS_FACTS, research_short
 from youtube_publisher import upload_video_to_youtube
 
@@ -120,6 +121,16 @@ def _strip_hashtags(text: str) -> str:
     """
     cleaned = re.sub(r"(?:^|\s)#[\w]+", " ", text or "")
     return re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+
+
+def topic_label(topic: str) -> str:
+    """"The Carrington Event (1859), the solar storm..." -> "The Carrington
+    Event · 1859": the subject and its year, shown over the hook."""
+    subject = (topic or "").split("(")[0].split(",")[0].strip(" .")
+    year = re.search(r"\((\d{3,4})", topic or "")
+    if not subject or len(subject) > 48:
+        return ""
+    return f"{subject} · {year.group(1)}" if year else subject
 
 
 def build_metadata(script_data: dict, episode=None):
@@ -427,15 +438,18 @@ def check_visual_quality(script_data: dict) -> None:
     if not cloudflare_available() or MIN_PREFERRED_FRAMES <= 0:
         return
 
-    scenes = script_data.get("scenes") or []
-    if not scenes:
+    # Every generated picture, one per shot; real archive pictures are not
+    # generated and do not count either way.
+    from visual_engine import generated_sources
+    sources = generated_sources(script_data)
+    if not sources:
         return
-    preferred = sum(1 for s in scenes if s.get("image_source") == "workers-ai")
-    share = preferred / len(scenes)
+    preferred = sum(1 for s in sources if s == "workers-ai")
+    share = preferred / len(sources)
     if share >= MIN_PREFERRED_FRAMES:
         return
 
-    print(f"\n❌ Halted: only {preferred}/{len(scenes)} frames came from Workers "
+    print(f"\n❌ Halted: only {preferred}/{len(sources)} frames came from Workers "
           f"AI (floor is {MIN_PREFERRED_FRAMES:.0%}).")
     print("   Cloudflare's free allocation is 10,000 neurons a day and resets at "
           "00:00 UTC. Three runs of five frames is roughly all of it, so a manual "
@@ -666,6 +680,7 @@ def main():
     # Outro additions go into the narration before any audio is rendered, so
     # they are spoken and captioned. Question first (off by default), then the
     # tease — the signature line closes the video.
+    script_data["topic_label"] = topic_label(topic)
     first_comment = append_question_to_script(script_data)
     add_outro_scene(script_data)
 
@@ -676,8 +691,11 @@ def main():
     # Phase 2: assets
     script_data = generate_audio_pipeline(script_data, build_dir,
                                           voice=_pick_kokoro_voice())
-    script_data = generate_visual_pipeline(script_data, build_dir)
+    # One picture per sentence: timed from the narration just rendered, real
+    # archive pictures first, then the generator paints the rest.
+    time_shots(script_data)
     add_archive_frames(script_data, build_dir)
+    script_data = generate_visual_pipeline(script_data, build_dir)
     draw_outro_card(script_data, build_dir)
 
     usable = [s for s in script_data["scenes"]

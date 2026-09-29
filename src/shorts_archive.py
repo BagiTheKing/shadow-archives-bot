@@ -1,22 +1,20 @@
 """
-Real archive pictures in the Shorts, beside the generated paintings.
+Real archive pictures in the Shorts, in place of generated paintings.
 
 Every frame of a Short used to be an AI oil painting. On a channel whose whole
-claim is "this really happened", one real photograph of the ship, the man or
+claim is "this really happened", a real photograph of the ship, the man or
 the battlefield is the proof a painting cannot be, and the long-form lanes
-have had the search for it (archive_engine.py) all along.
+already live on it (run #48: 69 of its 87 frames were archive).
 
-Up to SHORTS_ARCHIVE_FRAMES pictures a video, from two places, in this order:
-  1. the writer's archive_query for a scene, searched on Wikimedia Commons
-     and the Library of Congress. A result is used only if its file title
-     carries the query's words (archive_engine.footage_matches): an
-     unrelated real photo reads worse than a good painting;
-  2. the lead image of the story's Wikipedia article (shorts_facts), for the
-     earliest scene still without one.
-
-A picture does not replace the scene's painting: it becomes one of the scene's
-shots (video_engine.plan_shots), so the generator's daily allowance is spent
-exactly as before. Every picture is credited in the description.
+Each shot (shorts_shots.py) that has an archive_query is searched on Wikimedia
+Commons and the Library of Congress, before any painting is generated. A
+result is used only if its file title carries the query's words
+(archive_engine.footage_matches): an unrelated real photo reads worse than a
+good painting. When one is found it IS that shot's picture, and the generator
+skips the shot, which is also what keeps a Short inside the day's generator
+allowance. The story's Wikipedia lead image fills the first shot of scene 2
+when no search found anything. At most SHORTS_ARCHIVE_FRAMES a video, no
+picture twice, every one credited in the description.
 """
 
 import os
@@ -25,35 +23,41 @@ from archive_engine import (article_lead_image, download_archival_image,
                             fit_vertical, footage_matches, format_credit,
                             search_archives)
 
-ARCHIVE_FRAMES = int(os.getenv("SHORTS_ARCHIVE_FRAMES", "2"))
+ARCHIVE_FRAMES = int(os.getenv("SHORTS_ARCHIVE_FRAMES", "5"))
 W, H = 1080, 1920
 CANDIDATES_PER_QUERY = 6
 
 
-def _fetch(candidate, scene, idx, build_dir):
-    path = os.path.join(build_dir, f"archive_{idx}.jpg")
+def _story_shots(script_data):
+    for i, scene in enumerate(script_data.get("scenes") or []):
+        if scene.get("is_outro"):
+            continue
+        for k, shot in enumerate(scene.get("shots") or []):
+            yield i, k, shot
+
+
+def _fetch(candidate, shot, label, build_dir):
+    path = os.path.join(build_dir, f"archive_{label}.jpg")
     if not download_archival_image(candidate, path, W, H, fit=fit_vertical):
         return False
-    scene["archive_path"] = path
-    scene["archive_credit"] = format_credit(candidate)
-    print(f"🗄️  Scene {idx}: archive frame — {scene['archive_credit'][:90]}")
+    shot["image_path"] = path
+    shot["image_source"] = "archive"
+    shot["credit"] = format_credit(candidate)
+    print(f"🗄️  Shot {label}: archive picture — {shot['credit'][:90]}")
     return True
 
 
 def add_archive_frames(script_data: dict, build_dir: str = "build") -> int:
-    """Attaches archive_path/archive_credit to up to ARCHIVE_FRAMES scenes.
-    Returns how many were found. Never raises: a Short without a real
-    picture is still a Short."""
+    """Gives up to ARCHIVE_FRAMES shots a real picture. Returns how many.
+    Never raises: a Short without a real picture is still a Short."""
     if ARCHIVE_FRAMES <= 0:
         return 0
-    scenes = [(i, s) for i, s in enumerate(script_data.get("scenes") or [])
-              if not s.get("is_outro")]
     used, found = set(), 0
     try:
-        for idx, scene in scenes:
+        for i, k, shot in _story_shots(script_data):
             if found >= ARCHIVE_FRAMES:
                 break
-            query = (scene.get("archive_query") or "").strip()
+            query = (shot.get("archive_query") or "").strip()
             if not query:
                 continue
             for cand in search_archives(query, limit=10)[:CANDIDATES_PER_QUERY]:
@@ -61,30 +65,33 @@ def add_archive_frames(script_data: dict, build_dir: str = "build") -> int:
                     continue
                 if not footage_matches(query, (cand.get("title") or "").lower()):
                     continue
-                if _fetch(cand, scene, idx, build_dir):
+                if _fetch(cand, shot, f"{i}_{k}", build_dir):
                     used.add(cand["url"])
                     found += 1
                     break
             else:
-                print(f"   🗄️  Scene {idx}: nothing on the archives matches "
+                print(f"   🗄️  Shot {i}_{k}: nothing on the archives matches "
                       f"{query!r}.")
 
         source_title = script_data.get("source_title")
-        if found < ARCHIVE_FRAMES and source_title:
+        if found == 0 and source_title:
             lead = article_lead_image(source_title)
-            # The hook is the painting's moment; the lead image goes to the
-            # first scene after it that has no real picture yet.
-            spare = [(i, s) for i, s in scenes[1:] if not s.get("archive_path")]
-            if lead and lead["url"] not in used and spare:
-                idx, scene = spare[0]
-                if _fetch(lead, scene, idx, build_dir):
+            spare = [(i, k, s) for i, k, s in _story_shots(script_data)
+                     if i >= 1 and k == 0 and not s.get("image_path")]
+            if lead and spare:
+                i, k, shot = spare[0]
+                if _fetch(lead, shot, f"{i}_{k}", build_dir):
                     found += 1
     except Exception as e:
-        print(f"⚠️ Archive frames skipped ({type(e).__name__}: {e}).")
-    print(f"🗄️  {found} archive frame(s) in this Short.")
+        print(f"⚠️ Archive pictures skipped ({type(e).__name__}: {e}).")
+    print(f"🗄️  {found} archive picture(s) in this Short.")
     return found
 
 
 def archive_credits(script_data: dict) -> list:
-    return [s["archive_credit"] for s in script_data.get("scenes") or []
-            if s.get("archive_path") and s.get("archive_credit")]
+    credits = []
+    for _, _, shot in _story_shots(script_data):
+        if shot.get("image_source") == "archive" and shot.get("credit") \
+                and shot["credit"] not in credits:
+            credits.append(shot["credit"])
+    return credits

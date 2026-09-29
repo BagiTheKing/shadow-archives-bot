@@ -126,26 +126,32 @@ WRITING RULES:
 - Concrete specifics (numbers, names, dates) beat vague drama.
 - Write for the ear, not the page: no parentheses, no semicolons.
 
-IMAGE PROMPTS:
-- Each scene gets one image_prompt describing a SINGLE clear focal subject \
-(one person, one object, one place). Crowded prompts produce muddy AI images.
-- Vary the shot types across scenes: extreme close-up, wide establishing shot, \
-low-angle, overhead, silhouette. State the shot type first.
-- ONE FIGURE AT MOST, and commit to a distance: one face filling the frame, one \
-silhouette, one object, or a landscape. Two or three half-size people in one \
-frame render as smudges with broken hands. Never make hands the subject.
+SHOTS (the pictures): one per SENTENCE of the narration, in order.
+- Each scene has a "shots" list with exactly one entry per sentence of that \
+scene's narration. The picture changes when the sentence starts, so each \
+image_prompt must show exactly what THAT sentence says: the ship, the person, \
+the place, the object or the moment it names. A viewer with the sound off must \
+be able to follow the story from the pictures alone.
+- Scene 1's picture shows the story's subject itself, recognisably (the \
+warship, the burning telegraph office, the bridge), never a generic mood shot.
+- Never the same subject twice in a row, never the same picture twice in the \
+video. Vary the distance across the video: wide establishing shot, medium \
+shot, extreme close-up of an object, overhead, silhouette. State the shot \
+type first.
+- One clear focal subject per picture (one person, one object, one place). \
+ONE FIGURE AT MOST, and commit to a distance. Never make hands the subject.
 - ANCHOR THE ERA: name the period's dress, ships, weapons and buildings \
 explicitly so nothing modern appears in a historical scene.
-- Every prompt must end with exactly: "dramatic chiaroscuro lighting, dark moody \
-cinematic oil painting, visible expressive brushwork, rich texture, muted color \
-palette with one accent color, highly detailed, no text, no watermark"
-
-ARCHIVE QUERIES (real pictures beside the paintings):
-- For the two or three scenes whose subject has a real photograph or period \
-artwork (the ship, the person, the battle, the building, the place), give an \
-archive_query: 2-4 words to search Wikimedia Commons with, naming that exact \
-subject ("Vasa ship", "Isandlwana battle", "Tay Bridge"). No dates, no generic \
-words ("soldiers", "disaster"). Leave it "" for every other scene.
+- Every image_prompt must end with exactly: "dramatic chiaroscuro lighting, \
+dark moody cinematic oil painting, visible expressive brushwork, rich texture, \
+muted color palette with one accent color, highly detailed, no text, no \
+watermark"
+- archive_query: when the sentence names something that has a real \
+photograph or period artwork (the ship, the person, the battle, the building, \
+the instrument), 2-4 words to search Wikimedia Commons with, naming that \
+exact subject ("Vasa ship", "Richard Carrington", "Tay Bridge"). No dates, no \
+generic words. Otherwise "". A real picture found this way is used instead of \
+the painting, so aim for it wherever the sentence allows.
 
 TITLE RULES (the title is the second filter, after the hook):
 - No ALL CAPS words. The user message states the hard character limit; it is a
@@ -228,9 +234,27 @@ OUTPUT: Only a valid JSON object, no markdown fences, with this exact shape:
   "next_tease": "only when the user message names a NEXT story: at most 12 words teasing it",
   "tags": ["8-12 specific search tags, including the proper nouns from the story"],
   "scenes": [
-    {"narration": "...", "image_prompt": "...", "archive_query": ""}
+    {"narration": "Sentence one. Sentence two.", "shots": [
+      {"image_prompt": "... picture for sentence one ...", "archive_query": ""},
+      {"image_prompt": "... picture for sentence two ...", "archive_query": "..."}
+    ]}
   ]
 }"""
+
+
+def reply_text(response) -> str:
+    """The model's text, wherever it put it: reasoning models on some
+    providers leave "content" empty and put the answer in "reasoning" or
+    "reasoning_content" (the same helper as longform_llm._reply_text)."""
+    try:
+        message = response.choices[0].message
+    except (AttributeError, IndexError, TypeError):
+        return ""
+    for field in ("content", "reasoning", "reasoning_content"):
+        text = getattr(message, field, None)
+        if isinstance(text, str) and text.strip():
+            return text
+    return ""
 
 
 def _strip_fences(raw: str) -> str:
@@ -478,6 +502,11 @@ def _validate(data: dict, title_max: int = 80, avoid_titles=(),
               "usually a reply that was cut off mid-object.")
         return False
     for i, s in enumerate(scenes):
+        if not s.get("image_prompt"):
+            first = next((x for x in s.get("shots") or []
+                          if isinstance(x, dict) and x.get("image_prompt")), None)
+            if first:
+                s["image_prompt"] = first["image_prompt"]
         missing = [f for f in ("narration", "image_prompt") if not s.get(f)]
         if missing:
             print(f"⚠️ Script rejected: scene {i} is missing "
@@ -847,6 +876,14 @@ def spec_issues(data: dict, has_facts: bool) -> list:
         elif len(everywhere) > MAX_TURN_LINES:
             problems.append("the narrator speaks to the viewer "
                             f"{len(everywhere)} times; once is the rule")
+    # One picture per sentence (docs/SHORTS_SPEC.md 12). A writer that gave
+    # every multi-sentence scene a single picture ignored the shot list.
+    multi = [s for s in data.get("scenes") or []
+             if len(re.split(r"(?<=[.!?])\s+", (s.get("narration") or "").strip())) > 1]
+    if multi and all(len([x for x in s.get("shots") or [] if isinstance(x, dict)
+                          and x.get("image_prompt")]) <= 1 for s in multi):
+        problems.append("every scene has a single picture; give each scene a "
+                        "\"shots\" list with one image_prompt per sentence")
     if not has_facts:
         # With no source to check a quote against, there are no quotes.
         for s in scenes:
@@ -999,7 +1036,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
         for attempt in range(1, max_retries_per_model + 1):
             print(f"🤖 Trying {model} (attempt {attempt}/{max_retries_per_model})...")
             try:
-                response = client.chat.completions.create(
+                kwargs = dict(
                     model=model,
                     messages=[
                         {"role": "system", "content": get_system_prompt()},
@@ -1008,7 +1045,17 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                     temperature=0.8,
                     max_tokens=4000,
                 )
-                content = response.choices[0].message.content
+                if "gpt-oss" in model:
+                    # A reasoning model spends the same 4,000 tokens on
+                    # thinking first; on Groq it thought until nothing was
+                    # left and answered with empty content (run #123).
+                    kwargs["reasoning_effort"] = "low"
+                try:
+                    response = client.chat.completions.create(**kwargs)
+                except TypeError:
+                    kwargs.pop("reasoning_effort", None)
+                    response = client.chat.completions.create(**kwargs)
+                content = reply_text(response)
                 if not content or not content.strip():
                     raise ValueError("model returned empty content")
                 data = _extract_json(content)
@@ -1076,6 +1123,8 @@ def generate_video_script(topic: str = None, avoid_titles=(),
                 normalize_thumbnail_fields(data)
                 normalize_next_tease(data, next_topic)
                 normalize_punch_phrase(data)
+                from shorts_shots import normalize_shots
+                normalize_shots(data)
                 print(f"✅ Script generated by {response.model}")
                 return data
             except Exception as e:

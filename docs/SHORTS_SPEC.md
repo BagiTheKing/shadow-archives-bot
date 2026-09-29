@@ -63,18 +63,29 @@ and nothing checks it yet: those are the rules to move into code next.
     (`SPEAK_QUESTION=0`). Code.
 
 ## On screen
-12. **A new picture at least every 4 seconds.** Each scene is cut into shots
-    of about 3.5 seconds and never over 4: the painting wide, a real archive
-    picture when the scene has one, a punch-in on the painting. Code:
-    `video_engine.plan_shots`.
+12. **A new picture for every sentence, each used once.** Each scene's shots
+    are one per sentence, each showing what that sentence says; the cut
+    lands where the sentence starts in the narration, and each picture gets
+    one slow move, taking turns across the video. No picture twice, no
+    punch-ins on the same picture (run #123 showed they read as the video
+    lagging). At most 10 pictures (`SHORTS_MAX_IMAGES`), none on screen for
+    under 1.8 seconds: over budget, the shortest neighbouring shots merge.
+    Code: `shorts_shots`, `video_engine.plan_shots`; the writer ignoring the
+    shot list is rejected (`spec_issues`). Prompt: the picture shows what the
+    sentence says, scene 1 shows the subject itself.
+12a. **What the video is about, on screen from the first frame**: the
+    subject and year ("THE CARRINGTON EVENT · 1859") over the hook. Code:
+    `topic_label`, `generate_subtitles`.
 13. **Paintings in one style, dated.** Every generated frame gets the
     channel's style and the story's era stamped on at generation, whatever
     the writer asked for. A video with under 60% of its frames from Workers
     AI (when configured) is not published. Code: `build_generation_prompt`,
     `check_visual_quality`. Prompt: one figure at most, never hands.
-14. **Real pictures, matched and credited.** Up to 2 archive pictures (Commons
-    or the Library of Congress), used only when the file title carries the
-    search words, or the article's free lead image; every one credited in the
+14. **Real pictures first, matched and credited.** Each shot with an archive
+    search is looked up on Commons and the Library of Congress before any
+    painting is generated; a match (the file title carries the search words)
+    is that shot's picture. Up to 5 a Short (`SHORTS_ARCHIVE_FRAMES`), or the
+    article's free lead image when nothing matched; every one credited in the
     description. Code: `shorts_archive`.
 15. **Captions.** At most 4 words at a time, broken on punctuation, every
     figure in the accent yellow. Code: `generate_subtitles`.

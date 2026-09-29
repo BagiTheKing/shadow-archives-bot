@@ -6,8 +6,8 @@ What changed vs the old version:
    animation, instead of a full paragraph parked in the center of the screen.
 2. MOTION: each scene gets a different Ken Burns move (zoom in / zoom out /
    pan left / pan right), with the source upscaled first to kill zoompan jitter.
-   Scenes are cut into shots of ~3.5s (painting, archive picture, punch-in),
-   see plan_shots.
+   Every sentence gets its own picture, cut where the sentence starts
+   (shorts_shots.py, plan_shots).
 3. TRANSITIONS: 0.4s crossfades between scenes instead of hard cuts.
 4. GRADE: subtle vignette + film grain for a cohesive cinematic look.
 5. MUSIC: if a track exists in music/, it's looped, ducked -20dB under the
@@ -21,7 +21,6 @@ What changed vs the old version:
    music_volume).
 """
 
-import math
 import os
 import random
 import re
@@ -253,6 +252,16 @@ def generate_subtitles(script_data: dict, output_ass: str, timeline_offsets: lis
     print("📝 Generating word-synced captions...")
     events = []
 
+    # What this video is about, on screen for the hook: "THE CARRINGTON EVENT
+    # · 1859". The pictures alone did not say it (run #123).
+    label = (script_data.get("topic_label") or "").strip()
+    if label and timeline_offsets:
+        first = script_data.get("scenes", [{}])[0].get("duration") or 3.0
+        body = label.upper().replace("{", "").replace("}", "")
+        events.append(
+            f"Dialogue: 2,{_ass_time(0.15)},{_ass_time(max(1.5, min(3.6, first)))},"
+            f"Cta,,0,0,0,,{{\\an8\\pos({W // 2},280)\\fs86\\fad(200,250)}}{body}")
+
     # While the punch phrase is on screen, the bottom captions saying the same
     # words stand down: the phrase twice at once is noise, not emphasis.
     punch = punch_timing(script_data, timeline_offsets)
@@ -339,32 +348,23 @@ def _ken_burns_filter(duration: float, style: int) -> str:
     frames = max(int(duration * FPS), 1)
     up = f"scale={W * 2}:{H * 2}:flags=lanczos"
     common = f"d={frames}:s={W}x{H}:fps={FPS}"
-    z_rate = 0.20 / frames  # total 20% zoom across the clip
+    # 10% across the shot: shots are 2-6 seconds now, and the 20% that was
+    # calm over a 9-second scene lurches over three.
+    z_rate = 0.10 / frames
 
     if style == 0:  # slow zoom in, centered
-        zp = (f"zoompan=z='min(zoom+{z_rate:.6f},1.2)'"
+        zp = (f"zoompan=z='min(zoom+{z_rate:.6f},1.1)'"
               f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':{common}")
     elif style == 1:  # zoom out
-        zp = (f"zoompan=z='if(eq(on,1),1.2,max(zoom-{z_rate:.6f},1.0))'"
+        zp = (f"zoompan=z='if(eq(on,1),1.1,max(zoom-{z_rate:.6f},1.0))'"
               f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':{common}")
     elif style == 2:  # pan right with slight zoom
-        zp = (f"zoompan=z='1.15':x='(iw-iw/zoom)*on/{frames}'"
+        zp = (f"zoompan=z='1.08':x='(iw-iw/zoom)*on/{frames}'"
               f":y='ih/2-(ih/zoom/2)':{common}")
     else:  # pan left with slight zoom
-        zp = (f"zoompan=z='1.15':x='(iw-iw/zoom)*(1-on/{frames})'"
+        zp = (f"zoompan=z='1.08':x='(iw-iw/zoom)*(1-on/{frames})'"
               f":y='ih/2-(ih/zoom/2)':{common}")
     return f"{up},{zp}"
-
-
-def _punch_filter(duration: float) -> str:
-    """A tight crop of the same frame, drifting in slowly: the cut from a wide
-    shot to this reads as a new shot without spending another generation.
-    Aimed a little above centre, where the single figure's face sits."""
-    frames = max(int(duration * FPS), 1)
-    up = f"scale={W * 2}:{H * 2}:flags=lanczos"
-    return (f"{up},zoompan=z='{PUNCH_ZOOM}+{0.06 / frames:.6f}*on'"
-            f":x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*0.42'"
-            f":d={frames}:s={W}x{H}:fps={FPS}")
 
 
 def _static_filter(duration: float) -> str:
@@ -374,64 +374,47 @@ def _static_filter(duration: float) -> str:
     return f"scale={W}:{H}:flags=lanczos,fps={FPS}"
 
 
-# A still held for nine seconds is where a Short loses people: every scene was
-# one image for its whole narration, about 9s each. Scenes are now cut into
-# shots of about SHOT_SECONDS: the painting wide, a real archive picture when
-# the scene has one (shorts_archive.py), and a punch-in on the painting. Cuts
-# inside a scene are hard; scenes still dissolve into each other.
-SHOT_SECONDS = float(os.getenv("SHORTS_SHOT_SECONDS", "3.5"))
-# docs/SHORTS_SPEC.md 9: no shot is held longer than this, whatever the
-# scene's length. A 14-second scene gets four shots, not three; past four
-# the shots cycle (wide, archive, punch-in, ...) with new motion each time.
-MAX_SHOT_SECONDS = 4.0
-MAX_SHOTS = 8
-PUNCH = "punch"
-PUNCH_ZOOM = 1.38
+# One picture per sentence (shorts_shots.py): every shot is a different
+# picture, cut where its sentence starts, with one slow move. The moves take
+# turns across the whole video, so neighbouring shots never move alike.
 # Archive pictures sit over a blurred copy of themselves; a pan would slide
 # the picture off centre, so they only zoom.
+_MOTIONS = (0, 2, 1, 3)          # zoom in, pan right, zoom out, pan left
 _ARCHIVE_MOTIONS = (0, 1)
 
 
-def plan_shots(scene: dict, clip_len: float, idx: int):
-    """[(image_path, motion)] for one scene: motion is a Ken Burns style
-    (0-3), PUNCH, or None for the static next-file card."""
-    image = scene["image_path"]
-    if scene.get("is_outro"):
-        return [(image, None)]
-    archive = scene.get("archive_path")
-    base = idx % 4
-    if archive and scene.get("image_source") == "designed-fallback":
-        # The generator failed this scene: the real picture takes its place.
-        image, archive, base = archive, None, _ARCHIVE_MOTIONS[idx % 2]
+class MotionCycle:
+    def __init__(self):
+        self.n = 0
 
-    n = max(1, min(MAX_SHOTS, max(round(clip_len / SHOT_SECONDS),
-                                  math.ceil(clip_len / MAX_SHOT_SECONDS))))
-    if archive and n < 2 and clip_len >= 2.4:
-        n = 2                     # a real picture is worth a quick cut
-    if archive:
-        pool = [(image, base), (archive, _ARCHIVE_MOTIONS[idx % 2]),
-                (image, PUNCH), (archive, PUNCH)]
-    else:
-        pool = [(image, base), (image, PUNCH), (image, (base + 2) % 4),
-                (image, PUNCH)]
-    # A scene longer than four shots: go round again, each wide shot with a
-    # different move from the one it repeats.
-    while len(pool) < n:
-        k = len(pool)
-        shot, motion = pool[k % 4]
-        if shot == archive and motion != PUNCH:
-            motion = _ARCHIVE_MOTIONS[(_ARCHIVE_MOTIONS.index(motion) + 1) % 2]
-        elif motion != PUNCH:
-            motion = (motion + 1) % 4
-        pool.append((shot, motion))
-    return pool[:n]
+    def next(self, archive: bool) -> int:
+        self.n += 1
+        if archive:
+            return _ARCHIVE_MOTIONS[self.n % 2]
+        return _MOTIONS[self.n % len(_MOTIONS)]
 
 
-def _shot_frames(clip_len: float, n: int):
-    """Frames per shot, summing exactly to the clip's frame count."""
-    total = max(int(round(clip_len * FPS)), n)
-    each = total // n
-    return [each] * (n - 1) + [total - each * (n - 1)]
+def plan_shots(scene: dict, clip_len: float, motions: MotionCycle):
+    """[(image_path, motion, seconds)] for one scene. motion is a Ken Burns
+    style (0-3), or None for the static next-file card. The shots' lengths
+    add up to clip_len."""
+    if scene.get("is_outro") or not scene.get("shots"):
+        motion = None if scene.get("is_outro") else motions.next(False)
+        return [(scene["image_path"], motion, clip_len)]
+    shots = scene["shots"]
+    starts = [0.0] + [float(x.get("start") or 0) for x in shots[1:]]
+    ends = starts[1:] + [clip_len]
+    return [(x["image_path"], motions.next(x.get("image_source") == "archive"),
+             max(0.1, b - a))
+            for x, a, b in zip(shots, starts, ends)]
+
+
+def _shot_frames(lengths, clip_len: float):
+    """Frames per shot from their lengths, summing exactly to the clip."""
+    total = max(int(round(clip_len * FPS)), len(lengths))
+    frames = [max(1, int(round(x * FPS))) for x in lengths[:-1]]
+    frames.append(max(1, total - sum(frames)))
+    return frames
 
 
 def create_scene_clip(shots, audio_path, duration, output_path):
@@ -446,15 +429,13 @@ def create_scene_clip(shots, audio_path, duration, output_path):
     died because a harbour had..." still fading while the next line started.
     """
     clip_len = duration + XFADE
-    frames = _shot_frames(clip_len, len(shots))
+    frames = _shot_frames([x[2] for x in shots], clip_len)
     inputs, graph = [], []
-    for k, ((image, motion), n) in enumerate(zip(shots, frames)):
+    for k, ((image, motion, _), n) in enumerate(zip(shots, frames)):
         inputs += ["-loop", "1", "-framerate", str(FPS), "-i", image]
         seconds = n / FPS
         if motion is None:
             vf = _static_filter(seconds)
-        elif motion == PUNCH:
-            vf = _punch_filter(seconds)
         else:
             vf = _ken_burns_filter(seconds, motion)
         graph.append(f"[{k}:v]{vf},trim=end_frame={n},setpts=PTS-STARTPTS,"
@@ -534,14 +515,15 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
 
     # ---- Phase 1: render individual scene clips with varied motion ----
     clips, durations = [], []
+    motions = MotionCycle()
     for idx, scene in enumerate(scenes):
         clip_path = os.path.join(build_dir, f"clip_{idx}.mp4")
-        shots = plan_shots(scene, scene["duration"] + XFADE, idx)
+        shots = plan_shots(scene, scene["duration"] + XFADE, motions)
         described = ", ".join(
             "static card" if m is None else
-            ("archive" if img == scene.get("archive_path") else "painting")
-            + (" punch-in" if m == PUNCH else "")
-            for img, m in shots)
+            f"{'archive' if 'archive_' in os.path.basename(img) else 'painting'} "
+            f"{secs:.1f}s"
+            for img, m, secs in shots)
         print(f"🎞️ Rendering scene {idx} ({scene['duration']:.1f}s, "
               f"{len(shots)} shot(s): {described})...")
         create_scene_clip(shots, scene["audio_path"], scene["duration"],
