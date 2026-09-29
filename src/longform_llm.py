@@ -3427,6 +3427,12 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
     )
     data = _call(pool, "You write documentary location stamps. Output only "
                  "JSON.", prompt, max_tokens=1500)
+    if not data and _last_model:
+        # One more try on another model: the 2026-09-29 trend run lost every
+        # map to a single busy (503) model at this call.
+        print("   ↩️  Maps request came back empty — one more try on another model.")
+        data = _call(pool, "You write documentary location stamps. Output only "
+                     "JSON.", prompt, max_tokens=1500, skip={_last_model})
     maps = (data or {}).get("maps") or [(data or {}).get("map")]
     # story mode: no map in the teaser or over a cast introduction
     # (docs/VIDEO_SPEC.md 1-2)
