@@ -6,10 +6,10 @@
         "videos/hmc-ROH7jfU/2_map.jpg",
         "videos/hmc-ROH7jfU/3_person.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-09-30T13:06:16.378142+00:00",
+      "views_at_start": 2,
       "results": [],
       "registered": "2026-09-30T13:05:54.515908+00:00"
     },
