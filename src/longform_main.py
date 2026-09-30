@@ -460,58 +460,74 @@ def main():
     try:
         story_topic = os.getenv("STORY_TOPIC", "").strip()
         stage = os.getenv("STORY_STAGE", "full").strip().lower()
-        if story_topic:
-            # A named story (e.g. the Six-Day War remake): no channel watch,
-            # no anchor — the topic is given, story mode tells it.
-            topic, enforce_history, from_short, era_year = story_topic, True, False, None
-            print(f"📖 Story topic given: {topic} (stage: {stage})")
+        # A run that died (spent quota, a chapter nobody could write) left its
+        # topic, story and finished chapters behind: carry on from there
+        # instead of paying for them again (run_cache.py).
+        import run_cache
+        saved = run_cache.load()
+        resumed = bool(saved) and (not story_topic or saved["topic"] == story_topic)
+        if resumed:
+            topic, story = saved["topic"], saved["story"]
+            enforce_history = saved.get("enforce_history", False)
+            from_short = saved.get("from_short", False)
+            era_year = saved.get("era_year") or story.get("era_year")
+            print(f"♻️  Resuming the last run's story: {topic[:90]} "
+                  f"({len(saved.get('chapters') or {})} chapter(s) already written).")
+            run_cache.mark_resumed()
         else:
-            topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
-        if not topic:
-            print("❌ Halted: every topic in the pool is already published. "
-                  "Add new entries to CORE_TOPICS in src/topics.py.")
-            raise SystemExit(1)
-        if os.getenv("TOPIC_ONLY", "0") == "1":
-            # Stops after the selection calls: tests channel watch and anchor
-            # choice against a real model and the real channel for two or
-            # three LLM requests, instead of a full render and upload.
-            print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
-            print(f"   enforce_history={enforce_history} era_year={era_year}")
-            return
-        # Story mode is the only long-form format (owner, 2026-09-28): every
-        # lane, every topic. The old six-chapter arc is never a fallback — a
-        # run whose story cannot be built stops instead.
-        from longform_llm import _anchor_fits_niche
-        tried = {topic}
-        if not story_topic and not _anchor_fits_niche(topic, story=True):
-            # checked before any research is spent on it: the 2026-09-30
-            # weekly run spent two runs' quota on "Maimonides' principle ...
-            # to acquit a thousand guilty", an idea with no story in it
-            print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
-            story = None
-        else:
-            story = build_story(topic, BUILD_DIR, given=bool(story_topic))
-        while not story and not story_topic and len(tried) < 4:
-            # An automatic lane can pick another topic: its first pick may
-            # be an idea rather than an event (see build_story). A named
-            # topic never changes.
-            covered = covered_topics(history, longform_only=True) if history else set()
-            nxt = pick_topic(int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7")) - len(tried),
-                             exclude=covered | tried)
-            if not nxt or nxt in tried:
-                break
-            topic, enforce_history, from_short = nxt, False, False
-            tried.add(topic)
-            if not _anchor_fits_niche(topic, story=True):
+            if story_topic:
+                # A named story (e.g. the Six-Day War remake): no channel watch,
+                # no anchor — the topic is given, story mode tells it.
+                topic, enforce_history, from_short, era_year = story_topic, True, False, None
+                print(f"📖 Story topic given: {topic} (stage: {stage})")
+            else:
+                topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
+            if not topic:
+                print("❌ Halted: every topic in the pool is already published. "
+                      "Add new entries to CORE_TOPICS in src/topics.py.")
+                raise SystemExit(1)
+            if os.getenv("TOPIC_ONLY", "0") == "1":
+                # Stops after the selection calls: tests channel watch and anchor
+                # choice against a real model and the real channel for two or
+                # three LLM requests, instead of a full render and upload.
+                print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
+                print(f"   enforce_history={enforce_history} era_year={era_year}")
+                return
+            # Story mode is the only long-form format (owner, 2026-09-28): every
+            # lane, every topic. The old six-chapter arc is never a fallback — a
+            # run whose story cannot be built stops instead.
+            from longform_llm import _anchor_fits_niche
+            tried = {topic}
+            if not story_topic and not _anchor_fits_niche(topic, story=True):
+                # checked before any research is spent on it: the 2026-09-30
+                # weekly run spent two runs' quota on "Maimonides' principle ...
+                # to acquit a thousand guilty", an idea with no story in it
                 print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
-                continue
-            print(f"↩️  Trying another topic: {topic[:80]}")
-            story = build_story(topic, BUILD_DIR)
-        if not story:
-            print("❌ Story mode could not build a fact sheet and outline — "
-                  "stopping rather than writing it in the old arc.")
-            raise SystemExit(1)
-        era_year = era_year or story.get("era_year")
+                story = None
+            else:
+                story = build_story(topic, BUILD_DIR, given=bool(story_topic))
+            while not story and not story_topic and len(tried) < 4:
+                # An automatic lane can pick another topic: its first pick may
+                # be an idea rather than an event (see build_story). A named
+                # topic never changes.
+                covered = covered_topics(history, longform_only=True) if history else set()
+                nxt = pick_topic(int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7")) - len(tried),
+                                 exclude=covered | tried)
+                if not nxt or nxt in tried:
+                    break
+                topic, enforce_history, from_short = nxt, False, False
+                tried.add(topic)
+                if not _anchor_fits_niche(topic, story=True):
+                    print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
+                    continue
+                print(f"↩️  Trying another topic: {topic[:80]}")
+                story = build_story(topic, BUILD_DIR)
+            if not story:
+                print("❌ Story mode could not build a fact sheet and outline — "
+                      "stopping rather than writing it in the old arc.")
+                raise SystemExit(1)
+            era_year = era_year or story.get("era_year")
+            run_cache.save_story(topic, story, enforce_history, era_year, from_short)
         if stage == "outline":
             print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")
             return
@@ -653,6 +669,8 @@ def main():
                                            playlist_title=SERIES_NAME,
                                            playlist_description=PLAYLIST_DESCRIPTION)
 
+    if video_id:
+        run_cache.clear()
     if video_id:
         # for the thumbnail rotation (tools/thumb_rotation.py): the workflow
         # registers this video's thumbnails under its id

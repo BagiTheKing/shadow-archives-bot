@@ -21,6 +21,7 @@ import time
 
 from openai import OpenAI
 
+import run_cache
 from audio_engine import is_speakable
 from llm_engine import (get_free_models, normalize_thumbnail_fields,
                         validate_title, _extract_json, _validate_hook,
@@ -2519,6 +2520,20 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         seg_rule = seg_plan[1] if seg_plan else None
         print(f"✍️  Chapter: {heading} (~{words} words, {pacing['role']}, "
               f"cut every ~{pacing['words_per_image']} words)...")
+        cached = run_cache.chapter(topic, c_index, heading) if story else None
+        if cached:
+            # written by the last run of this lane before it died (run_cache.py)
+            chapters.append(cached)
+            chapter_text = " ".join(x["narration"] for x in cached["scenes"])
+            said_sentences.extend(_sentences(chapter_text))
+            said_lines.extend(
+                line.strip() for line in re.split(r"(?<=[.!?])\s+", chapter_text)
+                if len(line.split()) >= 4)
+            story_text += " " + chapter_text
+            tail = cached["scenes"][-1]["narration"][-160:]
+            print(f"   ♻️  Already written by the last run — reused "
+                  f"({len(chapter_text.split())} words, no request spent).")
+            continue
         data, best, feedback = None, None, ""
         # A weak handoff is worth exactly one extra request, not the whole
         # attempt budget: the seam matters, but not as much as having a
@@ -2714,6 +2729,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         tail = segs[-1]["narration"][-160:]
         total = sum(len(x["narration"].split()) for x in segs)
         print(f"   ✅ {len(segs)} segments, {total} words")
+        if story:
+            run_cache.save_chapter(topic, c_index, chapters[-1])
 
         # The one joke, right after the fatal call — see _generate_joke_beat.
         # Appended to segs directly (not folded into chapter_text/said_lines

@@ -174,9 +174,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Progress of a run that died (run_cache.py): the next run of this
+      # lane carries on from it instead of paying for the same research and
+      # chapters twice. Kept on the run-cache branch, one folder per lane.
+      - name: Fetch saved progress
+        continue-on-error: true
+        run: |
+          git fetch -q origin run-cache && git worktree add -q cache origin/run-cache || mkdir -p cache
+
       - name: Run trending long-form pipeline
         id: pipeline
         env:
+          RUN_CACHE_DIR: cache/timely
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # Optional and the biggest script-quality upgrade available: a free
           # Google AI Studio key (https://aistudio.google.com/apikey) switches
@@ -258,6 +267,19 @@ jobs:
           # Nothing after this year may appear in the narration.
           HISTORY_CUTOFF_YEAR: '2010'
         run: python src/longform_main.py
+
+      - name: Save progress
+        if: always()
+        continue-on-error: true
+        run: |
+          [ -e cache/.git ] || exit 0
+          cd cache
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Run progress (${{ github.workflow }} #${{ github.run_number }})"
+          git push -q origin HEAD:run-cache
 
       # Test & Compare has no API: the thumbnails are tried in turn by
       # rotate_thumbnails.yml once the video is public.
