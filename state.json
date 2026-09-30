@@ -2,16 +2,16 @@
   "videos": {
     "hmc-ROH7jfU": {
       "files": [
-        "videos/hmc-ROH7jfU/1_face_off.jpg",
-        "videos/hmc-ROH7jfU/2_one_person.jpg",
-        "videos/hmc-ROH7jfU/3_map.jpg"
+        "videos/hmc-ROH7jfU/1_faceoff.jpg",
+        "videos/hmc-ROH7jfU/2_map.jpg",
+        "videos/hmc-ROH7jfU/3_person.jpg"
       ],
-      "status": "testing",
-      "current": 0,
-      "since": "2026-09-30T12:50:46.651299+00:00",
-      "views_at_start": 2,
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
       "results": [],
-      "registered": "2026-09-30T12:50:07.441654+00:00"
+      "registered": "2026-09-30T13:05:54.515908+00:00"
     },
     "9x3thBUuzF4": {
       "files": [
