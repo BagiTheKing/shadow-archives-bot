@@ -652,7 +652,7 @@ def _call(pool, system, user, max_tokens, skip=()):
         try:
             _request_count += 1
             kwargs = dict(
-                model=model,
+                model=pool.api_name(model),
                 messages=[{"role": "system", "content": system},
                           {"role": "user", "content": user}],
                 temperature=0.7,

@@ -192,6 +192,7 @@ jobs:
           # the writer from OpenRouter's free models to Gemini's free tier.
           # Absent, the pipeline uses OpenRouter exactly as before.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           # More free writers, each with its own daily allowance. The chain is
           # gemini -> groq -> cerebras -> zhipu -> openrouter, and a provider
           # that runs dry now retires itself and hands over instead of ending

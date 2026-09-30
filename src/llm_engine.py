@@ -1000,7 +1000,7 @@ def generate_video_script(topic: str = None, avoid_titles=(),
             print(f"🤖 Trying {model} (attempt {attempt}/{max_retries_per_model})...")
             try:
                 response = client.chat.completions.create(
-                    model=model,
+                    model=pool.api_name(model),
                     messages=[
                         {"role": "system", "content": get_system_prompt()},
                         {"role": "user", "content": user_prompt + fact_feedback},

@@ -147,9 +147,17 @@ def gemini_reserved() -> bool:
     return today in GEMINI_RESERVED_DAYS
 
 
+# A second Gemini key (owner, 2026-09-30): its models join the chain right
+# after the first key's, so a run that spends one key's daily quota carries on
+# with the other. Its model ids carry the suffix below inside the pool (two
+# keys serve the same model names); ModelPool.api_name strips it for the API.
+GEMINI_KEY_ENVS = ("GEMINI_API_KEY", "GEMINI_API_KEY_2")
+SECOND_KEY_SUFFIX = "@2"
+
+
 def gemini_available() -> bool:
     global _reserved_notice_shown
-    if not os.getenv("GEMINI_API_KEY"):
+    if not any(os.getenv(k) for k in GEMINI_KEY_ENVS):
         return False
     if gemini_reserved():
         if not _reserved_notice_shown:
@@ -465,6 +473,12 @@ class ModelPool:
     def client_for(self, model):
         return self._by_model[model][0]
 
+    @staticmethod
+    def api_name(model):
+        """The id to send to the API: the pool's id without the second-key
+        suffix ("gemini-3.8-flash@2" -> "gemini-3.8-flash")."""
+        return model.split(SECOND_KEY_SUFFIX)[0]
+
     def provider_for(self, model):
         return self._by_model[model][1]
 
@@ -487,10 +501,18 @@ def get_pool() -> ModelPool:
     entries = []
 
     if gemini_available():
-        client = OpenAI(base_url=GEMINI_BASE_URL,
-                        api_key=os.getenv("GEMINI_API_KEY"))
-        for model in discover_gemini_models(client):
-            entries.append((model, client, "gemini"))
+        for n, env in enumerate(GEMINI_KEY_ENVS):
+            if not os.getenv(env):
+                continue
+            client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv(env))
+            suffix = SECOND_KEY_SUFFIX if n else ""
+            try:
+                models = discover_gemini_models(client)
+            except Exception as e:
+                print(f"   ⚠️ {env}: model list unavailable ({type(e).__name__}).")
+                models = []
+            for model in models:
+                entries.append((model + suffix, client, "gemini"))
 
     if groq_available():
         client = OpenAI(base_url=GROQ_BASE_URL,
