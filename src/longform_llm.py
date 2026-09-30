@@ -313,22 +313,52 @@ STORY_TITLE_RULES = (
     "so they must say DIFFERENT things.\n")
 
 STORY_THUMB_RULES = (
-    "And thumbnail_variants: the words for three different thumbnails of "
-    "this video, ALL CAPS, each saying something different from the title "
-    "and from each other:\n"
-    "- faceoff: two leaders from opposite sides face each other; big = 1-3 "
-    "words, the hook; sub = 2-4 words finishing it.\n"
-    "- person: the one who decided, alone; 3-6 words about what they did and "
-    "what it cost.\n"
-    "- map: over a map of the places; big = 1-3 words, sub = 1-3 words.\n"
+    "And thumbnail_variants: the words for three thumbnails, ALL CAPS. Each "
+    "must make a stranger who has never heard of this story stop scrolling: "
+    "ONE shocking, TRUE fact from the narration, in plain words understood "
+    "in one second, no names (the faces and tags show who). Use the story's "
+    "most shocking figure (dead, destroyed, lost, how fast) with its noun, or "
+    "its cruellest twist. Every number must be one the narration states.\n"
+    "- faceoff (two leaders face each other): big = the shocking figure and "
+    "its noun, 2-3 words; box = 2-4 words that make it hit.\n"
+    "- person (the one who decided, alone): setup = what they did, 2-4 "
+    "words; twist = what it cost them, 2-4 words.\n"
+    "- map (the place, with an arrow): question = 2-5 words a stranger needs "
+    "answered; tag = the shocking figure again, 2-3 words.\n"
     "The shape, from a different story (never reuse these words): faceoff "
-    "\"13 DAYS\" / \"ONE STEP FROM WAR\"; person \"HE SENT THE MISSILES\"; "
-    "map \"90 MILES\" / \"FROM FLORIDA\".\n"
-    "Only what the narration states; neutral about present-day conflicts.\n")
+    "big \"13 DAYS\", box \"ONE STEP FROM WAR\"; person setup \"HE SENT THE "
+    "MISSILES\", twist \"THEN TOOK THEM BACK\"; map question \"90 MILES "
+    "FROM FLORIDA?\", tag \"13 DAYS OF FEAR\".\n"
+    "Neutral about present-day conflicts: shock with facts, never blame.\n")
+
+def _checked_thumb_texts(variants, story, full_text):
+    """The thumbnail words with every field whose numbers are not in the fact
+    sheet or the narration removed: a thumbnail's shocking figure must be
+    one the video itself states."""
+    if not isinstance(variants, dict):
+        return {}
+    known = json.dumps((story or {}).get("sheet") or {}) + " " + (full_text or "")
+    digits = {d.replace(",", "") for d in re.findall(r"\d[\d,]*", known)}
+    out = {}
+    for look, fields in variants.items():
+        if not isinstance(fields, dict):
+            continue
+        kept = {}
+        for k, v in fields.items():
+            nums = [d.replace(",", "") for d in re.findall(r"\d[\d,]*", str(v or ""))]
+            if all(n in digits for n in nums):
+                kept[k] = v
+            else:
+                print(f"   ↩️  Thumbnail {look}.{k} dropped: {v!r} has a number "
+                      f"the video does not state.")
+        out[look] = kept
+    return out
+
 
 # words the examples use: a variant made of them is a copy, not a thumbnail
 THUMB_EXAMPLE_TEXTS = {"13 DAYS", "ONE STEP FROM WAR", "HE SENT THE MISSILES",
-                       "90 MILES", "FROM FLORIDA"}
+                       "THEN TOOK THEM BACK", "90 MILES FROM FLORIDA?",
+                       "90 MILES FROM FLORIDA", "13 DAYS OF FEAR"}
 
 _RESTRAINED_TITLE_ADDENDUM = "" if CLICKBAIT_MODE else (
     "BANNED, because they would fit any story at all: 'the hidden ...', "
@@ -2903,9 +2933,10 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # they share the repair: see llm_engine.normalize_thumbnail_fields.
         "thumbnail_text": meta.get("thumbnail_text"),
         "thumbnail_badge": meta.get("thumbnail_badge"),
-        # story mode: the texts of the three thumbnails (thumb_variants.py)
-        "thumbnail_variants": meta.get("thumbnail_variants")
-        if isinstance(meta.get("thumbnail_variants"), dict) else {},
+        # story mode: the texts of the three thumbnails (thumb_variants.py),
+        # every number checked against the fact sheet and the narration
+        "thumbnail_variants": _checked_thumb_texts(
+            meta.get("thumbnail_variants"), story, full_text),
         # Posted as the first comment under the video. See
         # youtube_publisher.post_first_comment for why the channel needs one.
         "comment_question": str(meta.get("comment_question") or "").strip()[:280],
@@ -3021,8 +3052,9 @@ def _packaging_call(pool, topic, full_text, retitle=False, story=None):
                  'Output: {"title": "...", "description": "3 sentences, no hashtags", '
                  '"tags": ["10-14 search tags including proper nouns"], '
                  '"thumbnail_text": "...", "thumbnail_badge": "...", '
-                 + ('"thumbnail_variants": {"faceoff": {"big": "...", "sub": "..."}, '
-                    '"person": "...", "map": {"big": "...", "sub": "..."}}, '
+                 + ('"thumbnail_variants": {"faceoff": {"big": "...", "box": "..."}, '
+                    '"person": {"setup": "...", "twist": "..."}, '
+                    '"map": {"question": "...", "tag": "..."}}, '
                     if story else "") +
                  '"comment_question": "..."}',
                  # Same headroom logic as the anchor call: reasoning models

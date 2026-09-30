@@ -1,5 +1,11 @@
 """
-Three thumbnails per story-mode video, for YouTube's Test & Compare.
+Three thumbnails per story-mode video, tried in turn by the thumbnail
+rotation (tools/thumb_rotation.py) or by YouTube's Test & Compare.
+
+The look (approved 2026-09-30 on the Ethiopia–Eritrea set): a dark map of
+the two sides with their border glowing red, one shocking and verified fact
+in huge type that a stranger understands at a glance, and plain tags that say
+who is who ("ETHIOPIA", "ERITREA", "ETHIOPIA'S LEADER").
 
 Every run makes up to three different thumbnails from what the video itself
 contains, uploads the strongest one, and keeps all three (build/thumbnails/)
@@ -125,122 +131,247 @@ def _save(img, path):
     return path
 
 
-def faceoff(bg_path, left_photo, right_photo, big, sub, year, out):
-    a, b = _cutout(left_photo, 640), _cutout(right_photo, 620)
+
+def _tag(d, text, x, y):
+    """A small boxed label centred on x ("ETHIOPIA", "EGYPT'S PRESIDENT")."""
+    if not text:
+        return
+    f = _font(46)
+    while f.size > 28 and d.textlength(text, font=f) > 420:
+        f = _font(f.size - 4)
+    w = d.textlength(text, font=f) + 36
+    d.rectangle([x - w / 2, y, x + w / 2, y + 58], fill=(10, 10, 10), outline=WHITE, width=3)
+    d.text((x, y + 29), text, font=f, fill=WHITE, anchor="mm")
+
+
+def _box(d, text, x, y, size=62, max_w=520):
+    """White words on a red bar, centred on x."""
+    if not text:
+        return
+    size = _fit(d, text, size, max_w - 40, floor=30)
+    f = _font(size)
+    w = d.textlength(text, font=f) + 48
+    d.rectangle([x - w / 2, y, x + w / 2, y + size + 22], fill=RED)
+    d.text((x, y + (size + 22) / 2), text, font=f, fill=WHITE, anchor="mm")
+
+
+# ---------------------------------------------------------------------------
+# The map: every look is drawn on it when the story's places can be found
+# ---------------------------------------------------------------------------
+
+def _country(name):
+    import map_engine as M
+    n = M._norm(name)
+    for f in M._load("ne_10m_admin_0_countries"):
+        p = f["properties"]
+        if n and n in {M._norm(p.get(k)) for k in ("ADMIN", "NAME", "NAME_LONG", "NAME_EN")}:
+            return f
+    return None
+
+
+def _border(a, b):
+    """The shared border of two countries as lists of (lon, lat), or []."""
+    import map_engine as M
+    fa, fb = _country(a), _country(b)
+    if not (fa and fb):
+        return []
+    pts_b = {(round(x, 2), round(y, 2)) for r in M._rings(fb["geometry"]) for x, y in r}
+    segs = []
+    for r in M._rings(fa["geometry"]):
+        seg = []
+        for x, y in r:
+            if (round(x, 2), round(y, 2)) in pts_b:
+                seg.append((x, y))
+            else:
+                if len(seg) > 1:
+                    segs.append(seg)
+                seg = []
+        if len(seg) > 1:
+            segs.append(seg)
+    return segs
+
+
+class Stage:
+    """A dark map framed on (cx, cy) spanning `span` degrees of longitude
+    across the area right of x0."""
+
+    def __init__(self, cx, cy, span, x0=0):
+        self.k = math.cos(math.radians(cy))
+        self.scale = (W - x0) / (span * self.k)
+        self.x0 = x0
+        self.lon0 = cx - (W - x0) / 2 / (self.scale * self.k)
+        self.lat1 = cy + H / 2 / self.scale
+
+    def P(self, lon, lat):
+        return (self.x0 + (lon - self.lon0) * self.k * self.scale,
+                (self.lat1 - lat) * self.scale)
+
+    def visible(self, ring):
+        lon1 = self.lon0 + (W - self.x0) / (self.scale * self.k) + 2
+        lat0 = self.lat1 - H / self.scale - 2
+        return any(self.lon0 - 2 < x < lon1 and lat0 < y < self.lat1 + 2
+                   for x, y in ring[::20] or ring)
+
+
+def _draw_map(stage, sides=(), targets=(), points=(), labels=True, dim=1.0):
+    """The map image: land, the two sides a shade lighter, their border
+    glowing red, target regions red, target points ringed."""
+    import map_engine as M
+    img = Image.new("RGB", (W, H), (7, 10, 16))
+    d = ImageDraw.Draw(img)
+    side_names = {M._norm(s) for s in sides}
+    for f in M._load("ne_10m_admin_0_countries"):
+        p = f["properties"]
+        mine = M._norm(p.get("NAME")) in side_names or M._norm(p.get("ADMIN")) in side_names
+        for r in M._rings(f["geometry"]):
+            if stage.visible(r):
+                d.polygon([stage.P(*q) for q in r], fill=(56, 50, 44) if mine else (28, 27, 26),
+                          outline=(84, 78, 70))
+    glow = Image.new("L", (W, H), 0)
+    gd = ImageDraw.Draw(glow)
+    if len(sides) >= 2:
+        for seg in _border(sides[0], sides[1]):
+            gd.line([stage.P(*q) for q in seg], fill=255, width=10)
+    for rings in targets:
+        for r in rings:
+            gd.polygon([stage.P(*q) for q in r], fill=255)
+    for ll in points:
+        x, y = stage.P(*ll)
+        gd.ellipse([x - 40, y - 40, x + 40, y + 40], fill=255)
+    img.paste(Image.new("RGB", (W, H), RED), (0, 0), glow.filter(ImageFilter.GaussianBlur(12)))
+    d = ImageDraw.Draw(img)
+    for rings in targets:
+        for r in rings:
+            d.polygon([stage.P(*q) for q in r], fill=(190, 34, 28), outline=(255, 120, 100))
+    if len(sides) >= 2:
+        for seg in _border(sides[0], sides[1]):
+            d.line([stage.P(*q) for q in seg], fill=(255, 110, 90), width=3)
+    if labels:
+        for s in sides:
+            f = _country(s)
+            if f:
+                x, y = stage.P(f["properties"]["LABEL_X"], f["properties"]["LABEL_Y"])
+                if 0 < x < W and 0 < y < H:
+                    d.text((x, y), s.upper(), font=_font(40), fill=(235, 225, 210), anchor="mm")
+    if dim < 1:
+        img = Image.blend(Image.new("RGB", (W, H), (0, 0, 0)), img, dim)
+    return img
+
+
+def _frame(sides, targets, points):
+    """(cx, cy, span) around the targets, else the two sides' border."""
+    xs, ys = [], []
+    for rings in targets:
+        for r in rings:
+            xs += [q[0] for q in r]
+            ys += [q[1] for q in r]
+    for ll in points:
+        xs.append(ll[0])
+        ys.append(ll[1])
+    if not xs and len(sides) >= 2:
+        for seg in _border(sides[0], sides[1]):
+            xs += [q[0] for q in seg]
+            ys += [q[1] for q in seg]
+    if not xs:
+        return None
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.6, 3.5) * 1.35
+    return cx, cy, span
+
+
+# ---------------------------------------------------------------------------
+# The three looks
+# ---------------------------------------------------------------------------
+
+def faceoff(bg, left, right, big, box, tags, out):
+    """bg: a finished 1280x720 background. left/right: (photo, tag)."""
+    a, b = _cutout(left, 650), _cutout(right, 630)
     if not (a and b):
         return None
-    img = _background(bg_path)
-    _paste_person(img, a, (-110, H - a[0].height + 40))
-    _paste_person(img, b, (W - b[0].width + 110, H - b[0].height + 40))
+    img = bg.copy()
+    _paste_person(img, a, (-150, H - a[0].height + 40))
+    _paste_person(img, b, (W - b[0].width + 120, H - b[0].height + 40))
     d = ImageDraw.Draw(img)
-    mid = int(W * 0.44)                   # the gap between the two faces
-    size = _fit(d, big, 180, mid)
-    _text(d, big, size, (W // 2, 60), YELLOW, "mt", stroke=4)
-    y = 60 + int(size * 1.15)
-    for line in _wrap(d, sub, _font(70), mid)[:2]:
-        _text(d, line, _fit(d, line, 70, mid), (W // 2, y), WHITE, "mt", stroke=3)
-        y += 75
-    _year_tag(d, year, (W // 2, y + 30), anchor_centre=True)
+    mid = int(W * 0.46)
+    words = big.split()
+    # the number (or first word) huge and yellow, the rest large and white
+    first = words[0] if len(words) > 1 else big
+    rest = " ".join(words[1:]) if len(words) > 1 else ""
+    s1 = _fit(d, first, 200, mid)
+    _text(d, first, s1, (W // 2, 40), YELLOW, "mt", stroke=5)
+    y = 40 + int(s1 * 1.07)
+    if rest:
+        s2 = _fit(d, rest, 150, mid)
+        _text(d, rest, s2, (W // 2, y), WHITE, "mt", stroke=5)
+        y += int(s2 * 1.2)
+    _box(d, box, W // 2, max(y, 430), max_w=mid + 40)
+    _tag(d, tags[0], 190, 640)
+    _tag(d, tags[1], W - 190, 640)
     return _save(img, out)
 
 
-def person(bg_path, photo, words, year, out):
+def person(bg, photo, setup, twist, tag, out):
     cut = _cutout(photo, 760)
     if not cut:
         return None
-    img = _left_scrim(_background(bg_path))
-    _paste_person(img, cut, (W - cut[0].width + 30, H - cut[0].height + 80))
+    img = _left_scrim(bg.copy())
+    _paste_person(img, cut, (W - cut[0].width + 60, H - cut[0].height + 80))
     d = ImageDraw.Draw(img)
-    width = int(W * 0.5)
-    size = 118
-    lines = _wrap(d, words, _font(size), width)
-    while len(lines) > 3 and size > 60:
-        size -= 8
-        lines = _wrap(d, words, _font(size), width)
-    lines = lines[:3]
-    y = (H - len(lines) * int(size * 1.1)) // 2 - 20
+    width = int(W * 0.52)
+    y = 165
     d.rectangle([70, y - 35, 200, y - 25], fill=YELLOW)
-    for i, line in enumerate(lines):
-        _text(d, line, size, (70, y), YELLOW if i == len(lines) - 1 else WHITE)
-        y += int(size * 1.1)
-    _year_tag(d, year, (70, y + 20))
+    for text, colour, size in ((setup, WHITE, 128), (twist, YELLOW, 96)):
+        lines = _wrap(d, text, _font(size), width)
+        while len(lines) > 2 and size > 60:
+            size -= 8
+            lines = _wrap(d, text, _font(size), width)
+        for line in lines[:2]:
+            _text(d, line, size, (70, y), colour)
+            y += int(size * 1.08)
+        y += 20
+    _tag(d, tag, W - 260, 640)
     return _save(img, out)
 
 
-def map_thumb(targets, lit, big, sub, out):
-    """targets: place names the video's maps point at; lit: countries or
-    provinces they light up. None when no place can be found."""
-    import map_engine as M
-    regions, points = [], []
-    for name in list(dict.fromkeys(targets + lit)):
-        r = M.find_region(name)
-        if r:
-            regions.append((name in targets, r[1]))
-        elif name in targets:
-            ll = M.geocode(name)
-            if ll:
-                points.append((name, ll))
-    if not regions and not points:
-        return None
-    # framed on the targets; lit countries are context and may run off the
-    # edge (a whole lit Egypt shrank the Sinai to a dot in the first test)
-    framed = [rings for is_t, rings in regions if is_t] or [rings for _, rings in regions]
-    xs = [p[0] for rings in framed for ring in rings for p in ring] + [ll[0] for _, ll in points]
-    ys = [p[1] for rings in framed for ring in rings for p in ring] + [ll[1] for _, ll in points]
-    if points and not any(is_t for is_t, _ in regions):
-        xs, ys = [ll[0] for _, ll in points], [ll[1] for _, ll in points]
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.6, 3.5) * 1.35
-    k = math.cos(math.radians(cy))
-    area_x0, area_w = 420, W - 420               # the map sits right of the text
-    scale = area_w / (span * k)
-    lon0, lat1 = cx - area_w / 2 / (scale * k), cy + H / 2 / scale
-
-    def P(lon, lat):
-        return (area_x0 + (lon - lon0) * k * scale, (lat1 - lat) * scale)
-
-    img = Image.new("RGB", (W, H), (8, 14, 22))
+def map_look(stage_args, sides, targets, points, label, question, tag, out):
+    """The question on the left, an arrow to the place, the tag under it."""
+    # closer than the backgrounds: the place is the subject here
+    st = Stage(stage_args[0], stage_args[1], stage_args[2] * 0.72, x0=380)
+    img = _draw_map(st, sides, targets, points)
     d = ImageDraw.Draw(img)
-    for f in M._load("ne_10m_admin_0_countries"):
-        for ring in M._rings(f["geometry"]):
-            if any(lon0 - 5 < x < lon0 + W / (scale * k) + 5 and lat1 - H / scale - 5 < y < lat1 + 5
-                   for x, y in ring[::25] or ring):
-                d.polygon([P(*p) for p in ring], fill=(34, 32, 30), outline=(70, 66, 60))
-    # lit countries first, then the red glow, then the targets on top
-    for is_target, rings in regions:
-        if not is_target:
-            for ring in rings:
-                d.polygon([P(*p) for p in ring], fill=(90, 86, 80), outline=WHITE)
-    glow = Image.new("L", (W, H), 0)
-    gd = ImageDraw.Draw(glow)
-    for is_target, rings in regions:
-        if is_target:
-            for ring in rings:
-                gd.polygon([P(*p) for p in ring], fill=255)
-    for _, ll in points:
-        x, y = P(*ll)
-        gd.ellipse([x - 70, y - 70, x + 70, y + 70], fill=255)
-    img.paste(Image.new("RGB", (W, H), RED), (0, 0),
-              glow.filter(ImageFilter.GaussianBlur(16)).point(lambda v: int(v * .75)))
+    if points:
+        tx, ty = st.P(*points[0])
+    elif targets:
+        r = max(targets[0], key=len)
+        tx = sum(st.P(*q)[0] for q in r) / len(r)
+        ty = sum(st.P(*q)[1] for q in r) / len(r)
+    else:
+        tx = ty = None
+    if tx is not None and points:
+        d.ellipse([tx - 20, ty - 20, tx + 20, ty + 20], fill=(200, 30, 24), outline=WHITE, width=6)
+        d.ellipse([tx - 58, ty - 58, tx + 58, ty + 58], outline=WHITE, width=4)
+    img = _left_scrim(img, reach=.52)
     d = ImageDraw.Draw(img)
-    for is_target, rings in regions:
-        if is_target:
-            for ring in rings:
-                d.polygon([P(*p) for p in ring], fill=(190, 34, 28), outline=(255, 120, 100))
-    for name, ll in points:
-        x, y = P(*ll)
-        d.ellipse([x - 24, y - 24, x + 24, y + 24], fill=(190, 34, 28), outline=WHITE, width=5)
-        d.ellipse([x - 60, y - 60, x + 60, y + 60], outline=(255, 120, 100), width=3)
-    img = _left_scrim(img, reach=.5)
-    d = ImageDraw.Draw(img)
-    d.rectangle([70, 120, 200, 130], fill=YELLOW)
-    size = _fit(d, big, 170, 560)
-    _text(d, big, size, (70, 150), YELLOW)
-    y = 150 + int(size * 1.15)
-    for line in _wrap(d, sub, _font(120), 560)[:2]:
-        s = _fit(d, line, 120, 560)
-        _text(d, line, s, (70, y), WHITE)
-        y += int(s * 1.08)
+    if tx is not None and tx > 620:
+        d.line([(560, ty), (tx - 70, ty)], fill=YELLOW, width=12)
+        d.polygon([(tx - 66, ty), (tx - 100, ty - 24), (tx - 100, ty + 24)], fill=YELLOW)
+        if label:
+            d.text((tx, ty + 78), label.upper(), font=_font(34), fill=WHITE, anchor="mm")
+    d.rectangle([70, 110, 200, 120], fill=YELLOW)
+    size = 124
+    lines = _wrap(d, question, _font(size), 540)
+    while len(lines) > 3 and size > 70:
+        size -= 8
+        lines = _wrap(d, question, _font(size), 540)
+    y = 140
+    for i, line in enumerate(lines[:3]):
+        _text(d, line, size, (70, y), YELLOW if i == len(lines[:3]) - 1 else WHITE)
+        y += int(size * 1.12)
+    if tag:
+        f = _font(50)
+        w = d.textlength(tag, font=f) + 48
+        d.rectangle([70, y + 20, 70 + w, y + 80], fill=RED)
+        d.text((70 + w / 2, y + 50), tag, font=f, fill=WHITE, anchor="mm")
     return _save(img, out)
 
 
@@ -248,26 +379,29 @@ def map_thumb(targets, lit, big, sub, out):
 # One video
 # ---------------------------------------------------------------------------
 
-def _clean(text, banned):
-    t = re.sub(r"\s+", " ", str(text or "")).strip(" .,:;!?\"'").upper()
+def _clean(text, banned=()):
+    t = re.sub(r"\s+", " ", str(text or "")).strip(" ,:;\"'").upper()
     return "" if not t or t in banned else t
 
 
 def _texts(script):
+    """The three looks' words (validated in longform_llm against the fact
+    sheet); what is missing falls back to the single thumbnail text."""
     try:
         from longform_llm import THUMB_EXAMPLE_TEXTS as banned
     except Exception:
         banned = set()
     v = script.get("thumbnail_variants") or {}
+    get = lambda k: v.get(k) if isinstance(v.get(k), dict) else {}
     fallback = _clean(script.get("thumbnail_text") or script.get("title"), banned)
-    fo = v.get("faceoff") if isinstance(v.get("faceoff"), dict) else {}
-    mp = v.get("map") if isinstance(v.get("map"), dict) else {}
+    fo, pe, mp = get("faceoff"), get("person"), get("map")
     return {
-        "faceoff": (_clean(fo.get("big"), banned) or fallback,
-                    _clean(fo.get("sub"), banned)),
-        "person": _clean(v.get("person"), banned) or fallback,
-        "map": (_clean(mp.get("big"), banned) or fallback,
-                _clean(mp.get("sub"), banned)),
+        "big": _clean(fo.get("big"), banned) or fallback,
+        "box": _clean(fo.get("box") or fo.get("sub"), banned),
+        "setup": _clean(pe.get("setup"), banned) or fallback,
+        "twist": _clean(pe.get("twist"), banned),
+        "question": _clean(mp.get("question") or mp.get("big"), banned) or fallback,
+        "tag": _clean(mp.get("tag") or mp.get("sub"), banned),
     }
 
 
@@ -284,47 +418,106 @@ def _people(scenes):
     return out
 
 
+def _side_name(role):
+    """The country a cast member's role names, as the map spells it:
+    "Egypt's president" -> "Egypt", "Ethiopian Prime Minister" ->
+    "Ethiopia", "Israeli general" -> "Israel". "" when none is found."""
+    for w in re.findall(r"[A-Z][A-Za-z-]+", role or ""):
+        if w.lower() in {"king", "queen", "president", "prime", "minister", "general",
+                         "field", "marshal", "chief", "the", "of", "defense", "defence"}:
+            continue
+        for cand in (w, w[:-1], w[:-2], w[:-3], w[:-1] + "a"):
+            try:
+                if len(cand) > 3 and _country(cand):
+                    return _country(cand)["properties"]["NAME"]
+            except Exception:
+                return ""
+    return ""
+
+
 def build(scenes, script, build_dir):
     """[(kind, path)] best first, all under build_dir/thumbnails/. Empty only
     if not even the plain thumbnail could be drawn."""
-    from longform_llm import _side_of
+    import map_engine as M
     out_dir = os.path.join(build_dir, "thumbnails")
     os.makedirs(out_dir, exist_ok=True)
-    texts = _texts(script)
-    year = "".join(re.findall(r"\d", str(script.get("thumbnail_badge") or "")))[:4]
+    t = _texts(script)
     plain = [s for s in scenes if not s.get("dossier") and not s.get("map")
              and not s.get("_is_map")]
-    bg = pick_source_scene(plain) or pick_source_scene(scenes)
+    bg_photo = pick_source_scene(plain) or pick_source_scene(scenes)
     made = []
 
     people = _people(scenes)
     decider = next((p for p in people if p[2]), people[0] if people else None)
-    if bg and len(people) >= 2:
-        # two people from different sides, the decider first when there is one
-        order = ([decider] if decider else []) + [p for p in people if p is not decider]
-        pair = None
-        for i, a in enumerate(order):
-            for b in order[i + 1:]:
-                sa, sb = _side_of({"role": a[1]}), _side_of({"role": b[1]})
-                if sa and sb and sa != sb:
-                    pair = (a, b)
-                    break
-            if pair:
+    pair = None
+    order = ([decider] if decider else []) + [p for p in people if p is not decider]
+    for i, a in enumerate(order):
+        for b in order[i + 1:]:
+            sa, sb = _side_name(a[1]), _side_name(b[1])
+            if sa and sb and sa.lower() != sb.lower():
+                pair = (a, b)
                 break
-        if pair and texts["faceoff"][0]:
-            try:
-                got = faceoff(bg, pair[0][3], pair[1][3], texts["faceoff"][0],
-                              texts["faceoff"][1], year,
-                              os.path.join(out_dir, "1_faceoff.jpg"))
-                if got:
-                    made.append(("faceoff", got))
-            except Exception as e:
-                print(f"   ↩️  Face-off thumbnail failed ({type(e).__name__}: {e}).")
-    if bg and decider and texts["person"]:
+        if pair:
+            break
+    sides = [_side_name(p[1]) for p in pair] if pair else \
+        [x for x in dict.fromkeys(_side_name(p[1]) for p in people) if x][:2]
+
+    # the video's own map places
+    target_names, lit = [], []
+    for s in scenes:
+        m = s.get("map") if s.get("_is_map") else None
+        if m and m.get("target"):
+            target_names.append(m["target"])
+            lit += list(m.get("light") or [])
+    targets, points, label = [], [], ""
+    for name in dict.fromkeys(target_names):
+        try:
+            r = M.find_region(name)
+            if r and r[0] == "province":
+                targets.append(r[1])
+                label = label or name
+            elif not r:
+                ll = M.geocode(name)
+                if ll:
+                    points.append(ll)
+                    label = label or name
+        except Exception as e:
+            print(f"   ↩️  Map place {name!r} not found ({type(e).__name__}).")
+    sides = [s for s in sides if _country(s)] or [x for x in lit if _country(x)][:2]
+
+    # the background: the map of the two sides when it can be drawn, the
+    # video's archival frame otherwise
+    fr = _frame(sides, targets, points)
+    if fr:
+        bg = _vignette(_draw_map(Stage(fr[0], fr[1], max(fr[2], 6.0)), sides,
+                                 targets, points, labels=False, dim=.75))
+    elif bg_photo:
+        bg = _background(bg_photo)
+    else:
+        bg = None
+
+    if bg is not None and pair and t["big"]:
+        try:
+            got = faceoff(bg, pair[0][3], pair[1][3], t["big"], t["box"],
+                          (_side_name(pair[0][1]).upper(), _side_name(pair[1][1]).upper()),
+                          os.path.join(out_dir, "1_faceoff.jpg"))
+            if got:
+                made.append(("faceoff", got))
+        except Exception as e:
+            print(f"   ↩️  Face-off thumbnail failed ({type(e).__name__}: {e}).")
+    if fr and t["question"]:
+        try:
+            got = map_look(fr, sides, targets, points, label, t["question"], t["tag"],
+                           os.path.join(out_dir, "2_map.jpg"))
+            if got:
+                made.append(("map", got))
+        except Exception as e:
+            print(f"   ↩️  Map thumbnail failed ({type(e).__name__}: {e}).")
+    if bg is not None and decider and t["setup"]:
         for p in [decider] + [x for x in people if x is not decider]:
             try:
-                got = person(bg, p[3], texts["person"], year,
-                             os.path.join(out_dir, "2_person.jpg"))
+                got = person(bg, p[3], t["setup"], t["twist"], (p[1] or "").upper()[:26],
+                             os.path.join(out_dir, "3_person.jpg"))
             except Exception as e:
                 print(f"   ↩️  Person thumbnail failed ({type(e).__name__}: {e}).")
                 got = None
@@ -332,26 +525,11 @@ def build(scenes, script, build_dir):
                 made.append(("person", got))
                 break
 
-    targets, lit = [], []
-    for s in scenes:
-        m = s.get("map") if s.get("_is_map") else None
-        if m:
-            targets.append(m.get("target") or "")
-            lit += list(m.get("light") or [])
-    targets = [t for t in targets if t]
-    if targets and texts["map"][0]:
-        try:
-            got = map_thumb(targets, lit, texts["map"][0], texts["map"][1],
-                            os.path.join(out_dir, "3_map.jpg"))
-            if got:
-                made.append(("map", got))
-        except Exception as e:
-            print(f"   ↩️  Map thumbnail failed ({type(e).__name__}: {e}).")
-
-    if len(made) < 3 and bg:
+    if len(made) < 3 and bg_photo:
         # the plain look fills a missing slot, so there is always something
         try:
-            got = make_thumbnail(bg, texts["person"] or texts["faceoff"][0],
+            year = "".join(re.findall(r"\d", str(script.get("thumbnail_badge") or "")))[:4]
+            got = make_thumbnail(bg_photo, t["big"] or t["setup"],
                                  os.path.join(out_dir, f"{len(made) + 1}_frame.jpg"),
                                  badge=year)
             made.append(("frame", got))

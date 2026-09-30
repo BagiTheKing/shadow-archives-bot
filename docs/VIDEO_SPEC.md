@@ -78,9 +78,14 @@ without the owner's say-so.
     or disaster that ended by 2010); news headlines are only the fallback,
     and the log says so when it is used.
 
-16. **Three thumbnails per video**: face-off (two leaders from opposite
-    sides), one person (the one who decided), map (the video's own map
-    places). The first one made is uploaded; all are kept as the run's
+16. **Three thumbnails per video**, in the approved shock style (dark map
+    of the two sides, border glowing red): face-off (two leaders, a country
+    tag under each, one shocking figure huge: "70,000+ DEAD / FOR ONE
+    VILLAGE"), map (a question and an arrow to the place: "WHO OWNS THIS
+    VILLAGE?"), one person (what they did, then what it cost: "HE WON THE
+    WAR... AND LOST THE VILLAGE", with their role tag). True and plain: every
+    number is checked against the fact sheet and the narration; no names
+    in the words; neutral about present-day conflicts. The first one made is uploaded; all are kept as the run's
     thumbnail artifact for 90 days and registered for the automatic
     rotation (rotate_thumbnails.yml): once the video is public each one is
     shown for 3 days, then the one with the most views per day is kept. No
