@@ -1086,7 +1086,11 @@ STORY_MARKERS = NICHE_MARKERS + (
     "war", "battle", "siege", "invasion", "invaded", "uprising", "revolt",
     "rebellion", "revolution", "crisis", "coup", "massacre", "intifada",
     "blockade", "offensive", "occupation", "occupied", "conflict", "attack",
-    "bombing", "evacuation", "famine", "explosion", "meltdown", "sinking")
+    "bombing", "evacuation", "famine", "explosion", "meltdown", "sinking",
+    "fire", "fired", "shelled", "voyage", "expedition", "raid", "incident",
+    "accident", "mutiny", "assassination", "assassinated", "riot", "flood",
+    "earthquake", "fleet", "shipwreck", "crash", "collapse", "trial", "purge",
+    "d-day", "landing", "landings", "campaign", "operation")
 
 STORY_ANCHOR_RULE = (
     "- THE STORY MUST BE A STORY: a war, battle, siege, uprising, crisis, "

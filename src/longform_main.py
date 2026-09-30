@@ -481,9 +481,17 @@ def main():
         # Story mode is the only long-form format (owner, 2026-09-28): every
         # lane, every topic. The old six-chapter arc is never a fallback — a
         # run whose story cannot be built stops instead.
-        story = build_story(topic, BUILD_DIR, given=bool(story_topic))
+        from longform_llm import _anchor_fits_niche
         tried = {topic}
-        while not story and not story_topic and len(tried) < 3:
+        if not story_topic and not _anchor_fits_niche(topic, story=True):
+            # checked before any research is spent on it: the 2026-09-30
+            # weekly run spent two runs' quota on "Maimonides' principle ...
+            # to acquit a thousand guilty", an idea with no story in it
+            print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
+            story = None
+        else:
+            story = build_story(topic, BUILD_DIR, given=bool(story_topic))
+        while not story and not story_topic and len(tried) < 4:
             # An automatic lane can pick another topic: its first pick may
             # be an idea rather than an event (see build_story). A named
             # topic never changes.
@@ -492,9 +500,12 @@ def main():
                              exclude=covered | tried)
             if not nxt or nxt in tried:
                 break
-            print(f"↩️  No story in {topic[:60]!r} — trying another topic: {nxt[:80]}")
             topic, enforce_history, from_short = nxt, False, False
             tried.add(topic)
+            if not _anchor_fits_niche(topic, story=True):
+                print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
+                continue
+            print(f"↩️  Trying another topic: {topic[:80]}")
             story = build_story(topic, BUILD_DIR)
         if not story:
             print("❌ Story mode could not build a fact sheet and outline — "
