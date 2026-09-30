@@ -1,0 +1,56 @@
+name: Thumbnail Rotation
+
+# YouTube's Test & Compare has no API, so each long-form video's three
+# thumbnails (src/thumb_variants.py) are tried in turn instead: 3 days each
+# once the video is public, then the one with the most views per day is kept.
+# State and images live on the thumb-rotation branch. See
+# tools/thumb_rotation.py.
+
+on:
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: thumb-rotation
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install YouTube client
+        run: pip install google-api-python-client google-auth google-auth-httplib2
+
+      - name: Fetch rotation state
+        run: |
+          git fetch -q origin thumb-rotation
+          git worktree add -q rot origin/thumb-rotation
+
+      - name: Rotate
+        env:
+          ROT_DIR: rot
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python tools/thumb_rotation.py rotate
+
+      - name: Save state
+        if: always()
+        run: |
+          cd rot
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Thumbnail rotation (run ${{ github.run_number }})"
+          git push -q origin HEAD:thumb-rotation

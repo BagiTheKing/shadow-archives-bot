@@ -621,6 +621,12 @@ def main():
                                            playlist_title=SERIES_NAME,
                                            playlist_description=PLAYLIST_DESCRIPTION)
 
+    if video_id:
+        # for the thumbnail rotation (tools/thumb_rotation.py): the workflow
+        # registers this video's thumbnails under its id
+        with open(os.path.join(BUILD_DIR, "uploaded.json"), "w", encoding="utf-8") as f:
+            json.dump({"video_id": video_id}, f)
+
     # Phase 6: Shorts cut from this video, each linking back to it. After the
     # upload, because the link is the point; rendered on dry runs too, so
     # they can be watched in the artifact first.

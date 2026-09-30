@@ -78,11 +78,13 @@ without the owner's say-so.
     or disaster that ended by 2010); news headlines are only the fallback,
     and the log says so when it is used.
 
-16. **Three thumbnails per video** for YouTube's Test & Compare (added by
-    the owner in Studio when the video goes public): face-off (two leaders
-    from opposite sides), one person (the one who decided), map (the video's
-    own map places). The first one made is uploaded; all are kept as the
-    run's thumbnail artifact for 90 days. Titles: under 60 characters, the
+16. **Three thumbnails per video**: face-off (two leaders from opposite
+    sides), one person (the one who decided), map (the video's own map
+    places). The first one made is uploaded; all are kept as the run's
+    thumbnail artifact for 90 days and registered for the automatic
+    rotation (rotate_thumbnails.yml): once the video is public each one is
+    shown for 3 days, then the one with the most views per day is kept. No
+    manual Test & Compare needed (the owner may still use it). Titles: under 60 characters, the
     searchable name plus a stake, saying something different from the
     thumbnail; neutral about present-day conflicts.
 

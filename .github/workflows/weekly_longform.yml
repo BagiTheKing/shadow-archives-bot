@@ -64,6 +64,10 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
+    # contents: write only to register the thumbnails on the thumb-rotation
+    # branch (step "Register thumbnails for rotation")
+    permissions:
+      contents: write
     # The repo is private, so minutes are metered against 2,000/month. A healthy
     # run is ~60 min; this ceiling stops a hung ffmpeg or a Pollinations
     # rate-limit spiral from quietly eating a fifth of the monthly budget.
@@ -210,6 +214,25 @@ jobs:
           LONGFORM_CLIPS: '2'
           LONGFORM_TOPIC_OFFSET: ${{ inputs.topic_offset || '-7' }}
         run: python src/longform_main.py
+
+      # Test & Compare has no API: the thumbnails are tried in turn by
+      # rotate_thumbnails.yml once the video is public.
+      - name: Register thumbnails for rotation
+        if: success()
+        continue-on-error: true
+        run: |
+          [ -f build/uploaded.json ] && [ -d build/thumbnails ] || exit 0
+          vid=$(python -c "import json; print(json.load(open('build/uploaded.json'))['video_id'])")
+          git fetch -q origin thumb-rotation
+          git worktree add -q rot origin/thumb-rotation
+          ROT_DIR=rot python tools/thumb_rotation.py register "$vid" build/thumbnails
+          cd rot
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Register $vid for thumbnail rotation"
+          git push -q origin HEAD:thumb-rotation
 
       # Diagnostics only — never allowed to fail the run. Same reasoning as the
       # Shorts workflow: whether we can save a debug copy must not decide whether
