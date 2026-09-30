@@ -275,7 +275,7 @@ def build_first_comment(script: dict) -> str:
             "it already too late?")
 
 
-def build_story(topic, build_dir):
+def build_story(topic, build_dir, given=False):
     """Research + fact sheet + outline (story_mode.py), printed for review.
     Returns {"sheet", "plan", "era_year"} or None."""
     from collections import Counter
@@ -311,6 +311,13 @@ def build_story(topic, build_dir):
             print("   ↩️  Thin fact sheet — trying once more on another model.")
     if not sheet:
         print("⚠️ Story mode: the fact sheet came back too thin to tell a story.")
+        return None
+    if not sheet["numbers"] and not sheet["quotes"] and not given:
+        # An idea, not an event: the 2026-09-30 weekly run was handed
+        # "Blackstone's ratio" (a legal principle) by the encore lane, found
+        # no figure and no quote in it, and failed a chapter later.
+        print("⚠️ Story mode: no figure and no quote in the article — this "
+              "topic is an idea, not an event with a story.")
         return None
     # Three tries, each on a different model: one weak model's malformed
     # outline must not cost the whole story (it did on the fourth run).
@@ -474,7 +481,21 @@ def main():
         # Story mode is the only long-form format (owner, 2026-09-28): every
         # lane, every topic. The old six-chapter arc is never a fallback — a
         # run whose story cannot be built stops instead.
-        story = build_story(topic, BUILD_DIR)
+        story = build_story(topic, BUILD_DIR, given=bool(story_topic))
+        tried = {topic}
+        while not story and not story_topic and len(tried) < 3:
+            # An automatic lane can pick another topic: its first pick may
+            # be an idea rather than an event (see build_story). A named
+            # topic never changes.
+            covered = covered_topics(history, longform_only=True) if history else set()
+            nxt = pick_topic(int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7")) - len(tried),
+                             exclude=covered | tried)
+            if not nxt or nxt in tried:
+                break
+            print(f"↩️  No story in {topic[:60]!r} — trying another topic: {nxt[:80]}")
+            topic, enforce_history, from_short = nxt, False, False
+            tried.add(topic)
+            story = build_story(topic, BUILD_DIR)
         if not story:
             print("❌ Story mode could not build a fact sheet and outline — "
                   "stopping rather than writing it in the old arc.")

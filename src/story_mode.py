@@ -465,6 +465,9 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         c["words"] = max(90 if c["role"] == "open" else 180, int(w * scale))
         if c["role"] == "pivot":
             c["words"] = min(c["words"], 260)
+        # a free model writes ~550 words reliably in one reply; the 2026-09-30
+        # weekly run lost an 810-word chapter and with it the whole video
+        c["words"] = min(c["words"], 550)
         if c["role"] == "open":
             c["words"] = min(c["words"], 140)
     if len(chapters) > 1 and cast:
