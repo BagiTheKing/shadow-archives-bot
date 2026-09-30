@@ -722,7 +722,16 @@ def _call(pool, system, user, max_tokens, skip=()):
             # A retired model never comes back mid-run, and a model out of its
             # daily quota will not recover either. Retiring both here is what
             # keeps six chapters from each paying the same two failures.
-            if "404" in err or "no longer available" in err.lower():
+            if "403" in err and ("denied" in err.lower() or "permission" in err.lower()):
+                # the whole key is refused ("Your project has been denied
+                # access"): every model it serves goes, not one retry each —
+                # the 2026-09-30 weekly run paid a dozen retries for it
+                client = pool.client_for(model)
+                gone = [m for m in pool.models if pool.client_for(m) is client]
+                _retired.update(gone)
+                print(f"   ⛔ this key is refused (403) — dropping its {len(gone)} "
+                      f"model(s) for the rest of this run.")
+            elif "404" in err or "no longer available" in err.lower():
                 _retired.add(model)
                 print(f"   ⛔ {model} is not available to this key — dropped.")
             elif "429" in err or "quota" in err.lower():
