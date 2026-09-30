@@ -78,6 +78,14 @@ without the owner's say-so.
     or disaster that ended by 2010); news headlines are only the fallback,
     and the log says so when it is used.
 
+16. **Three thumbnails per video** for YouTube's Test & Compare (added by
+    the owner in Studio when the video goes public): face-off (two leaders
+    from opposite sides), one person (the one who decided), map (the video's
+    own map places). The first one made is uploaded; all are kept as the
+    run's thumbnail artifact for 90 days. Titles: under 60 characters, the
+    searchable name plus a stake, saying something different from the
+    thumbnail; neutral about present-day conflicts.
+
 ## Process
 14. Check a change against this list before pushing. Test writing with a
     script-only run, visuals with short sample renders, then one full run,

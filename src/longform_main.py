@@ -565,15 +565,27 @@ def main():
     elif minutes > 12:
         print(f"⚠️ Video is {minutes:.1f} min — longer than the 6-9 min target.")
 
-    # Phase 4: thumbnail
+    # Phase 4: thumbnail. Story mode makes up to three (thumb_variants.py),
+    # uploads the first and keeps all of them in build/thumbnails/ for
+    # YouTube Studio's Test & Compare; the single frame below is the fallback.
     thumb_path = None
     try:
-        source = pick_source_scene(scenes)
+        from thumb_variants import build as build_thumbnails
+        variants = build_thumbnails(scenes, script, BUILD_DIR)
+        if variants:
+            thumb_path = variants[0][1]
+            print(f"🖼️  {len(variants)} thumbnail(s) for Test & Compare: "
+                  f"{', '.join(k for k, _ in variants)}; uploading {variants[0][0]}.")
+    except Exception as e:
+        print(f"⚠️ Thumbnail variants failed ({type(e).__name__}: {e}) — "
+              "using the single-frame thumbnail.")
+    try:
+        source = None if thumb_path else pick_source_scene(scenes)
         if source:
             thumb_path = os.path.join(BUILD_DIR, "thumbnail.jpg")
-            year = (script.get("thumbnail_badge") or "").strip()
-            name = formats.name_of(script.get("format"))
-            badge = f"{name} · {year}" if year else name
+            # the year alone: the old format names ("THE ORDER") mean
+            # nothing in a story video
+            badge = (script.get("thumbnail_badge") or "").strip()
             make_thumbnail(source, script.get("thumbnail_text") or script["title"],
                            thumb_path, badge=badge,
                            accent=formats.accent_of(script.get("format")))

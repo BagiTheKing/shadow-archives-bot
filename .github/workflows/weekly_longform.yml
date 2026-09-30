@@ -246,9 +246,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: longform-thumbnail-${{ github.run_number }}
-          path: build/thumbnail.jpg
+          path: |
+            build/thumbnail.jpg
+            build/thumbnails/
           if-no-files-found: ignore
-          retention-days: 7
+          # 90 days: the three variants are uploaded to YouTube Studio's
+          # Test & Compare by hand when the video goes public
+          retention-days: 90
 
       - name: Upload rendered video (explicit dry runs only)
         if: always() && inputs.skip_upload

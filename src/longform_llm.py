@@ -299,6 +299,37 @@ _RESTRAINED_VOICE_ADDENDUM = "" if CLICKBAIT_MODE else (
 )
 
 # Same flag, for the packaging call's title prompt.
+# Story mode's packaging (docs/VIDEO_SPEC.md): the old rules below were
+# written for the courtroom arc ("The Cost", "The Claim") that story mode
+# replaced.
+STORY_TITLE_RULES = (
+    "STORY VIDEO TITLE: under 60 characters. It carries the event's "
+    "searchable name (\"Six-Day War\", \"Chernobyl\") AND a stake a "
+    "stranger would click for: a number, a turn of events or a question the "
+    "video answers (\"13 Days the World Almost Ended | Cuban Missile "
+    "Crisis\", \"The Night Chernobyl's Reactor 4 Exploded\" — examples from "
+    "other stories, never reuse their words). Neutral: never blame one side of a "
+    "present-day conflict. The title and the thumbnail are read together, "
+    "so they must say DIFFERENT things.\n")
+
+STORY_THUMB_RULES = (
+    "And thumbnail_variants: the words for three different thumbnails of "
+    "this video, ALL CAPS, each saying something different from the title "
+    "and from each other:\n"
+    "- faceoff: two leaders from opposite sides face each other; big = 1-3 "
+    "words, the hook; sub = 2-4 words finishing it.\n"
+    "- person: the one who decided, alone; 3-6 words about what they did and "
+    "what it cost.\n"
+    "- map: over a map of the places; big = 1-3 words, sub = 1-3 words.\n"
+    "The shape, from a different story (never reuse these words): faceoff "
+    "\"13 DAYS\" / \"ONE STEP FROM WAR\"; person \"HE SENT THE MISSILES\"; "
+    "map \"90 MILES\" / \"FROM FLORIDA\".\n"
+    "Only what the narration states; neutral about present-day conflicts.\n")
+
+# words the examples use: a variant made of them is a copy, not a thumbnail
+THUMB_EXAMPLE_TEXTS = {"13 DAYS", "ONE STEP FROM WAR", "HE SENT THE MISSILES",
+                       "90 MILES", "FROM FLORIDA"}
+
 _RESTRAINED_TITLE_ADDENDUM = "" if CLICKBAIT_MODE else (
     "BANNED, because they would fit any story at all: 'the hidden ...', "
     "'the untold story', 'what really happened', 'the forgotten ...', "
@@ -2827,14 +2858,14 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
               "did — the video may not pay off what it promised.")
     meta = {}
     try:
-        meta = _packaging_call(pool, topic, full_text)
+        meta = _packaging_call(pool, topic, full_text, story=story)
         # One correction pass, and only when the title is the problem. The
         # published long-form titles include "Soviet Invasion of Kuril Islands
         # 1945: The Hidden WW2 Battle" — a phrase that would fit any battle
         # ever fought, attached to a name almost nobody recognises. That
         # combination is the whole reason these videos are not clicked.
         if not validate_title((meta.get("title") or "").strip()):
-            retry = _packaging_call(pool, topic, full_text, retitle=True)
+            retry = _packaging_call(pool, topic, full_text, retitle=True, story=story)
             if retry.get("title") and validate_title(retry["title"].strip()):
                 meta = retry
             else:
@@ -2872,6 +2903,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # they share the repair: see llm_engine.normalize_thumbnail_fields.
         "thumbnail_text": meta.get("thumbnail_text"),
         "thumbnail_badge": meta.get("thumbnail_badge"),
+        # story mode: the texts of the three thumbnails (thumb_variants.py)
+        "thumbnail_variants": meta.get("thumbnail_variants")
+        if isinstance(meta.get("thumbnail_variants"), dict) else {},
         # Posted as the first comment under the video. See
         # youtube_publisher.post_first_comment for why the channel needs one.
         "comment_question": str(meta.get("comment_question") or "").strip()[:280],
@@ -2894,7 +2928,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     return script
 
 
-def _packaging_call(pool, topic, full_text, retitle=False):
+def _packaging_call(pool, topic, full_text, retitle=False, story=None):
     """Title, description, tags and thumbnail text, written against the finished
     script rather than guessed up front.
 
@@ -2952,14 +2986,15 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  "recognised only by history buffs, and 'the Nuremberg gallows' "
                  "requires already knowing what Nuremberg was. Good: 'A Nazi War "
                  "Criminal Died Just 2 Hours Before His Execution'.\n"
+                 + (STORY_TITLE_RULES if story else
                  "GO HARD ON THE SELL. The narration above opens with 'The Cost' and "
-                 "'The Claim' — the second of those states the harshest reasonable "
-                 "reading of this story as a live question. Build the title FROM "
-                 "THAT CLAIM: turn it into the provocative question the whole video "
-                 "answers. A question-led title may prime an assumption the video "
-                 "complicates or answers 'no' to — that is exactly the shape to use, "
-                 "not a shape to avoid. A superlative, a hard number, dramatic "
-                 "phrasing are all wanted too.\n"
+                    "'The Claim' — the second of those states the harshest reasonable "
+                    "reading of this story as a live question. Build the title FROM "
+                    "THAT CLAIM: turn it into the provocative question the whole video "
+                    "answers. A question-led title may prime an assumption the video "
+                    "complicates or answers 'no' to — that is exactly the shape to use, "
+                    "not a shape to avoid. A superlative, a hard number, dramatic "
+                    "phrasing are all wanted too.\n") +
                  f"{_RESTRAINED_TITLE_ADDENDUM}"
                  "Also write thumbnail_text: THREE OR FOUR WORDS ONLY, readable at "
                  "thumbnail size. Not a sentence, no punctuation. Extract the "
@@ -2977,6 +3012,7 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  "sank', 'AMAZING HISTORY FACT' — too flat, or too generic to be "
                  "about this story.\n"
                  "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
+                 + (STORY_THUMB_RULES if story else "") +
                  "And comment_question: ONE question to post as the first comment, "
                  "answerable by someone who just watched this and has an opinion — "
                  "who was at fault, which moment was the point of no return, what "
@@ -2985,6 +3021,9 @@ def _packaging_call(pool, topic, full_text, retitle=False):
                  'Output: {"title": "...", "description": "3 sentences, no hashtags", '
                  '"tags": ["10-14 search tags including proper nouns"], '
                  '"thumbnail_text": "...", "thumbnail_badge": "...", '
+                 + ('"thumbnail_variants": {"faceoff": {"big": "...", "sub": "..."}, '
+                    '"person": "...", "map": {"big": "...", "sub": "..."}}, '
+                    if story else "") +
                  '"comment_question": "..."}',
                  # Same headroom logic as the anchor call: reasoning models
                  # think inside max_tokens, and a truncated reply costs a
