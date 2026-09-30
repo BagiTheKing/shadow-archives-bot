@@ -12,6 +12,19 @@
       "views_at_start": 2,
       "results": [],
       "registered": "2026-09-30T12:50:07.441654+00:00"
+    },
+    "9x3thBUuzF4": {
+      "files": [
+        "videos/9x3thBUuzF4/1_faceoff.jpg",
+        "videos/9x3thBUuzF4/2_map.jpg",
+        "videos/9x3thBUuzF4/3_person.jpg"
+      ],
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
+      "results": [],
+      "registered": "2026-09-30T13:00:04.652488+00:00"
     }
   }
 }
