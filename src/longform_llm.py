@@ -1091,7 +1091,8 @@ STORY_MARKERS = NICHE_MARKERS + (
     "fire", "fired", "shelled", "voyage", "expedition", "raid", "incident",
     "accident", "mutiny", "assassination", "assassinated", "riot", "flood",
     "earthquake", "fleet", "shipwreck", "crash", "collapse", "trial", "purge",
-    "d-day", "landing", "landings", "campaign", "operation")
+    "d-day", "landing", "landings", "campaign", "operation", "hanged",
+    "executed", "execution", "persecution", "hunt", "exodus", "hijacking")
 
 STORY_ANCHOR_RULE = (
     "- THE STORY MUST BE A STORY: a war, battle, siege, uprising, crisis, "
@@ -1104,6 +1105,56 @@ STORY_ANCHOR_RULE = (
     "turning point.\n")
 
 
+def idea_to_event(pool, idea, avoid_titles=()):
+    """The one real event that best tells an idea as a story, as a topic
+    sentence, or None. Story mode needs an event (sides, dates, a turning
+    point); an automatic lane sometimes hands it an idea ("Maimonides'
+    principle that it is better to acquit a thousand guilty..."), which is a
+    good subject told the wrong way. The event keeps the idea as its hook:
+    the Salem witch trials (1692), where Increase Mather wrote that it was
+    better that ten suspected witches escape than one innocent be condemned.
+    """
+    avoid = "\n".join(f"- {t}" for t in list(avoid_titles or [])[:20] if t)
+    prompt = (
+        f"This documentary subject is an IDEA, not an event:\n{idea}\n\n"
+        "Name the ONE real historical event that best tells this idea as a "
+        "story: a trial, war, siege, crisis, uprising or disaster with named "
+        "people on opposite sides, dates and a turning point, where this idea "
+        "was at stake or was put to the test. It must be well documented on "
+        f"English Wikipedia and have ended in {HISTORY_CUTOFF_YEAR} or earlier. "
+        "Pick the most dramatic fit, not merely the earliest.\n"
+        + (f"ALREADY COVERED ON THIS CHANNEL — choose something else:\n{avoid}\n"
+           if avoid else "")
+        + "If no real event fits, answer with an empty event.\n"
+        'Output ONLY JSON: {"event": "the event\'s common name, e.g. Salem '
+        'witch trials", "year": 1692, "topic": "one sentence: the event, and '
+        'how it put the idea to the test", "why": "one sentence"}')
+    try:
+        data = _call(pool, "You pick historical events for documentaries. "
+                     "Output only JSON.", prompt, max_tokens=2000)
+    except QuotaExhausted:
+        raise
+    except Exception as e:
+        print(f"   ↩️  Idea-to-event request failed ({type(e).__name__}: {e}).")
+        return None
+    event = str((data or {}).get("event") or "").strip()
+    topic = str((data or {}).get("topic") or "").strip()
+    try:
+        year = int((data or {}).get("year") or 9999)
+    except (TypeError, ValueError):
+        year = 9999
+    if not event or not topic or "..." in event:
+        return None
+    if year > HISTORY_CUTOFF_YEAR:
+        print(f"   ↩️  Event {event!r} ({year}) is after the {HISTORY_CUTOFF_YEAR} cutoff.")
+        return None
+    sentence = f"{event} ({year}): {topic}"
+    if not _anchor_fits_niche(sentence, story=True):
+        print(f"   ↩️  {event!r} does not read as an event either.")
+        return None
+    return sentence
+
+
 def _anchor_fits_niche(topic: str, why: str = "", story: bool = False) -> bool:
     """True if the chosen event is a decision-and-consequence story (story
     mode: any war, crisis or disaster, see STORY_MARKERS).
@@ -1113,8 +1164,10 @@ def _anchor_fits_niche(topic: str, why: str = "", story: bool = False) -> bool:
     fit the channel is the story we tell about it.
     """
     text = f"{topic} {why}".lower()
-    markers = STORY_MARKERS if story else NICHE_MARKERS
-    return any(re.search(rf"\b{m}\b", text) for m in markers)
+    if not story:
+        return any(re.search(rf"\b{m}\b", text) for m in NICHE_MARKERS)
+    # plurals count too: "trials", "wars", "landings"
+    return any(re.search(rf"\b{re.escape(m)}(?:s|es)?\b", text) for m in STORY_MARKERS)
 
 
 def extract_channel_subjects(videos, pool=None, avoid_titles=()):

@@ -496,17 +496,34 @@ def main():
             # Story mode is the only long-form format (owner, 2026-09-28): every
             # lane, every topic. The old six-chapter arc is never a fallback — a
             # run whose story cannot be built stops instead.
-            from longform_llm import _anchor_fits_niche
+            from longform_llm import _anchor_fits_niche, idea_to_event
+
+            def as_event(t):
+                """t when it reads as an event; else the real event that best
+                tells the idea (Maimonides' principle -> the Salem witch
+                trials), or None. Checked before any research is spent: the
+                2026-09-30 weekly run spent two runs' quota on that idea."""
+                if _anchor_fits_niche(t, story=True):
+                    return t
+                ev = idea_to_event(get_pool(), t, recent_titles(history, 20) if history else ())
+                if ev:
+                    print(f"💡 Idea turned into its event: {t[:60]!r} -> {ev[:90]}")
+                else:
+                    print(f"↩️  {t[:70]!r} reads as an idea and no event tells it — skipped.")
+                return ev
+
             tried = {topic}
-            if not story_topic and not _anchor_fits_niche(topic, story=True):
-                # checked before any research is spent on it: the 2026-09-30
-                # weekly run spent two runs' quota on "Maimonides' principle ...
-                # to acquit a thousand guilty", an idea with no story in it
-                print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
-                story = None
+            if story_topic:
+                story = build_story(topic, BUILD_DIR, given=True)
             else:
-                story = build_story(topic, BUILD_DIR, given=bool(story_topic))
-            while not story and not story_topic and len(tried) < 4:
+                event = as_event(topic)
+                if event:
+                    topic = event
+                    tried.add(topic)
+                    story = build_story(topic, BUILD_DIR)
+                else:
+                    story = None
+            while not story and not story_topic and len(tried) < 6:
                 # An automatic lane can pick another topic: its first pick may
                 # be an idea rather than an event (see build_story). A named
                 # topic never changes.
@@ -515,11 +532,12 @@ def main():
                                  exclude=covered | tried)
                 if not nxt or nxt in tried:
                     break
-                topic, enforce_history, from_short = nxt, False, False
-                tried.add(topic)
-                if not _anchor_fits_niche(topic, story=True):
-                    print(f"↩️  {topic[:70]!r} reads as an idea, not an event — skipped.")
+                tried.add(nxt)
+                event = as_event(nxt)
+                if not event:
                     continue
+                topic, enforce_history, from_short = event, False, False
+                tried.add(topic)
                 print(f"↩️  Trying another topic: {topic[:80]}")
                 story = build_story(topic, BUILD_DIR)
             if not story:
