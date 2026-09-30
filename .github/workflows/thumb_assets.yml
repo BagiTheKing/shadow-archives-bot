@@ -1,0 +1,44 @@
+name: Thumbnail Assets
+
+# Manual only. Fetches portraits and archive images for designing a
+# thumbnail by hand (tools/fetch_thumb_assets.py) and pushes them to the
+# `thumb-assets` branch. Never touches main and never uploads anything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      people:
+        description: "People (Wikipedia titles), separated by |"
+        default: ""
+      queries:
+        description: "Archive image searches, separated by |"
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Fetch
+        env:
+          PEOPLE: ${{ inputs.people }}
+          QUERIES: ${{ inputs.queries }}
+        run: python tools/fetch_thumb_assets.py thumb_out
+      - name: Push to the thumb-assets branch
+        run: |
+          cd thumb_out
+          git init -q -b thumb-assets
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Thumbnail assets (run ${{ github.run_number }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" thumb-assets
