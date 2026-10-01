@@ -186,14 +186,16 @@ def zhipu_available() -> bool:
 
 
 # Cloudflare Workers AI, on the account the AI images already use: big free
-# models with very long inputs (checked 2026-10-01: DeepSeek V4 Flash and
-# GLM-5.3 Flash take a million tokens, Mistral Small 128k). Its free daily
-# allowance is SHARED with the images, so it is the last resort of the chain
-# (longform_llm._order_models), tried only after every other model failed.
-# CLOUDFLARE_TEXT=0 turns it off; CLOUDFLARE_MODELS overrides the list.
-CLOUDFLARE_MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731",
-                     "@cf/zai-org/glm-5.3-flash",
-                     "@cf/mistralai/mistral-small-3.1-24b-instruct"]
+# models with long inputs (checked live 2026-10-01 on the free plan: Qwen
+# 3.8 27B takes 262k tokens, Mistral Small 3.1 and gpt-oss-120b 128k; the
+# catalogue also lists DeepSeek V4 and GLM-5.3, which the free plan refuses).
+# Its free daily allowance is SHARED with the images, so it is the last
+# resort of the chain (longform_llm._order_models), tried only after every
+# other model failed. CLOUDFLARE_TEXT=0 turns it off; CLOUDFLARE_MODELS
+# overrides the list.
+CLOUDFLARE_MODELS = ["@cf/qwen/qwen3.8-27b",
+                     "@cf/mistralai/mistral-small-3.1-24b-instruct",
+                     "@cf/openai/gpt-oss-120b"]
 LAST_RESORT_PROVIDERS = ("cloudflare",)
 
 
