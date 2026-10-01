@@ -32,10 +32,10 @@
         "videos/NPLsPRM6RH4/2_person.jpg",
         "videos/NPLsPRM6RH4/3_cyanide.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-01T14:11:28.953448+00:00",
+      "views_at_start": 1,
       "results": [],
       "registered": "2026-10-01T14:10:15.356075+00:00"
     }
