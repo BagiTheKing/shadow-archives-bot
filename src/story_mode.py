@@ -219,12 +219,17 @@ def article_problem(topic, art, cutoff=LEGACY_CUTOFF):
     time, and after the cutoff."""
     years = _years(art["text"])
     if len(years) >= 5:
-        median = years[len(years) // 2]
-        if cutoff and median > cutoff:
-            return f"it is mostly about {median}, after the {cutoff} cutoff"
+        # the year it names most, not the median: an article with decades
+        # of aftermath (Chernobyl: median 2006) is still about its event
+        from collections import Counter
+        top = Counter(years).most_common(1)[0][0]
+        if cutoff and top > cutoff:
+            return f"it is mostly about {top}, after the {cutoff} cutoff"
         asked = _years(topic)
-        if asked and min(abs(median - y) for y in asked) > 15:
-            return f"it is mostly about {median}, the topic is {asked[0]}"
+        lead = art["title"] + " " + art["text"][:1500]
+        if asked and min(abs(top - y) for y in asked) > 15 \
+                and not any(str(y) in lead for y in asked):
+            return f"it is mostly about {top}, the topic is {asked[0]}"
     words = topic_words(topic)
     head = (art["title"] + " " + art["text"][:3000]).lower()
     need = min(2, len(words))

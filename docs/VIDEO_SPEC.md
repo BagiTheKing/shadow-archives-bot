@@ -102,7 +102,11 @@ without the owner's say-so.
 18. **Topics are researched the day before.** The daily scout (07:05 UTC, fresh quota)
     keeps one ready story per lane on the topic-queue branch (trend stories
     kept 4 days, encore 21); a video run takes it and only researches for
-    itself when the queue is empty.
+    itself when the queue is empty. The story's article must be the
+    event's own (the year it names most is the event's time, before the
+    cutoff, and its opening names the topic); up to three related articles
+    (the wider conflict, the leaders on each side) add their paragraphs
+    about the same years, and every one is listed in the sources.
 19. **Every video passes the checklist** (src/preflight.py) before voice and
     render, and again before upload: placeholder title, description, question
     or quote cards are repaired; missing maps, cast cards, sources or
