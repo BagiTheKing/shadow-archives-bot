@@ -79,16 +79,31 @@ def github_models():
         lim = m.get("limits") or {}
         print(f"   {m.get('id')}: tier {m.get('rate_limit_tier')}, "
               f"in {lim.get('max_input_tokens')}, out {lim.get('max_output_tokens')}")
-    from openai import OpenAI
-    client = OpenAI(base_url="https://models.github.ai/inference", api_key=token)
-    for model in ("openai/gpt-4.1", "deepseek/DeepSeek-V3-0324", "openai/gpt-4.1-mini"):
+    hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+           "Accept": "application/json"}
+    ask = lambda model: {"model": model, "max_tokens": 20, "messages": [
+        {"role": "user", "content": "Reply with the single word OK."}]}
+    for base, models in (
+            ("https://models.github.ai/inference", ("openai/gpt-4.1", "openai/gpt-4.1-mini",
+                                                     "deepseek/DeepSeek-V3-0324")),
+            ("https://models.inference.ai.azure.com", ("gpt-4o", "gpt-4o-mini",
+                                                        "DeepSeek-V3-0324"))):
         try:
-            got = client.chat.completions.create(
-                model=model, max_tokens=20,
-                messages=[{"role": "user", "content": "Reply with the single word OK."}])
-            print(f"   {model}: answered {got.choices[0].message.content.strip()[:20]!r}")
+            r = requests.get(base + "/models", headers=hdr, timeout=30)
+            print(f"{base}/models: HTTP {r.status_code}, {r.headers.get('content-type')}, "
+                  f"{r.text[:300]!r}")
         except Exception as e:
-            print(f"   {model}: FAILED — {str(e)[:200]}")
+            print(f"{base}/models: {type(e).__name__}: {e}")
+        for model in models:
+            try:
+                r = requests.post(base + "/chat/completions", headers=hdr, json=ask(model), timeout=60)
+                body = r.text[:300].replace("\n", " ")
+                print(f"   {model}: HTTP {r.status_code}, {r.headers.get('content-type')}: {body}")
+                left = {k: v for k, v in r.headers.items() if "ratelimit" in k.lower()}
+                if left:
+                    print(f"      limits: {left}")
+            except Exception as e:
+                print(f"   {model}: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
