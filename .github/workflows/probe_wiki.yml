@@ -39,6 +39,7 @@ jobs:
               --data-urlencode "titles=$p" --data-urlencode "redirects=1" \
               --data-urlencode "format=json" -o "$f.txt.json"
             ls -la "$f.json" "$f.txt.json"
+            sleep 3   # Wikipedia rate-limits fast clients
           done
           git init -q -b preview-wiki
           git config user.name "github-actions[bot]"
