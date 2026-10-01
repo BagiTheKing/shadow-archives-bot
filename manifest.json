@@ -1,0 +1,63 @@
+{
+  "people": [
+    {
+      "name": "Erwin Rommel",
+      "photo": "people/00/lf_dossier_photo.jpg",
+      "lines": [
+        "GERMAN FIELD MARSHAL",
+        "1891 – 1944"
+      ],
+      "credit": "Erwin-Rommel-1941.jpg — Unknown authorUnknown author — Public domain (via Wikimedia Commons)"
+    },
+    {
+      "name": "Adolf Hitler",
+      "photo": "people/01/lf_dossier_photo.jpg",
+      "lines": [
+        "DICTATOR OF GERMANY FROM 1933 TO 1945"
+      ],
+      "credit": "Hitler portrait crop (cropped)(2).jpg — Heinrich Hoffmann — CC BY-SA 3.0 de (via Wikimedia Commons)"
+    }
+  ],
+  "images": [
+    {
+      "file": "images/00.jpg",
+      "query": "Erwin Rommel 1944",
+      "credit": "Erwin Rommel Memorial, place of suicide, Herrlingen (2019) — Olga Ernst — CC BY-SA 4.0 (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/01.jpg",
+      "query": "Erwin Rommel 1944",
+      "credit": "Marszałek Erwin Rommel i obergruppenfuhrer Sepp Dietrich na froncie w Normandii (2-361) — Kempe — Public domain (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/02.jpg",
+      "query": "Erwin Rommel 1944",
+      "credit": "Marszałek Erwin Rommel podczas inspekcji na Wale Atlantyckim. (2-359) — Speck — Public domain (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/03.jpg",
+      "query": "Erwin Rommel 1944",
+      "credit": "Marszałek Erwin Rommel podczas inspekcji na Wale Atlantyckim (2-335) — Schaaf — Public domain (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/04.jpg",
+      "query": "Herrlingen",
+      "credit": "Erwin-Rommel-Steige - Herrlingen (Blaustein) — Reutlingendorf — CC BY-SA 4.0 (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/05.jpg",
+      "query": "Herrlingen",
+      "credit": "Landschaftsschutzgebiet Blaustein IMG 9564 — Alexander-93 — CC BY-SA 4.0 (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/06.jpg",
+      "query": "Herrlingen",
+      "credit": "Railway station Herrlingen (Blaustein) 2019 — Olga Ernst — CC BY-SA 4.0 (via Wikimedia Commons)"
+    },
+    {
+      "file": "images/07.jpg",
+      "query": "Herrlingen",
+      "credit": "Herrlingen - Steinbruch an der B28 — SchorSch — CC BY-SA 2.0 de (via Wikimedia Commons)"
+    }
+  ]
+}
