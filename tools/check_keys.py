@@ -65,11 +65,14 @@ def github_models():
     r = requests.get("https://models.github.ai/catalog/models", timeout=30,
                      headers={"Authorization": f"Bearer {token}",
                               "Accept": "application/vnd.github+json"})
-    print(f"GitHub Models catalogue: HTTP {r.status_code}")
-    if r.status_code != 200:
-        print("   " + r.text[:200])
-        return
-    for m in r.json():
+    print(f"GitHub Models catalogue: HTTP {r.status_code}, "
+          f"{r.headers.get('content-type')}, {len(r.content)} bytes")
+    try:
+        catalogue = r.json()
+    except Exception:
+        print("   not JSON: " + r.text[:200].replace("\n", " "))
+        catalogue = []
+    for m in catalogue if isinstance(catalogue, list) else []:
         if "chat-completion" not in str(m.get("supported_output_modalities", "")) and \
                 "text" not in str(m.get("supported_output_modalities", "")):
             continue
