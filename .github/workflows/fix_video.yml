@@ -18,6 +18,9 @@ on:
       privacy:
         description: "public / unlisted / private (blank = keep)"
         default: ""
+      thumbnail:
+        description: "Thumbnail path on the thumb-rotation branch, e.g. videos/<id>/1_faceoff.jpg (blank = keep)"
+        default: ""
 
 jobs:
   fix:
@@ -29,8 +32,14 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install google-api-python-client google-auth google-auth-httplib2
+      - name: Fetch thumbnails
+        if: inputs.thumbnail != ''
+        run: |
+          git fetch -q origin thumb-rotation
+          git worktree add -q rot origin/thumb-rotation
       - name: Fix
         env:
+          THUMB: ${{ inputs.thumbnail != '' && format('rot/{0}', inputs.thumbnail) || '' }}
           VIDEO_ID: ${{ inputs.video_id }}
           TITLE: ${{ inputs.title }}
           INTRO: ${{ inputs.intro }}

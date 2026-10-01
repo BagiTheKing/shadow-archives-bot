@@ -57,6 +57,12 @@ def main():
         body["status"] = {"privacyStatus": privacy,
                           "selfDeclaredMadeForKids": status.get("selfDeclaredMadeForKids", False)}
         parts = "snippet,status"
+    thumb = os.getenv("THUMB", "").strip()
+    if thumb:
+        # set before anything goes public: the old thumbnail may carry the
+        # same placeholder text
+        from youtube_publisher import set_thumbnail
+        set_thumbnail(yt, vid, thumb)
     yt.videos().update(part=parts, body=body).execute()
     print(f"After:  {body['snippet']['title']!r} [{privacy or status['privacyStatus']}]")
     print("Description starts: " + desc[:200].replace("\n", " | "))
