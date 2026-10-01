@@ -28,15 +28,16 @@
     },
     "NPLsPRM6RH4": {
       "files": [
-        "videos/NPLsPRM6RH4/2_frame.jpg",
-        "videos/NPLsPRM6RH4/3_person.jpg"
+        "videos/NPLsPRM6RH4/1_faceoff.jpg",
+        "videos/NPLsPRM6RH4/2_person.jpg",
+        "videos/NPLsPRM6RH4/3_cyanide.jpg"
       ],
       "status": "waiting",
       "current": null,
       "since": null,
       "views_at_start": null,
       "results": [],
-      "registered": "2026-10-01T12:10:17.329217+00:00"
+      "registered": "2026-10-01T14:10:15.356075+00:00"
     }
   }
 }
