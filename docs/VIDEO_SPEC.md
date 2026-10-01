@@ -103,6 +103,12 @@ without the owner's say-so.
     keeps one ready story per lane on the topic-queue branch (trend stories
     kept 4 days, encore 21); a video run takes it and only researches for
     itself when the queue is empty.
+19. **Every video passes the checklist** (src/preflight.py) before voice and
+    render, and again before upload: placeholder title, description, question
+    or quote cards are repaired; missing maps, cast cards, sources or
+    thumbnails are listed in the run summary; only a broken video is stopped.
+    Every failure a run has had becomes a test in tests/ (offline, run on
+    each push).
 
 ## Process
 14. Check a change against this list before pushing. Test writing with a

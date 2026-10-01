@@ -651,6 +651,14 @@ def main():
               f"{len(script['claim_sources'])} distinct works cited.")
     print(f"🎬 {len(scenes)} scenes across {len(script['chapters'])} chapters")
 
+    # The checklist (preflight.py), before an hour of voice and render is
+    # spent: repairs what it can, reports the rest, stops a broken video.
+    import preflight
+    checks = preflight.script_check(script, story, scenes)
+    if any(ok == "block" for ok, _, _ in checks):
+        run_cache.save_stage(topic, "script", None)   # write it again next run
+    preflight.report(checks, "script")
+
     # Asked out loud at the end, not only in the comment field. Same reasoning
     # as the Shorts pipeline: an unpinned comment sits below the fold.
     first_comment = build_first_comment(script)
@@ -689,6 +697,7 @@ def main():
     # uploads the first and keeps all of them in build/thumbnails/ for
     # YouTube Studio's Test & Compare; the single frame below is the fallback.
     thumb_path = None
+    variants = []
     try:
         from thumb_variants import build as build_thumbnails
         variants = build_thumbnails(scenes, script, BUILD_DIR)
@@ -727,6 +736,9 @@ def main():
     caption_path = os.path.join(BUILD_DIR, SRT_NAME)
     if not os.path.exists(caption_path):
         caption_path = None
+
+    preflight.report(preflight.upload_check(title, description, thumb_path, variants),
+                     "before upload")
 
     # The render is saved before the upload: if the upload fails (YouTube's
     # daily quota, a network error) the workflow keeps these files as an

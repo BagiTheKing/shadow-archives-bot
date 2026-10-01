@@ -1,0 +1,22 @@
+name: Tests
+
+# Recorded failures replayed offline (tests/): a change that brings one back
+# shows red here before any video run pays for it. ~1 minute, no secrets.
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'tests/**']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -v tests
