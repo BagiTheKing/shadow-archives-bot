@@ -18,6 +18,8 @@ def gemini(env):
     if not key:
         print(f"{env}: not set")
         return
+    # the last 4 characters only, to compare with AI Studio's key list
+    print(f"{env}: key ends in ...{key[-4:]} ({len(key)} characters)")
     from openai import OpenAI
     from llm_provider import GEMINI_BASE_URL
     client = OpenAI(base_url=GEMINI_BASE_URL, api_key=key)
