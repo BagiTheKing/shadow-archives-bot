@@ -12,7 +12,9 @@ from memory with no source, an invented ship and the West Bank and Golan
 credited to Egypt.
 
 Story mode tells the story instead of arguing a case:
-1. research(): the event's own Wikipedia article, as plain text.
+1. gather(): the event's own Wikipedia article (checked to be about this
+   event and its time) plus up to three related articles from the other
+   sides, cut to the same years, as plain text.
 2. fact_sheet(): a model extracts a dated timeline, the people, places,
    figures and verbatim quotes — ONLY from that text. Every quote must be
    a substring of the article and every figure's digits must appear in it;
@@ -108,43 +110,45 @@ most. Never hands as the subject.
 # ---------------------------------------------------------------------------
 
 def article_queries(pool, topic, call):
-    """What to search Wikipedia for. A short topic ("Six-Day War") is its own
-    query; the automatic lanes hand over 30-40 word sentences, which a wiki
-    search does badly on, so a model names the event's article first."""
-    if len(topic.split()) <= 6:
-        return [topic]
-    queries = []
+    """What to search Wikipedia for: (main, related). main: titles for the
+    event's own article, best first, then the topic itself. related: up to
+    3 articles that tell the same event from other sides (the wider
+    conflict, the key people on each side), so the story does not rest on
+    one article."""
+    main, related = [], []
     try:
         data = call(pool, "You name Wikipedia articles. Output only JSON.",
-                    f"Topic: {topic}\n\nGive up to 3 exact English Wikipedia "
-                    "article titles for the main event this topic is about, best "
-                    "first (e.g. \"Six-Day War\", \"Chernobyl disaster\").\n"
-                    'Output ONLY JSON: {"titles": ["..."]}', max_tokens=800,
-                    expect={"titles": list})
-        queries = [t.strip() for t in (data or {}).get("titles") or []
-                   if isinstance(t, str) and 3 <= len(t.strip()) <= 80
-                   and "..." not in t][:3]
+                    f"Topic: {topic}\n\nName English Wikipedia articles, exact titles.\n"
+                    "- titles: up to 3 for the main event this topic is about, best "
+                    "first (e.g. \"Six-Day War\", \"Battle of Gaza (2007)\").\n"
+                    "- related: up to 3 OTHER articles that cover the same event from "
+                    "other sides: the wider conflict it belongs to, and the key "
+                    "people or groups on each side (leaders, commanders, "
+                    "organisations). Not later events.\n"
+                    'Output ONLY JSON: {"titles": ["..."], "related": ["..."]}',
+                    max_tokens=800, expect={"titles": list})
+        ok = lambda t: isinstance(t, str) and 3 <= len(t.strip()) <= 80 and "..." not in t
+        main = [t.strip() for t in (data or {}).get("titles") or [] if ok(t)][:3]
+        related = [t.strip() for t in (data or {}).get("related") or [] if ok(t)][:3]
     except Exception as e:
         print(f"⚠️ Article lookup failed ({type(e).__name__}: {e}).")
-    return queries + [topic]
+    if topic not in main:
+        main.append(topic)
+    return main, [t for t in related if t not in main]
 
 
-def research(topic):
-    """{"title", "url", "text"} for the topic's Wikipedia article, or None."""
+def _fetch(title):
+    """{"title", "url", "text"} for an exact Wikipedia title, or None."""
     from archive_engine import _polite_get
-    r = _polite_get(WIKI_API, params={
-        "action": "query", "list": "search", "srsearch": topic, "srlimit": 1,
-        "format": "json"}, timeout=30)
-    hits = (r.json().get("query") or {}).get("search") or []
-    if not hits:
-        return None
-    title = hits[0]["title"]
     r = _polite_get(WIKI_API, params={
         "action": "query", "prop": "extracts", "explaintext": 1,
         "exsectionformat": "wiki", "titles": title, "redirects": 1,
         "format": "json"}, timeout=60)
     pages = list(((r.json().get("query") or {}).get("pages") or {}).values())
-    text = (pages[0].get("extract") or "") if pages else ""
+    if not pages or "missing" in pages[0]:
+        return None
+    title = pages[0].get("title") or title
+    text = pages[0].get("extract") or ""
     # Cut the reference apparatus: it is long and carries no story.
     for sec in _DROP_SECTIONS:
         m = re.search(rf"\n==+\s*{re.escape(sec)}\s*==+", text)
@@ -152,12 +156,157 @@ def research(topic):
             text = text[:m.start()]
     if len(text) < 2000:
         return None
-    url = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
+    return {"title": title, "text": text[:ARTICLE_CHARS],
+            "url": "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")}
+
+
+def candidates(query):
+    """The article named `query`, then Wikipedia's top search hits for it."""
+    from archive_engine import _polite_get
+    seen = set()
+    got = _fetch(query)
+    if got:
+        seen.add(got["title"])
+        yield got
+    r = _polite_get(WIKI_API, params={
+        "action": "query", "list": "search", "srsearch": query, "srlimit": 3,
+        "format": "json"}, timeout=30)
+    for hit in (r.json().get("query") or {}).get("search") or []:
+        if hit["title"] not in seen:
+            seen.add(hit["title"])
+            got = _fetch(hit["title"])
+            if got:
+                yield got
+
+
+def research(topic):
+    """The first article found for `topic`, with its footnotes, or None."""
+    for art in candidates(topic):
+        return _with_sources(art)
+    return None
+
+
+def _with_sources(art):
     # the article's footnotes, for the per-claim sources on screen and in
     # the description (claim_sources.py); a failure only costs those
     from claim_sources import fetch as fetch_sources
-    return {"title": title, "text": text[:ARTICLE_CHARS], "url": url,
-            "sources": fetch_sources(title, url)}
+    art["sources"] = fetch_sources(art["title"], art["url"])
+    return art
+
+
+_YEAR_RE = re.compile(r"\b(1[0-9]\d\d|20[0-4]\d)\b")
+_TOPIC_STOP = {"the", "and", "that", "with", "from", "into", "over", "this", "their",
+               "which", "when", "where", "after", "before", "during", "against",
+               "was", "were", "how", "why", "what", "who", "its", "his", "her"}
+
+
+def _years(text):
+    return sorted(int(y) for y in _YEAR_RE.findall(text or ""))
+
+
+def topic_words(topic):
+    """The topic's naming words: from its name part (before any long
+    description), 4+ letters, possessives cut."""
+    name = re.split(r"\s*[:—]\s|,| was | is | and the ", topic or "", maxsplit=1)[0]
+    words = [re.sub(r"'s$", "", w.lower()) for w in re.findall(r"[A-Za-z][A-Za-z'-]+", name)]
+    return [w for w in dict.fromkeys(words) if len(w) >= 4 and w not in _TOPIC_STOP][:8]
+
+
+def article_problem(topic, art, cutoff=LEGACY_CUTOFF):
+    """Why this article is not the topic's own article, or None.
+    The first scout run took "Anti-Hamas insurgency in the Gaza Strip"
+    (2023-) for the 2007 Hamas takeover of Gaza: an article about another
+    time, and after the cutoff."""
+    years = _years(art["text"])
+    if len(years) >= 5:
+        median = years[len(years) // 2]
+        if cutoff and median > cutoff:
+            return f"it is mostly about {median}, after the {cutoff} cutoff"
+        asked = _years(topic)
+        if asked and min(abs(median - y) for y in asked) > 15:
+            return f"it is mostly about {median}, the topic is {asked[0]}"
+    words = topic_words(topic)
+    head = (art["title"] + " " + art["text"][:3000]).lower()
+    need = min(2, len(words))
+    if need and sum(1 for w in words if w in head) < need:
+        return "its opening does not name the topic"
+    return None
+
+
+RELATED_CHARS = 7000
+
+
+def _excerpt(art, window):
+    """The related article's paragraphs about the main story's years."""
+    lo, hi = window
+    out, size = [], 0
+    for para in (p for p in art["text"].split("\n") if p.strip()):
+        if any(lo <= y <= hi for y in _years(para)) and size + len(para) <= RELATED_CHARS:
+            out.append(para)
+            size += len(para) + 1
+    return "\n".join(out)
+
+
+def gather(pool, topic, call, cutoff=LEGACY_CUTOFF):
+    """The story's sources: the event's own article (checked to be about
+    this event and its time) and up to three related articles cut to the
+    same years. One combined article, or None:
+    {"title", "url", "text", "prompt_text", "sources", "related"}."""
+    main_q, related_q = article_queries(pool, topic, call)
+    main, tried = None, set()
+    for q in main_q:
+        for art in candidates(q):
+            if art["title"] in tried:
+                continue
+            tried.add(art["title"])
+            problem = article_problem(topic, art, cutoff)
+            if problem:
+                print(f"   ↩️  Article {art['title']!r} skipped: {problem}.")
+                continue
+            main = art
+            break
+        if main:
+            break
+    if not main:
+        print(f"⚠️ Story mode: no Wikipedia article matches {topic!r}.")
+        return None
+    _with_sources(main)
+    years = _years(main["text"])
+    if years:
+        lo, hi = years[len(years) // 10], years[(len(years) * 9) // 10]
+        window = (lo - 3, min(hi + 3, cutoff or hi + 3))
+    else:
+        window = (0, cutoff or 9999)
+    extras = []
+    for q in related_q:
+        try:
+            art = _fetch(q)
+        except Exception:
+            art = None
+        if not art or art["title"] in tried or art["title"] == main["title"]:
+            continue
+        tried.add(art["title"])
+        part = _excerpt(art, window)
+        if len(part) >= 500:
+            extras.append((art, part))
+    budget = FACT_SHEET_CHARS - sum(len(p) + 80 for _, p in extras)
+    prompt_text = compact_article(main["text"], budget)
+    full_text = main["text"]
+    sources = main.get("sources") or {"title": main["title"], "url": main["url"], "sentences": []}
+    for art, part in extras:
+        head = f"\n\n=== From the Wikipedia article \"{art['title']}\" ===\n"
+        prompt_text += head + part
+        full_text += head + art["text"]
+        more = _with_sources(art).get("sources")
+        if more:
+            sources = {**sources, "sentences": list(sources.get("sentences") or [])
+                       + list(more.get("sentences") or [])}
+    main.update(text=full_text, prompt_text=prompt_text, sources=sources,
+                related=[{"title": a["title"], "url": a["url"]} for a, _ in extras])
+    print(f"📚 Sources: {main['title']!r}"
+          + (" + " + ", ".join(repr(a["title"]) for a, _ in extras) if extras else "")
+          + f" (years {window[0]}–{window[1]}).")
+    return main
 
 
 # ---------------------------------------------------------------------------
@@ -284,9 +433,10 @@ def compact_article(text, limit=FACT_SHEET_CHARS):
 def fact_sheet(pool, topic, article, call):
     """The verified fact sheet for this story, or None."""
     prompt = (
-        f"Story: {topic}\n\nSOURCE ARTICLE (Wikipedia, \"{article['title']}\"):\n"
-        f"{compact_article(article['text'])}\n\n"
-        "Extract a FACT SHEET for a documentary, using ONLY this article. "
+        f"Story: {topic}\n\nSOURCE ARTICLE (Wikipedia, \"{article['title']}\")"
+        f"{', then excerpts of related articles' if article.get('related') else ''}:\n"
+        f"{article.get('prompt_text') or compact_article(article['text'])}\n\n"
+        "Extract a FACT SHEET for a documentary, using ONLY these texts. "
         "Copy names, dates and figures exactly as the article writes them.\n"
         "- timeline: 25-45 dated events in order, from the first cause to the "
         "aftermath, covering EVERY phase and EVERY front or theatre the "

@@ -184,3 +184,55 @@ class FindStory(unittest.TestCase):
     def test_queued_topic_not_picked_again(self):
         got = self.M.find_story("timely", None, avoid={"The 1995 Qatari coup d'etat"})
         self.assertIsNone(got)
+
+
+def _art(title, years, extra=""):
+    paras = [f"In {y}, {extra} events in Gaza involving Hamas and Fatah continued." for y in years]
+    return {"title": title, "url": "https://en.wikipedia.org/wiki/" + title.replace(" ", "_"),
+            "text": "\n".join(paras) * 3}
+
+
+class ArticleCheck(unittest.TestCase):
+    """Topic scout, 2026-10-01: "Anti-Hamas insurgency in the Gaza Strip"
+    (2023-) was taken for the 2007 Hamas takeover of Gaza."""
+    TOPIC = ("The 2007 Hamas takeover of Gaza was a coup that displaced Fatah "
+             "forces and established Hamas as the ruler")
+
+    def test_later_article_refused(self):
+        import story_mode as sm
+        art = _art("Anti-Hamas insurgency in the Gaza Strip", [2007, 2023, 2024, 2024, 2025, 2025])
+        self.assertIn("after the 2010 cutoff", sm.article_problem(self.TOPIC, art))
+
+    def test_right_article_accepted(self):
+        import story_mode as sm
+        art = _art("Battle of Gaza (2007)", [2006, 2007, 2007, 2007, 2008])
+        self.assertIsNone(sm.article_problem(self.TOPIC, art))
+
+    def test_unrelated_article_refused(self):
+        import story_mode as sm
+        art = {"title": "Dreyfus affair", "url": "u",
+               "text": "\n".join(f"In {y} the officer was tried in Paris." for y in
+                                 [1894, 1895, 1898, 1899, 1906]) * 3}
+        self.assertIsNotNone(sm.article_problem(self.TOPIC, art))
+
+    def test_gather_skips_wrong_article_and_adds_related(self):
+        import story_mode as sm
+        wrong = _art("Anti-Hamas insurgency in the Gaza Strip", [2023, 2024, 2024, 2025, 2025])
+        right = _art("Battle of Gaza (2007)", [2006, 2007, 2007, 2007, 2008], "fighting")
+        leader = {"title": "Ismail Haniyeh", "url": "https://en.wikipedia.org/wiki/Ismail_Haniyeh",
+                  "text": ("In 2006 Haniyeh became prime minister after the election won by Hamas. " * 8
+                           + "\nIn 2024 he was killed in Tehran. " * 8)}
+        saved = (sm.article_queries, sm.candidates, sm._fetch, sm._with_sources)
+        try:
+            sm.article_queries = lambda pool, topic, call: (["Hamas takeover of Gaza"], ["Ismail Haniyeh"])
+            sm.candidates = lambda q: iter([dict(wrong), dict(right)])
+            sm._fetch = lambda t: dict(leader) if t == "Ismail Haniyeh" else None
+            sm._with_sources = lambda a: a.update(sources={"title": a["title"], "url": a["url"],
+                                                           "sentences": []}) or a
+            got = sm.gather(None, self.TOPIC, None)
+        finally:
+            sm.article_queries, sm.candidates, sm._fetch, sm._with_sources = saved
+        self.assertEqual(got["title"], "Battle of Gaza (2007)")
+        self.assertEqual([r["title"] for r in got["related"]], ["Ismail Haniyeh"])
+        self.assertIn("prime minister", got["prompt_text"])
+        self.assertNotIn("Tehran", got["prompt_text"])     # cut to the story's years

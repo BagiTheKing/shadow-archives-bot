@@ -184,6 +184,8 @@ def build_sources_block(script, budget):
     lines = ["Sources:"]
     if article.get("url"):
         lines.append(f"• Wikipedia, \"{article.get('title') or ''}\": {article['url']}")
+    for rel in script.get("related_articles") or []:
+        lines.append(f"• Wikipedia, \"{rel['title']}\": {rel['url']}")
     for w in works:
         line = f"• {w['full']}"
         if len("\n".join(lines + [line, "…and others."])) > budget:
@@ -283,15 +285,11 @@ def build_story(topic, build_dir, given=False):
     from longform_llm import _call
     import story_mode as sm
     pool = _pool()
-    article = None
-    for query in sm.article_queries(pool, topic, _call):
-        article = sm.research(query)
-        if article:
-            break
+    # the event's own article, checked to be about this event and its time,
+    # plus related articles from the other sides (story_mode.gather)
+    article = sm.gather(pool, topic, _call)
     if not article:
-        print(f"⚠️ Story mode: no Wikipedia article found for {topic!r}.")
         return None
-    print(f"📚 Research: {article['title']} ({len(article['text']):,} chars)")
     # A weak model's sheet (the fourth run's had no figures and no quotes)
     # gets one more try on another model; the richer sheet is kept.
     import longform_llm as _llm
@@ -358,6 +356,7 @@ def build_story(topic, build_dir, given=False):
     years = Counter(int(y) for t in sheet["timeline"]
                     for y in re.findall(r"\b(1\d{3}|20\d{2})\b", t.get("date", "")))
     return {"sheet": sheet, "plan": plan, "sources": article.get("sources"),
+            "related": article.get("related") or [],
             "era_year": years.most_common(1)[0][0] if years else None}
 
 
@@ -664,6 +663,7 @@ def main():
         script["claim_sources"] = attach(scenes, story["sources"], story.get("sheet"))
         script["source_article"] = {"title": story["sources"].get("title"),
                                     "url": story["sources"].get("url")}
+        script["related_articles"] = story.get("related") or []
         print(f"📎 {sum(1 for s in scenes if s.get('claim_source'))} of "
               f"{len(scenes)} scenes carry a source; "
               f"{len(script['claim_sources'])} distinct works cited.")

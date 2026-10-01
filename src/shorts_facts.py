@@ -63,9 +63,17 @@ def research_short(topic):
         subject = (topic or "").split("(")[0].split(",")[0].strip()
         queries = [subject] if 0 < len(subject.split()) <= 8 else []
         article = None
-        for query in queries + [q for q in sm.article_queries(pool, topic, _call)
+        for query in queries + [q for q in sm.article_queries(pool, topic, _call)[0]
                                 if q not in queries]:
-            article = sm.research(query)
+            # the article must be about this event and its time
+            # (story_mode.article_problem)
+            for art in sm.candidates(query):
+                problem = sm.article_problem(topic, art)
+                if problem:
+                    print(f"   ↩️  Article {art['title']!r} skipped: {problem}.")
+                    continue
+                article = sm._with_sources(art)
+                break
             if article:
                 break
         if not article:
