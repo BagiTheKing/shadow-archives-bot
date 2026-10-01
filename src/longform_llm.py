@@ -3493,8 +3493,20 @@ def _place_map(plan, chapters, topic, after_decision=False, first=1,
         where = "after" if after_decision else "before"
         print(f"   ↩️  No scene {where} the decision speaks {target!r} — no map.")
         return
+    # Placed now, not at render time: a name no source can locate is
+    # dropped here, so the caller can map the story's next place instead
+    # (the 2026-10-01 Rommel video's "North Africa" had no coordinates).
+    try:
+        from map_engine import geocode
+        ll = geocode(target)
+    except Exception as e:
+        print(f"   ↩️  Could not place {target!r} ({type(e).__name__}: {e}).")
+        ll = None
+    if not ll:
+        print(f"   ↩️  No coordinates for {target!r} — no map there.")
+        return
     speaking[0][1]["map"] = {"target": target, "origin": origin,
-                             "action": action, "light": light}
+                             "action": action, "light": light, "ll": list(ll)}
     print(f"🗺️  Map planned: {origin or '—'} → {target} ({action}; "
           f"lit: {', '.join(light) or 'none'}).")
 

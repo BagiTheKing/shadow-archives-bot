@@ -755,7 +755,8 @@ def main():
     if not os.path.exists(caption_path):
         caption_path = None
 
-    preflight.report(preflight.upload_check(title, description, thumb_path, variants),
+    preflight.report(preflight.upload_check(title, description, thumb_path, variants,
+                                            scenes=scenes),
                      "before upload")
 
     # The render is saved before the upload: if the upload fails (YouTube's

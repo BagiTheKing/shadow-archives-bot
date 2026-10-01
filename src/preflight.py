@@ -102,8 +102,13 @@ def script_check(script, story=None, scenes=()):
     return items
 
 
-def upload_check(title, description, thumb_path, variants=()):
+def upload_check(title, description, thumb_path, variants=(), scenes=()):
     items = []
+    planned = sum(1 for s in scenes or () if s.get("map"))
+    drawn = sum(1 for s in scenes or () if s.get("map") and s.get("_is_map"))
+    if planned:
+        items.append((True if drawn == planned else False, "Maps drawn",
+                      f"{drawn} of {planned}"))
     if not _real(title):
         items.append(("block", "Final title", repr(title)))
     bad = [ln for ln in (description or "").splitlines() if ln.strip() and not _real(ln)

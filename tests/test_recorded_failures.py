@@ -236,3 +236,59 @@ class ArticleCheck(unittest.TestCase):
         self.assertEqual([r["title"] for r in got["related"]], ["Ismail Haniyeh"])
         self.assertIn("prime minister", got["prompt_text"])
         self.assertNotIn("Tehran", got["prompt_text"])     # cut to the story's years
+
+
+class Maps(unittest.TestCase):
+    """2026-10-01 Rommel: no map although the story crossed North Africa,
+    Normandy and Germany. "North Africa" has no coordinates on Wikipedia."""
+
+    def setUp(self):
+        import map_engine as ME
+        self.ME = ME
+        self.saved = (ME._wikipedia_coords, ME._wikipedia_search_coords, ME._load)
+        ME._wikipedia_coords = lambda n: None        # worst case: Wikipedia down
+        ME._wikipedia_search_coords = lambda n: None
+        ME._load = lambda name: []                   # no Natural Earth either
+        ME._GEOCODED.clear()
+
+    def tearDown(self):
+        self.ME._wikipedia_coords, self.ME._wikipedia_search_coords, self.ME._load = self.saved
+        self.ME._GEOCODED.clear()
+
+    def chapters(self):
+        sc = lambda t: {"narration": t}
+        return [{"scenes": [sc("Cold open.")]},
+                {"scenes": [sc("Rommel's men drove east across North Africa toward Egypt.")]},
+                {"scenes": [sc("Then came the summer in Normandy.")]},
+                {"scenes": [sc("At home in Herrlingen, two generals arrived.")]},
+                {"scenes": [sc("Verdict.")]}]
+
+    def test_broad_region_is_placed(self):
+        self.assertEqual(self.ME.geocode("North Africa"), (17.0, 28.0))
+        self.assertEqual(self.ME.geocode("the Balkans"), (21.0, 43.0))
+
+    def test_map_carries_its_coordinates(self):
+        ch = self.chapters()
+        L._place_map({"target": "North Africa", "origin": "", "action": "mark", "light": []},
+                     ch, "Rommel", first=1, anywhere=True)
+        got = [s["map"] for c in ch for s in c["scenes"] if s.get("map")]
+        self.assertEqual(got[0]["ll"], [17.0, 28.0])
+
+    def test_unplaceable_target_leaves_room_for_the_next(self):
+        ch = self.chapters()
+        L._place_map({"target": "Herrlingen", "origin": "", "action": "mark", "light": []},
+                     ch, "Rommel", first=1, anywhere=True)      # nothing can place it
+        self.assertFalse(any(s.get("map") for c in ch for s in c["scenes"]))
+        L._place_map({"target": "North Africa", "origin": "", "action": "mark", "light": []},
+                     ch, "Rommel", first=1, anywhere=True)
+        self.assertTrue(any(s.get("map") for c in ch for s in c["scenes"]))
+
+    def test_render_uses_saved_coordinates(self):
+        calls = []
+        self.ME.geocode = lambda n, _g=self.ME.geocode: calls.append(n) or _g(n)
+        try:
+            spec = self.ME.build_spec({"target": "Tobruk", "ll": [23.96, 32.08]}, [], 6.0)
+        finally:
+            self.ME.geocode = self.ME.geocode.__defaults__[0]
+        self.assertEqual(spec["targets"][0]["ll"], (23.96, 32.08))
+        self.assertEqual(calls, [])

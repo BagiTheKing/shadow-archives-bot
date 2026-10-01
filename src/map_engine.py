@@ -139,20 +139,204 @@ def _wikipedia_coords(name):
     return None
 
 
+# Broad regions a story names that have no point of their own: Wikipedia
+# gives "North Africa" no coordinates and Natural Earth has no such place
+# (the 2026-10-01 Rommel video lost its map to exactly this). Centres, lon/lat.
+MACRO_REGIONS = {
+    "north africa": (17.0, 28.0), "east africa": (38.0, 2.0),
+    "west africa": (-3.0, 12.0), "southern africa": (25.0, -25.0),
+    "horn of africa": (45.0, 8.0), "middle east": (45.0, 29.0),
+    "near east": (38.0, 33.0), "levant": (36.0, 33.5),
+    "persian gulf": (51.5, 26.5), "the gulf": (51.5, 26.5),
+    "western front": (3.5, 49.8), "eastern front": (30.0, 52.0),
+    "balkans": (21.0, 43.0), "caucasus": (44.0, 42.5),
+    "central asia": (66.0, 43.0), "southeast asia": (110.0, 10.0),
+    "far east": (125.0, 35.0), "mediterranean": (18.0, 36.0),
+    "mediterranean sea": (18.0, 36.0), "pacific": (165.0, 10.0),
+    "pacific ocean": (165.0, 10.0), "atlantic": (-35.0, 35.0),
+    "atlantic ocean": (-35.0, 35.0), "scandinavia": (15.0, 63.0),
+    "indochina": (104.0, 15.0), "latin america": (-65.0, -10.0),
+    "central america": (-87.0, 14.0), "western europe": (3.0, 48.0),
+    "eastern europe": (27.0, 52.0), "sinai": (33.8, 29.5),
+    "sinai peninsula": (33.8, 29.5), "golan heights": (35.75, 33.0),
+    "suez canal": (32.35, 30.6), "the straits of tiran": (34.46, 27.97),
+    "straits of tiran": (34.46, 27.97), "english channel": (-1.5, 50.2),
+}
+
+# The broad regions made of countries are lit as those countries, like a
+# single country is (names as Natural Earth writes them).
+MACRO_MEMBERS = {
+    "north africa": ["Morocco", "Algeria", "Tunisia", "Libya", "Egypt"],
+    "middle east": ["Egypt", "Israel", "Palestine", "Jordan", "Lebanon", "Syria", "Iraq",
+                    "Iran", "Saudi Arabia", "Kuwait", "Qatar", "Bahrain",
+                    "United Arab Emirates", "Oman", "Yemen", "Turkey"],
+    "near east": ["Israel", "Palestine", "Jordan", "Lebanon", "Syria", "Iraq", "Turkey"],
+    "levant": ["Israel", "Palestine", "Jordan", "Lebanon", "Syria"],
+    "horn of africa": ["Ethiopia", "Eritrea", "Djibouti", "Somalia", "Somaliland"],
+    "east africa": ["Kenya", "Uganda", "Tanzania", "Rwanda", "Burundi", "Ethiopia", "Somalia"],
+    "west africa": ["Senegal", "Mali", "Guinea", "Ivory Coast", "Ghana", "Burkina Faso",
+                    "Niger", "Nigeria", "Benin", "Togo", "Sierra Leone", "Liberia"],
+    "western front": ["France", "Belgium"],
+    "eastern front": ["Poland", "Belarus", "Ukraine", "Lithuania", "Latvia", "Estonia"],
+    "balkans": ["Slovenia", "Croatia", "Bosnia and Herzegovina", "Serbia", "Montenegro",
+                "Kosovo", "North Macedonia", "Albania", "Bulgaria", "Greece"],
+    "caucasus": ["Georgia", "Armenia", "Azerbaijan"],
+    "scandinavia": ["Norway", "Sweden", "Denmark"],
+    "indochina": ["Vietnam", "Laos", "Cambodia"],
+    "persian gulf": ["Kuwait", "Qatar", "Bahrain", "United Arab Emirates"],
+    "the gulf": ["Kuwait", "Qatar", "Bahrain", "United Arab Emirates"],
+}
+
+_GEOCODED = {}
+
+
+def _geo_region(name):
+    """A named physical region (Sinai Peninsula, Sahara, Crimea,
+    Normandie) from Natural Earth: the centre of its largest outline."""
+    n = _norm(name)
+    full = lambda s: _norm((s or "").replace("Pen.", "Peninsula").replace("PEN.", "PENINSULA")
+                           .replace("Mts.", "Mountains").replace("MTS.", "MOUNTAINS"))
+    try:
+        feats = _load("ne_10m_geography_regions_polys")
+    except Exception:
+        return None
+    for f in feats:
+        p = f["properties"]
+        if n in {full(p.get(k)) for k in ("NAME", "NAME_EN", "NAMEALT")} - {""}:
+            ring = max(_rings(f["geometry"]), key=len)
+            xs, ys = [q[0] for q in ring], [q[1] for q in ring]
+            return ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+    return None
+
+
+def _geo_region_rings(name):
+    """The outline rings of a named physical region, or None."""
+    n = _norm(name)
+    full = lambda s: _norm((s or "").replace("Pen.", "Peninsula").replace("PEN.", "PENINSULA")
+                           .replace("Mts.", "Mountains").replace("MTS.", "MOUNTAINS"))
+    try:
+        feats = _load("ne_10m_geography_regions_polys")
+    except Exception:
+        return None
+    for f in feats:
+        p = f["properties"]
+        if n in {full(p.get(k)) for k in ("NAME", "NAME_EN", "NAMEALT")} - {""}:
+            return _rings(f["geometry"])
+    return None
+
+
+def _region_spec(plan, target_ll, words, duration, modern):
+    """A country, province or broad region as the target (Germany, North
+    Africa): the whole region framed and lit, its name in the middle, in
+    place of a pinpoint zoomed into its empty centre."""
+    name = plan["target"]
+    key = _norm(re.sub(r"^the\s+", "", name, flags=re.I))
+    rings = None
+    r = find_region(name)
+    if r and modern:
+        rings = r[1]
+    elif key in MACRO_MEMBERS:
+        rings = []
+        for member in MACRO_MEMBERS[key]:
+            got = find_region(member)
+            if got:
+                main = max(got[1], key=len)
+                rings += [g for g in got[1] if _km(g[0], main[0]) < 1500]
+        rings = rings or None
+        r = None
+    elif not r:
+        rings = _geo_region_rings(name)
+    if rings and key in MACRO_MEMBERS:
+        xs = [p[0] for g in rings for p in g]
+        ys = [p[1] for g in rings for p in g]
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        fit = max(max(xs) - min(xs),
+                  (max(ys) - min(ys)) * (W / H) / math.cos(math.radians(cy))) * 1.3
+    elif rings:
+        # the mainland, not overseas islands far from it
+        main = max(rings, key=len)
+        mx, my = sum(p[0] for p in main) / len(main), sum(p[1] for p in main) / len(main)
+        rings = [g for g in rings if _km(g[0], (mx, my)) < 1500]
+        xs = [p[0] for g in rings for p in g]
+        ys = [p[1] for g in rings for p in g]
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        fit = max(max(xs) - min(xs),
+                  (max(ys) - min(ys)) * (W / H) / math.cos(math.radians(cy))) * 1.5
+    else:
+        cx, cy = target_ll
+        # a sea or an ocean wide, a small feature (Sinai, the Golan) close
+        fit = 28.0 if re.search(r"\b(sea|ocean|atlantic|pacific|mediterranean|asia|europe|america|east)\b", key) else 9.0
+    fit = max(4.0, min(60.0, fit))
+    t_target = spoken_at(words, name)
+    t_target = min(max(t_target if t_target is not None else duration * 0.3, 1.2),
+                   max(1.2, duration - 3.0))
+    wide = (cx, cy, min(90.0, fit * 2.2))
+    close = (cx, cy, fit)
+    camera = [(0.0, wide), (max(0.9, t_target - 0.1), close), (t_target + 3.0, close)]
+    label_ll = r[2] if (r and rings) else (cx, cy)
+    highlights = [{"rings": rings, "style": "lit", "at": t_target}] if rings else []
+    targets = [] if rings else [{"ll": (cx, cy), "at": t_target + 0.45}]
+    labels = [{"text": name.upper(), "ll": label_ll, "at": t_target + 0.45,
+               "anchor": "c" if rings else "l"}]
+    margin = wide[2]
+    return {
+        "bbox": (cx - margin, cy - margin * 0.7, cx + margin, cy + margin * 0.7),
+        "camera": camera, "highlights": highlights, "arrows": [],
+        "targets": targets or [{"ll": (cx, cy), "at": 1e9}],
+        "labels": labels, "borders": modern,
+        "anim_end": min(duration, t_target + 0.45 + len(name) * 0.055 + 1.5),
+    }
+
+
+def _is_region(name):
+    n = _norm(re.sub(r"^the\s+", "", name or "", flags=re.I))
+    return bool(find_region(name) or _geo_region_rings(name) or n in MACRO_REGIONS)
+
+
+def _wikipedia_search_coords(name):
+    """The first of Wikipedia's top search hits for `name` that has
+    coordinates and whose title carries the name's first word."""
+    try:
+        from archive_engine import _polite_get
+        r = _polite_get(WIKI_API, params={
+            "action": "query", "generator": "search", "gsrsearch": name,
+            "gsrlimit": 3, "prop": "coordinates", "colimit": 3,
+            "format": "json"}, timeout=30)
+        pages = sorted(((r.json().get("query") or {}).get("pages") or {}).values(),
+                       key=lambda pg: pg.get("index", 9))
+        first = _norm(name).split()[0] if _norm(name) else ""
+        for pg in pages:
+            if first and first in _norm(pg.get("title")).split() and pg.get("coordinates"):
+                c = pg["coordinates"][0]
+                return (float(c["lon"]), float(c["lat"]))
+    except Exception as e:
+        print(f"   ⚠️ Wikipedia search unavailable for {name!r} ({type(e).__name__}).")
+    return None
+
+
 def geocode(name):
     """(lon, lat) for a named place, or None. Wikipedia first — it knows
-    islands, battlefields and bases that no city list has."""
+    islands, battlefields and bases that no city list has — then Natural
+    Earth's cities, countries, provinces and physical regions, the broad
+    regions above, and last a Wikipedia search. Remembered for the run."""
+    key = _norm(re.sub(r"^the\s+", "", (name or "").strip(), flags=re.I))
+    if not key:
+        return None
+    if key in _GEOCODED:
+        return _GEOCODED[key]
     ll = _wikipedia_coords(name)
-    if ll:
-        return ll
-    n = _norm(name)
-    for f in _load("ne_10m_populated_places_simple"):
-        p = f["properties"]
-        if n in {_norm(p.get("name")), _norm(p.get("nameascii"))}:
-            x, y = f["geometry"]["coordinates"][:2]
-            return (x, y)
-    region = find_region(name)
-    return region[2] if region else None
+    if not ll:
+        for f in _load("ne_10m_populated_places_simple"):
+            p = f["properties"]
+            if key in {_norm(p.get("name")), _norm(p.get("nameascii"))}:
+                ll = tuple(f["geometry"]["coordinates"][:2])
+                break
+    if not ll:
+        region = find_region(name)
+        ll = region[2] if region else None
+    ll = ll or _geo_region(name) or MACRO_REGIONS.get(key) or _wikipedia_search_coords(name)
+    _GEOCODED[key] = tuple(ll) if ll else None
+    return _GEOCODED[key]
 
 
 def _inside(pt, rings):
@@ -416,10 +600,15 @@ def spoken_at(words, name):
 def build_spec(plan, words, duration, era_year=None):
     """plan: {"target", "origin", "action", "light": [...]} (names only).
     Returns a render spec, or None when the target cannot be placed."""
-    target_ll = geocode(plan["target"])
+    # placed when the script was written (longform_llm._place_map), so a
+    # Wikipedia rate limit at render time cannot cost the map
+    target_ll = tuple(plan["ll"]) if plan.get("ll") else geocode(plan["target"])
     if not target_ll:
         print(f"   ↩️  Map skipped: no coordinates for {plan['target']!r}.")
         return None
+    if not plan.get("origin") and _is_region(plan["target"]):
+        return _region_spec(plan, target_ll, words, duration,
+                            modern=not era_year or era_year >= MODERN_BORDERS_FROM)
     # An origin that is a province or country ("from the Fujian coast")
     # strikes from that region's nearest edge to the target — its coast —
     # not from its middle, and is lit softly as where the action came from.
