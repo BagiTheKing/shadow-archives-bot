@@ -106,6 +106,40 @@ def github_models():
                 print(f"   {model}: {type(e).__name__}: {e}")
 
 
+def cloudflare():
+    acct, token = os.getenv("CF_ACCOUNT_ID", "").strip(), os.getenv("CF_API_TOKEN", "").strip()
+    if not (acct and token):
+        print("Cloudflare: CF_ACCOUNT_ID / CF_API_TOKEN not set")
+        return
+    import requests
+    base = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai"
+    hdr = {"Authorization": f"Bearer {token}"}
+    r = requests.get(base + "/models/search", headers=hdr, timeout=30,
+                     params={"task": "Text Generation", "per_page": 100})
+    print(f"Cloudflare text models: HTTP {r.status_code}")
+    names = []
+    try:
+        for m in r.json().get("result") or []:
+            ctx = next((p.get("value") for p in m.get("properties") or []
+                        if p.get("property_id") == "context_window"), None)
+            names.append(m["name"])
+            print(f"   {m['name']} (context {ctx})")
+    except Exception as e:
+        print(f"   listing unreadable: {r.text[:200]}")
+    for model in [n for n in names if any(k in n for k in (
+            "gpt-oss-120b", "llama-3.3-70b", "llama-4-scout", "mistral-small-3.1",
+            "qwen3", "deepseek-r1-distill-qwen-32b", "gemma-3"))][:6]:
+        try:
+            r = requests.post(base + "/v1/chat/completions", headers=hdr, timeout=90, json={
+                "model": model, "max_tokens": 30,
+                "messages": [{"role": "user", "content": "Reply with the single word OK."}]})
+            body = r.json()
+            text = ((body.get("choices") or [{}])[0].get("message") or {}).get("content")
+            print(f"   {model}: HTTP {r.status_code}: {str(text or body)[:120]!r}")
+        except Exception as e:
+            print(f"   {model}: {type(e).__name__}: {str(e)[:150]}")
+
+
 if __name__ == "__main__":
     which = sys.argv[1:] or ["gemini", "wikimedia", "github"]
     if "gemini" in which:
@@ -115,3 +149,5 @@ if __name__ == "__main__":
         wikimedia()
     if "github" in which:
         github_models()
+    if "cloudflare" in which:
+        cloudflare()

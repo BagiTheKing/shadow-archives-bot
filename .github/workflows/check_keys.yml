@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       which:
-        description: 'What to check: gemini wikimedia github'
+        description: 'What to check: gemini wikimedia github cloudflare'
         default: 'gemini wikimedia github'
 
 jobs:
@@ -28,4 +28,6 @@ jobs:
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python tools/check_keys.py ${{ inputs.which }}
