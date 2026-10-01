@@ -160,7 +160,8 @@ class FindStory(unittest.TestCase):
         M.pick_topic = lambda *a, **k: None
         M.build_story = lambda t, d, given=False: (self.built.append(t) or {"plan": {}})
         longform_llm._anchor_fits_niche = lambda t, story=False: "principle" not in t
-        longform_llm.idea_to_event = lambda pool, idea, avoid: "The Dreyfus affair (1894)"
+        longform_llm.idea_to_event = lambda pool, idea, avoid: (
+            "The Dreyfus affair (1894): the wrongful conviction and execution of Captain Dreyfus")
 
     def tearDown(self):
         import longform_llm

@@ -320,6 +320,11 @@ def build_story(topic, build_dir, given=False):
         print("⚠️ Story mode: no figure, no quote and a short timeline — this "
               "topic is an idea, not an event with a story.")
         return None
+    if not sheet["numbers"] and not sheet["quotes"] and len(sheet.get("people") or []) < 2:
+        # a timeline with nobody in it is not a story either: the first scout
+        # run queued one (wrong article, the strong models out of quota)
+        print("⚠️ Story mode: no figure, no quote and no named people — too thin to tell.")
+        return None
     if not sheet["numbers"] and not sheet["quotes"]:
         # Ideas are caught before research now (find_story.as_event): a full
         # timeline with no figure or quote is a weak model's sheet, not an
@@ -475,6 +480,10 @@ def find_story(lane, history, avoid=()):
         ev = idea_to_event(get_pool(), t,
                            (recent_titles(history, 20) if history else []) + sorted(avoid))
         if ev:
+            # the event's name only: the description after it is the model's
+            # own and was wrong on the first try ("the wrongful conviction
+            # and execution of Captain Dreyfus" — he was not executed)
+            ev = re.split(r"\s*[:—]\s", ev, maxsplit=1)[0].strip() or ev
             print(f"💡 Idea turned into its event: {t[:60]!r} -> {ev[:90]}")
         else:
             print(f"↩️  {t[:70]!r} reads as an idea and no event tells it — skipped.")

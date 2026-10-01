@@ -5,12 +5,15 @@ name: Topic Scout
 # then Wikipedia research, verified fact sheet and outline. The video runs take
 # the ready story from the topic-queue branch and spend their quota on writing.
 #
-# 05:10 UTC: on what is left of the previous Pacific day's free Gemini quota
-# (it resets ~07:00 UTC), and before the trend lane's 07:40 run.
+# 07:05 UTC: just after the free Gemini quota resets (07:00 UTC in summer
+# time), so the research is done by the strong models, and before the trend
+# lane's 07:40 run. The first runs, on the previous day's leftovers, got
+# weak models and thin fact sheets. The exact start comes from a routine;
+# this cron is the late backup.
 
 on:
   schedule:
-    - cron: '10 5 * * *'
+    - cron: '5 7 * * *'
   workflow_dispatch:
     inputs:
       lanes:
