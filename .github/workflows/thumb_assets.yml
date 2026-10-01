@@ -32,6 +32,7 @@ jobs:
         env:
           PEOPLE: ${{ inputs.people }}
           QUERIES: ${{ inputs.queries }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
         run: python tools/fetch_thumb_assets.py thumb_out
       - name: Push to the thumb-assets branch
         run: |

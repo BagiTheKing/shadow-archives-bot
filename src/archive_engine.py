@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import time
+import urllib.parse
 
 import requests
 from PIL import Image, ImageEnhance, ImageFilter
@@ -58,11 +59,40 @@ _last_request_at = 0.0
 RATE_LIMIT_BACKOFF = (4, 9, 16)
 
 
+# The owner's Wikimedia access token (WIKIMEDIA_TOKEN): requests made as a
+# logged-in user get far higher limits than anonymous ones, which ran out
+# while researching and placing maps. Sent to the wiki APIs only, not to
+# image downloads, and dropped for the run if Wikimedia ever refuses it.
+_WIKI_HOSTS = ("wikipedia.org", "wikimedia.org", "wikiquote.org", "wikidata.org")
+_wiki_token_ok = True
+
+
+def wiki_auth(url, headers=None):
+    """`headers` plus the Wikimedia token when `url` is a wiki API."""
+    headers = dict(headers or {})
+    token = os.getenv("WIKIMEDIA_TOKEN", "").strip()
+    host = urllib.parse.urlparse(url).netloc
+    if (token and _wiki_token_ok and host.endswith(_WIKI_HOSTS)
+            and not host.startswith("upload.")):
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def wiki_token_refused(status):
+    """Called with a wiki API's status: a refused token is not sent again."""
+    global _wiki_token_ok
+    if status in (401, 403) and _wiki_token_ok and os.getenv("WIKIMEDIA_TOKEN"):
+        _wiki_token_ok = False
+        print("⚠️ Wikimedia refused the access token — continuing anonymously.")
+        return True
+    return False
+
+
 def _polite_get(url, **kwargs):
     """A GET that respects the archives' rate limits: serialised, identified,
     and backing off when told to."""
     global _last_request_at
-    kwargs.setdefault("headers", HEADERS)
+    base_headers = kwargs.pop("headers", HEADERS)
     kwargs.setdefault("timeout", 60)
     for attempt, backoff in enumerate((0,) + RATE_LIMIT_BACKOFF):
         if backoff:
@@ -71,7 +101,9 @@ def _polite_get(url, **kwargs):
         if gap < DOWNLOAD_GAP_SECONDS:
             time.sleep(DOWNLOAD_GAP_SECONDS - gap)
         _last_request_at = time.time()
-        response = requests.get(url, **kwargs)
+        response = requests.get(url, headers=wiki_auth(url, base_headers), **kwargs)
+        if wiki_token_refused(response.status_code):
+            response = requests.get(url, headers=wiki_auth(url, base_headers), **kwargs)
         if response.status_code != 429:
             return response
     return response

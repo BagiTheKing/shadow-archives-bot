@@ -17,6 +17,7 @@ longform_llm._source_intro_quote.
 
 import json
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -32,9 +33,17 @@ MAX_QUOTE_WORDS = 40
 
 def _get(params: dict) -> dict:
     url = API + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-        return json.loads(r.read())
+    from archive_engine import wiki_auth, wiki_token_refused
+    req = urllib.request.Request(url, headers=wiki_auth(url, {"User-Agent": UA}))
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if not wiki_token_refused(e.code):
+            raise
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return json.loads(r.read())
 
 
 def _search_pages(topic: str, limit: int = MAX_PAGES):
