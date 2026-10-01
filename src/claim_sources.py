@@ -352,13 +352,17 @@ def build_index(parsed):
     return sents, idf
 
 
-def attach(scenes, parsed):
+def attach(scenes, parsed, sheet=None):
     """Sets scene["claim_source"] = {"label", "full"} on every scene whose
     narration matches a cited sentence; returns the distinct sources used,
     in order of first appearance (for the description)."""
     index = build_index(parsed)
     used, seen = [], set()
-    if not index[0]:
+    title = (parsed or {}).get("title") or ""
+    article = ({"label": f"Wikipedia: {title}", "full": f"Wikipedia, {title}"}
+               if title else None)
+    facts = _fact_keys(sheet)
+    if not index[0] and not article:
         return used
     for s in scenes:
         best = None
@@ -367,9 +371,47 @@ def attach(scenes, parsed):
             if got:
                 best = got
                 break
+        if not best and article and _states_fact(s.get("narration") or "", facts):
+            # no footnote matched clearly, but the line states a fact from
+            # the fact sheet, and every fact sheet item is checked against
+            # this article: the article is its source (2026-10-01: only 3 of
+            # 67 scenes matched a footnote, so almost nothing showed)
+            best = article
         if best:
             s["claim_source"] = best
-            if best["full"] not in seen:
+            if best["full"] not in seen and best is not article:
                 seen.add(best["full"])
                 used.append(best)
     return used
+
+
+_MONTHS = ("january february march april may june july august september "
+           "october november december").split()
+
+
+def _fact_keys(sheet):
+    """Names and years the fact sheet states."""
+    keys = set()
+    for t in (sheet or {}).get("timeline") or []:
+        keys.update(re.findall(r"\b(1\d{3}|20\d{2})\b", str(t.get("date") or "")))
+        for p in t.get("people") or []:
+            w = [x for x in re.findall(r"[A-Za-z]+", p) if len(x) > 3]
+            if w:
+                keys.add(w[-1].lower())
+    for n in (sheet or {}).get("numbers") or []:
+        for v in re.findall(r"\d[\d,]*", str(n.get("value") or "")):
+            keys.update({v, v.replace(",", "")})
+    return keys
+
+
+def _states_fact(line, facts):
+    """A line that states something checkable: a year, a date, a figure
+    from the sheet, or a sheet person together with a date or a number."""
+    low = line.lower()
+    has_date = bool(re.search(r"\b(1\d{3}|20\d{2})\b", line)) or any(m in low for m in _MONTHS)
+    has_num = bool(re.search(r"\d", line)) or bool(re.search(
+        r"\b(hundred|thousand|million)s?\b", low))
+    names = any(k in low for k in facts if k.isalpha())
+    figure = any(n.replace(",", "") in facts or n in facts
+                 for n in re.findall(r"\d[\d,]*", line))
+    return has_date or figure or (names and has_num)

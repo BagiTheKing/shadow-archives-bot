@@ -258,11 +258,33 @@ def verify_sheet(sheet, article_text):
     return out, dropped
 
 
+FACT_SHEET_CHARS = 40000
+
+
+def compact_article(text, limit=FACT_SHEET_CHARS):
+    """The article cut to `limit` characters for the fact-sheet request:
+    the lead in full, then the paragraphs that carry dates, in order, until
+    the limit. Most free models refuse a whole long article ("request too
+    large", 413): on 2026-10-01 the Gulf War page (116,000 characters) lost
+    the trend video its Piers Morgan topic that way. The sheet is still
+    verified against the full article."""
+    if len(text) <= limit:
+        return text
+    paras = [p for p in text.split("\n") if p.strip()]
+    out, size = [], 0
+    for i, p in enumerate(paras):
+        keep = i < 6 or re.search(r"\b(1\d{3}|20\d{2})\b", p)
+        if keep and size + len(p) + 1 <= limit:
+            out.append(p)
+            size += len(p) + 1
+    return "\n".join(out)
+
+
 def fact_sheet(pool, topic, article, call):
     """The verified fact sheet for this story, or None."""
     prompt = (
         f"Story: {topic}\n\nSOURCE ARTICLE (Wikipedia, \"{article['title']}\"):\n"
-        f"{article['text']}\n\n"
+        f"{compact_article(article['text'])}\n\n"
         "Extract a FACT SHEET for a documentary, using ONLY this article. "
         "Copy names, dates and figures exactly as the article writes them.\n"
         "- timeline: 25-45 dated events in order, from the first cause to the "

@@ -350,7 +350,7 @@ def build_story(topic, build_dir, given=False):
             "era_year": years.most_common(1)[0][0] if years else None}
 
 
-def resolve_topic(lane: str, history=None):
+def resolve_topic(lane: str, history=None, extra_avoid=()):
     """Chooses this run's topic.
     Returns (topic, enforce_history, from_short, era_year).
 
@@ -396,7 +396,8 @@ def resolve_topic(lane: str, history=None):
         # for no benefit — _preferred_model is a separate global that
         # already persists across calls regardless.
         pool = get_pool()
-        avoid_titles = recent_titles(history, 20)
+        # extra_avoid: topics this run already failed to build a story from
+        avoid_titles = recent_titles(history, 20) + list(extra_avoid or ())
 
         # Checked first, ahead of the trend feeds below: a live political
         # talk show can have a heated, highly-searched debate up hours
@@ -523,6 +524,22 @@ def main():
                     story = build_story(topic, BUILD_DIR)
                 else:
                     story = None
+            if not story and not story_topic and lane == "timely":
+                # The watched channel is the point of this lane: before the
+                # general list, one more event for the same theme (the
+                # 2026-10-01 run fell back to Rommel when the Gulf War page
+                # could not be read).
+                print("↩️  The trend topic gave no story — asking once more for "
+                      "another event on the watched channel's theme.")
+                again, enforce_history, from_short, era_year = resolve_topic(
+                    lane, history, extra_avoid=sorted(tried))
+                if again and again not in tried:
+                    tried.add(again)
+                    event = as_event(again)
+                    if event:
+                        topic = event
+                        tried.add(topic)
+                        story = build_story(topic, BUILD_DIR)
             while not story and not story_topic and len(tried) < 6:
                 # An automatic lane can pick another topic: its first pick may
                 # be an idea rather than an event (see build_story). A named
@@ -589,7 +606,7 @@ def main():
         # matches a cited sentence of the article carries that footnote's
         # source on screen; all of them are listed in the description
         from claim_sources import attach
-        script["claim_sources"] = attach(scenes, story["sources"])
+        script["claim_sources"] = attach(scenes, story["sources"], story.get("sheet"))
         script["source_article"] = {"title": story["sources"].get("title"),
                                     "url": story["sources"].get("url")}
         print(f"📎 {sum(1 for s in scenes if s.get('claim_source'))} of "

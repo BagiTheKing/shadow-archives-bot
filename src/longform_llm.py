@@ -3000,6 +3000,23 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print("🛑 Quota gone before the date stamps; publishing without them.")
     except Exception as e:
         print(f"⚠️ Date stamps skipped ({type(e).__name__}: {e}).")
+    # Maps never depend on that request either: when it placed none (it came
+    # back empty on the 2026-10-01 Rommel video, a story across North Africa,
+    # Normandy and Germany), the outline's own places are mapped, each where
+    # the narration first speaks it, at most four, one per chapter.
+    if story and not any(s.get("map") for c in chapters for s in c["scenes"]):
+        places = [p for p in (story.get("plan") or {}).get("places") or [] if p]
+        if places:
+            print(f"🗺️  No map from the maps request — mapping the story's places: "
+                  f"{', '.join(places)}.")
+        for place in places:
+            if sum(1 for c in chapters for s in c["scenes"] if s.get("map")) >= 4:
+                break
+            try:
+                _place_map({"target": place, "origin": "", "action": "mark", "light": []},
+                           chapters, topic, first=2, anywhere=True)
+            except Exception as e:
+                print(f"   ↩️  Map of {place!r} skipped ({type(e).__name__}: {e}).")
     # Cast cards never depend on that request: without it (quota) they are
     # still placed, the decision maker read from the decision chapter.
     if story and not any(s.get("dossier") for c in chapters for s in c["scenes"]):
