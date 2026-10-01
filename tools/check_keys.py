@@ -56,7 +56,44 @@ def wikimedia():
         print(f"   map place {name!r}: {m.geocode(name)}")
 
 
+def github_models():
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        print("GitHub Models: no GITHUB_TOKEN")
+        return
+    import requests
+    r = requests.get("https://models.github.ai/catalog/models", timeout=30,
+                     headers={"Authorization": f"Bearer {token}",
+                              "Accept": "application/vnd.github+json"})
+    print(f"GitHub Models catalogue: HTTP {r.status_code}")
+    if r.status_code != 200:
+        print("   " + r.text[:200])
+        return
+    for m in r.json():
+        if "chat-completion" not in str(m.get("supported_output_modalities", "")) and \
+                "text" not in str(m.get("supported_output_modalities", "")):
+            continue
+        lim = m.get("limits") or {}
+        print(f"   {m.get('id')}: tier {m.get('rate_limit_tier')}, "
+              f"in {lim.get('max_input_tokens')}, out {lim.get('max_output_tokens')}")
+    from openai import OpenAI
+    client = OpenAI(base_url="https://models.github.ai/inference", api_key=token)
+    for model in ("openai/gpt-4.1", "deepseek/DeepSeek-V3-0324", "openai/gpt-4.1-mini"):
+        try:
+            got = client.chat.completions.create(
+                model=model, max_tokens=20,
+                messages=[{"role": "user", "content": "Reply with the single word OK."}])
+            print(f"   {model}: answered {got.choices[0].message.content.strip()[:20]!r}")
+        except Exception as e:
+            print(f"   {model}: FAILED — {str(e)[:200]}")
+
+
 if __name__ == "__main__":
-    gemini("GEMINI_API_KEY")
-    gemini("GEMINI_API_KEY_2")
-    wikimedia()
+    which = sys.argv[1:] or ["gemini", "wikimedia", "github"]
+    if "gemini" in which:
+        gemini("GEMINI_API_KEY")
+        gemini("GEMINI_API_KEY_2")
+    if "wikimedia" in which:
+        wikimedia()
+    if "github" in which:
+        github_models()

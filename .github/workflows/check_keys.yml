@@ -4,10 +4,17 @@ name: Check Keys
 # without printing them. A few model requests, nothing uploaded.
 on:
   workflow_dispatch:
+    inputs:
+      which:
+        description: 'What to check: gemini wikimedia github'
+        default: 'gemini wikimedia github'
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      models: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -20,4 +27,5 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
-        run: python tools/check_keys.py
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/check_keys.py ${{ inputs.which }}
