@@ -2972,6 +2972,11 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     meta = {}
     try:
         meta = _packaging_call(pool, topic, full_text, story=story)
+        if not meta.get("title"):
+            # an empty or placeholder reply: once more, on another model
+            print("   ↩️  Packaging reply had no real title — asking another model.")
+            meta = _packaging_call(pool, topic, full_text, story=story,
+                                   skip={_last_model} if _last_model else ()) or meta
         # One correction pass, and only when the title is the problem. The
         # published long-form titles include "Soviet Invasion of Kuril Islands
         # 1945: The Hidden WW2 Battle" — a phrase that would fit any battle
@@ -3004,7 +3009,12 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             print(f"   ↩️  Cast cards skipped ({type(e).__name__}: {e}).")
 
     words = sum(len(s["narration"].split()) for c in chapters for s in c["scenes"])
-    title = (meta.get("title") or topic[:70]).strip()
+    # without a real title, the topic's own name ("Rommel's forced suicide
+    # (1944)"), cut at a word, never a sentence chopped mid-word
+    fallback = re.split(r"[,:;—]", topic)[0].strip()
+    if len(fallback) > 70:
+        fallback = fallback[:70].rsplit(" ", 1)[0]
+    title = (meta.get("title") or fallback).strip()
 
     script = {
         "topic": topic,
@@ -3042,7 +3052,29 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     return script
 
 
-def _packaging_call(pool, topic, full_text, retitle=False, story=None):
+def _real_meta(meta):
+    """The packaging reply without placeholder echoes: the 2026-10-01 trend
+    video went up titled "...", its description and spoken closing question
+    "..." too, because one weak model copied the output template back. A
+    text field needs real words; a list keeps only real items."""
+    def real(v):
+        if not isinstance(v, str):
+            return False
+        bare = v.replace("...", " ").replace("\u2026", " ")
+        return len(re.findall(r"[A-Za-z]", bare)) >= 3 or len(re.findall(r"\d", bare)) >= 2
+    out = {}
+    for k, v in (meta or {}).items():
+        if isinstance(v, str):
+            if real(v):
+                out[k] = v
+        elif isinstance(v, list):
+            out[k] = [x for x in v if not isinstance(x, str) or real(x)]
+        else:
+            out[k] = v
+    return out
+
+
+def _packaging_call(pool, topic, full_text, retitle=False, story=None, skip=()):
     """Title, description, tags and thumbnail text, written against the finished
     script rather than guessed up front.
 
@@ -3069,7 +3101,7 @@ def _packaging_call(pool, topic, full_text, retitle=False, story=None):
                 "title, not a rewording: state the specific thing that went wrong "
                 "and what it cost, in words someone outside the subject understands."
                 "\n")
-    return _call(pool,
+    return _real_meta(_call(pool,
                  "You write YouTube metadata. Output only JSON, no fences.",
                  f"This is the narration of a documentary about:\n{topic}\n\n"
                  f"{full_text[:3000]}\n\n"
@@ -3143,7 +3175,7 @@ def _packaging_call(pool, topic, full_text, retitle=False, story=None):
                  # Same headroom logic as the anchor call: reasoning models
                  # think inside max_tokens, and a truncated reply costs a
                  # request from the daily budget and returns nothing.
-                 max_tokens=2500) or {}
+                 max_tokens=2500, skip=skip) or {})
 
 
 # Silence deliberately left at a chapter seam. Not dead air — dead air is what
