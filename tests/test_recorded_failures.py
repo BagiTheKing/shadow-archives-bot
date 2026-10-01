@@ -292,3 +292,24 @@ class Maps(unittest.TestCase):
             self.ME.geocode = self.ME.geocode.__defaults__[0]
         self.assertEqual(spec["targets"][0]["ll"], (23.96, 32.08))
         self.assertEqual(calls, [])
+
+
+class LastResort(unittest.TestCase):
+    """Cloudflare shares its free allowance with the AI images: it is tried
+    once, after every other model of the call."""
+
+    def setUp(self):
+        fresh()
+
+    def test_cloudflare_tried_last(self):
+        pool = Pool({"cloudflare/@cf/x": '{"ok": "cf"}', "gemini/g": Exception("Error code: 503"),
+                     "groq/a": Exception("Error code: 503"), "zhipu/z": '{"ok": "zhipu"}'})
+        pool.provider_for = lambda m: m.split("/")[0]
+        order = L._order_models(pool)
+        self.assertEqual(order[-1], "cloudflare/@cf/x")
+        self.assertEqual(L._call(pool, "s", "u", 100, expect={"ok": str})["ok"], "zhipu")
+
+    def test_cloudflare_answers_when_all_else_fails(self):
+        pool = Pool({"cloudflare/@cf/x": '{"ok": "cf"}', "gemini/g": Exception("Error code: 503"),
+                     "groq/a": Exception("Error code: 503")})
+        self.assertEqual(L._call(pool, "s", "u", 100, expect={"ok": str})["ok"], "cf")

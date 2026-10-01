@@ -185,6 +185,23 @@ def zhipu_available() -> bool:
     return bool(os.getenv("ZHIPU_API_KEY"))
 
 
+# Cloudflare Workers AI, on the account the AI images already use: big free
+# models with very long inputs (checked 2026-10-01: DeepSeek V4 Flash and
+# GLM-5.3 Flash take a million tokens, Mistral Small 128k). Its free daily
+# allowance is SHARED with the images, so it is the last resort of the chain
+# (longform_llm._order_models), tried only after every other model failed.
+# CLOUDFLARE_TEXT=0 turns it off; CLOUDFLARE_MODELS overrides the list.
+CLOUDFLARE_MODELS = ["@cf/deepseek-ai/deepseek-v4-flash-0731",
+                     "@cf/zai-org/glm-5.3-flash",
+                     "@cf/mistralai/mistral-small-3.1-24b-instruct"]
+LAST_RESORT_PROVIDERS = ("cloudflare",)
+
+
+def cloudflare_available() -> bool:
+    return bool(os.getenv("CF_ACCOUNT_ID") and os.getenv("CF_API_TOKEN")
+                and os.getenv("CLOUDFLARE_TEXT", "1") != "0")
+
+
 def anthropic_available() -> bool:
     return bool(os.getenv("ANTHROPIC_API_KEY"))
 
@@ -556,6 +573,16 @@ def get_pool() -> ModelPool:
         for model in get_free_models():
             entries.append((model, client, "openrouter"))
 
+    if cloudflare_available():
+        override = os.getenv("CLOUDFLARE_MODELS")
+        models = ([m.strip() for m in override.split(",") if m.strip()]
+                  if override else CLOUDFLARE_MODELS)
+        client = OpenAI(base_url="https://api.cloudflare.com/client/v4/accounts/"
+                                 f"{os.getenv('CF_ACCOUNT_ID')}/ai/v1",
+                        api_key=os.getenv("CF_API_TOKEN"))
+        for model in models:
+            entries.append((model, client, "cloudflare"))
+
     # Last, and only if a key is set: this is the one tier that bills.
     if anthropic_available():
         client = anthropic_client()
@@ -572,6 +599,7 @@ _PROVIDERS = (
     ("cerebras", cerebras_available, "free"),
     ("zhipu", zhipu_available, "free"),
     ("openrouter", openrouter_available, "free"),
+    ("cloudflare", cloudflare_available, "free"),
     ("anthropic", anthropic_available, "paid"),
 )
 

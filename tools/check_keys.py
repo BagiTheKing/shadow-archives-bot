@@ -126,12 +126,11 @@ def cloudflare():
             print(f"   {m['name']} (context {ctx})")
     except Exception as e:
         print(f"   listing unreadable: {r.text[:200]}")
-    for model in [n for n in names if any(k in n for k in (
-            "gpt-oss-120b", "llama-3.3-70b", "llama-4-scout", "mistral-small-3.1",
-            "qwen3", "deepseek-r1-distill-qwen-32b", "gemma-3"))][:6]:
+    from llm_provider import CLOUDFLARE_MODELS
+    for model in CLOUDFLARE_MODELS:
         try:
             r = requests.post(base + "/v1/chat/completions", headers=hdr, timeout=90, json={
-                "model": model, "max_tokens": 30,
+                "model": model, "max_tokens": 400,
                 "messages": [{"role": "user", "content": "Reply with the single word OK."}]})
             body = r.json()
             text = ((body.get("choices") or [{}])[0].get("message") or {}).get("content")

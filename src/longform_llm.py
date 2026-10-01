@@ -569,7 +569,7 @@ _last_model = None
 # What a free model will take in one request, in tokens (prompt plus reply
 # room). Conservative starting points; a "request too large" answer lowers a
 # model's own figure for the rest of the run (_size_limits).
-PROVIDER_REQUEST_TOKENS = {"gemini": 900_000, "anthropic": 180_000,
+PROVIDER_REQUEST_TOKENS = {"gemini": 900_000, "anthropic": 180_000, "cloudflare": 120_000,
                            "zhipu": 120_000, "openrouter": 30_000,
                            "groq": 30_000, "cerebras": 30_000}
 _size_limits = {}
@@ -669,13 +669,18 @@ def _order_models(pool, need=0):
     """Preferred model first, then the rest round-robined across providers,
     capped so one call cannot walk the entire list. Models this request is
     too large for are left out before the cap, so they never use a slot."""
+    from llm_provider import LAST_RESORT_PROVIDERS
     models = [m for m in _usable_models(pool.models) if not need or _fits(pool, m, need)]
+    # Cloudflare shares its free allowance with the AI images: one of its
+    # models is tried, after every other model of this call has failed.
+    last = [m for m in models if pool.provider_for(m) in LAST_RESORT_PROVIDERS]
+    models = [m for m in models if m not in last]
     if _preferred_model and _preferred_model in models:
         rest = [m for m in models if m != _preferred_model]
         ordered = [_preferred_model] + _interleave_by_provider(rest, pool)
     else:
         ordered = _interleave_by_provider(models, pool)
-    return ordered[:MAX_MODELS_PER_CALL]
+    return ordered[:MAX_MODELS_PER_CALL] + last[:1]
 
 
 def _reply_text(response):
