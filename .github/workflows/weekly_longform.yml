@@ -68,6 +68,7 @@ jobs:
     # branch (step "Register thumbnails for rotation")
     permissions:
       contents: write
+      actions: read
     # The repo is private, so minutes are metered against 2,000/month. A healthy
     # run is ~60 min; this ceiling stops a hung ffmpeg or a Pollinations
     # rate-limit spiral from quietly eating a fifth of the monthly budget.
@@ -150,6 +151,24 @@ jobs:
         run: |
           git fetch -q origin run-cache && git worktree add -q cache origin/run-cache || mkdir -p cache
 
+      # A render the last run made but could not upload (run_cache.py): its
+      # files were kept as an artifact, and this run uploads them.
+      - name: Find last run's render
+        id: render
+        continue-on-error: true
+        run: |
+          python -c "import json; r=json.load(open('cache/encore/state.json')).get('rendered') or {}; print('run_id=' + str(r.get('run_id') or ''))" >> "$GITHUB_OUTPUT" || true
+
+      - name: Restore last run's render
+        if: steps.render.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: render-encore
+          path: restore
+          run-id: ${{ steps.render.outputs.run_id }}
+          github-token: ${{ github.token }}
+
       # Stories researched ahead by the daily scout (topic_scout.yml): the run
       # takes the next one instead of finding and researching its own topic.
       - name: Fetch researched stories
@@ -162,6 +181,7 @@ jobs:
         env:
           RUN_CACHE_DIR: cache/encore
           STORY_QUEUE_DIR: queue
+          RESTORE_DIR: restore
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # Optional and the biggest script-quality upgrade available: a free
           # Google AI Studio key (https://aistudio.google.com/apikey) switches
@@ -232,6 +252,23 @@ jobs:
           LONGFORM_CLIPS: '2'
           LONGFORM_TOPIC_OFFSET: ${{ inputs.topic_offset || '-7' }}
         run: python src/longform_main.py
+
+      # Rendered but not uploaded: the render is kept for the next run, which
+      # uploads it instead of writing and rendering the video again.
+      - name: Keep the render for the next run
+        if: always() && hashFiles('build/rendered.json') != '' && hashFiles('build/uploaded.json') == ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-encore
+          path: |
+            build/final_longform.mp4
+            build/thumbnail.jpg
+            build/thumbnails/
+            build/captions.srt
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 4
 
       - name: Save progress
         if: always()

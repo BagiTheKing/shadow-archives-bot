@@ -93,8 +93,9 @@ without the owner's say-so.
     searchable name plus a stake, saying something different from the
     thumbnail; neutral about present-day conflicts.
 
-17. **A failed run is resumed, not repeated.** The story and every finished
-    chapter are saved on the run-cache branch; the next run of that lane
+17. **A failed run is resumed, not repeated.** The story, every finished
+    chapter, the finished script and, if the upload failed, the render (kept
+    4 days as an artifact) are saved on the run-cache branch; the next run of that lane
     carries on from them (at most twice, within 4 days) and a finished upload
     clears them. Automatic lanes skip a topic that reads as an idea rather
     than an event.

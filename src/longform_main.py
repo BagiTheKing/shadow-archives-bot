@@ -546,6 +546,8 @@ def main():
             print(f"♻️  Resuming the last run's story: {topic[:90]} "
                   f"({len(saved.get('chapters') or {})} chapter(s) already written).")
             run_cache.mark_resumed()
+            if saved.get("rendered") and upload_restored(saved):
+                return
         elif story_topic:
             # A named story (e.g. the Six-Day War remake): no channel watch,
             # no anchor — the topic is given, story mode tells it.
@@ -593,9 +595,17 @@ def main():
         if stage == "outline":
             print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")
             return
-        script = generate_longform_script(topic=topic,
-                                          enforce_history=enforce_history,
-                                          era_year=era_year, story=story)
+        script = saved.get("script") if resumed else None
+        if script:
+            # every LLM step (chapters, packaging, quotes, maps) already done
+            print(f"♻️  Script already finished last run: {script.get('title')!r} "
+                  "— going straight to voice, visuals and render.")
+        else:
+            script = generate_longform_script(topic=topic,
+                                              enforce_history=enforce_history,
+                                              era_year=era_year, story=story)
+            if script:
+                run_cache.save_stage(topic, "script", script)
     except QuotaExhausted as e:
         print(f"\n❌ Halted: {e}")
         print("   OpenRouter's free tier allows 50 requests a day across all "
@@ -718,6 +728,19 @@ def main():
     if not os.path.exists(caption_path):
         caption_path = None
 
+    # The render is saved before the upload: if the upload fails (YouTube's
+    # daily quota, a network error) the workflow keeps these files as an
+    # artifact and the next run uploads them without writing or rendering.
+    rendered = {"title": title, "description": description, "tags": tags,
+                "first_comment": first_comment, "run_id": os.getenv("GITHUB_RUN_ID"),
+                "video": os.path.relpath(video_path, BUILD_DIR),
+                "thumbnail": os.path.relpath(thumb_path, BUILD_DIR) if thumb_path else None,
+                "captions": os.path.relpath(caption_path, BUILD_DIR) if caption_path else None}
+    if os.getenv("SKIP_UPLOAD") != "1":
+        run_cache.save_stage(topic, "rendered", rendered)
+        with open(os.path.join(BUILD_DIR, "rendered.json"), "w", encoding="utf-8") as f:
+            json.dump(rendered, f)
+
     video_id = None
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — rendered but not uploaded (dry run).")
@@ -745,6 +768,45 @@ def main():
     publish_clips(scenes, script, video_id)
 
     print("🎉 Long-form pipeline complete.")
+
+
+def upload_restored(saved):
+    """Uploads the render a previous run of this lane made but could not
+    upload (its files restored to RESTORE_DIR by the workflow). False when
+    the files are not there: the run then renders again from the saved script."""
+    import run_cache
+    r = saved["rendered"]
+    root = os.getenv("RESTORE_DIR", "restore")
+    video = os.path.join(root, r.get("video") or "")
+    if not r.get("video") or not os.path.exists(video):
+        print("↩️  Last run's render is not available any more — rendering again.")
+        return False
+    print(f"♻️  Uploading last run's finished render: {r['title']}")
+    pick = lambda k: (os.path.join(root, r[k]) if r.get(k)
+                      and os.path.exists(os.path.join(root, r[k])) else None)
+    if os.getenv("SKIP_UPLOAD") == "1":
+        print("⏭️ SKIP_UPLOAD=1 — not uploaded (dry run).")
+        return True
+    video_id = upload_video_to_youtube(video, r["title"], r["description"], r["tags"],
+                                       thumbnail_path=pick("thumbnail"),
+                                       first_comment=r.get("first_comment"),
+                                       caption_path=pick("captions"),
+                                       playlist_title=SERIES_NAME,
+                                       playlist_description=PLAYLIST_DESCRIPTION)
+    if not video_id:
+        raise SystemExit("❌ Upload failed again — the render stays saved for the next run.")
+    run_cache.clear()
+    os.makedirs(BUILD_DIR, exist_ok=True)
+    with open(os.path.join(BUILD_DIR, "uploaded.json"), "w", encoding="utf-8") as f:
+        json.dump({"video_id": video_id}, f)
+    thumbs = os.path.join(root, "thumbnails")
+    if os.path.isdir(thumbs):
+        shutil.copytree(thumbs, os.path.join(BUILD_DIR, "thumbnails"), dirs_exist_ok=True)
+    # The Shorts need the scene files the render was made from, which are
+    # not kept: this video goes up without its two clips.
+    print("ℹ️  Shorts from this video skipped (resumed upload).")
+    print("🎉 Long-form pipeline complete.")
+    return True
 
 
 def publish_clips(scenes, script, video_id):

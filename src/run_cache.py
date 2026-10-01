@@ -5,8 +5,11 @@ starting over and paying for the same research and chapters again.
 
 What is kept, in RUN_CACHE_DIR/state.json (the workflow keeps that folder on
 the `run-cache` branch, one folder per lane):
-- the topic and its story (fact sheet, outline, claim sources), and
-- every chapter already written, keyed by its place in the outline.
+- the topic and its story (fact sheet, outline, claim sources),
+- every chapter already written, keyed by its place in the outline,
+- the finished script (packaging, quotes, maps: every LLM step done), and
+- once rendered, the upload's metadata and the run whose artifact holds the
+  render, so a failed upload is retried without writing or rendering again.
 
 A finished upload clears it. Progress older than MAX_AGE_DAYS is ignored:
 the story it belongs to may no longer be the right one to tell. Without
@@ -92,6 +95,26 @@ def chapter(topic, c_index, heading):
         return None
     ch = state.get("chapters", {}).get(str(c_index))
     return ch if ch and ch.get("heading") == heading else None
+
+
+def save_stage(topic, name, value):
+    """A finished stage of this story ("script", "rendered")."""
+    try:
+        state = load(fresh_check=False)
+        if not state or state["topic"] != topic:
+            return
+        state[name] = value
+        _write(state)
+        print(f"💾 Progress saved: {name}.")
+    except Exception as e:
+        print(f"   ↩️  Could not save {name} ({type(e).__name__}: {e}).")
+
+
+def stage(topic, name):
+    state = load(fresh_check=False)
+    if not state or state["topic"] != topic:
+        return None
+    return state.get(name)
 
 
 def mark_resumed():
