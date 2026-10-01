@@ -297,8 +297,8 @@ def build_story(topic, build_dir, given=False):
     import longform_llm as _llm
     sheet, tried_sheet = None, set()
     for attempt in range(2):
-        def scall(p, system, user, max_tokens):
-            return _call(p, system, user, max_tokens=max_tokens, skip=tried_sheet)
+        def scall(p, system, user, max_tokens, **kw):
+            return _call(p, system, user, max_tokens=max_tokens, skip=tried_sheet, **kw)
         got = sm.fact_sheet(pool, topic, article, scall)
         if _llm._last_model:
             tried_sheet.add(_llm._last_model)
@@ -323,8 +323,8 @@ def build_story(topic, build_dir, given=False):
     # outline must not cost the whole story (it did on the fourth run).
     tried, plan = set(), None
     for attempt in range(3):
-        def call(p, system, user, max_tokens):
-            return _call(p, system, user, max_tokens=max_tokens, skip=tried)
+        def call(p, system, user, max_tokens, **kw):
+            return _call(p, system, user, max_tokens=max_tokens, skip=tried, **kw)
         plan = sm.outline(pool, topic, sheet, call)
         if _llm._last_model:
             tried.add(_llm._last_model)

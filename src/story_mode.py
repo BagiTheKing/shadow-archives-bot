@@ -119,7 +119,8 @@ def article_queries(pool, topic, call):
                     f"Topic: {topic}\n\nGive up to 3 exact English Wikipedia "
                     "article titles for the main event this topic is about, best "
                     "first (e.g. \"Six-Day War\", \"Chernobyl disaster\").\n"
-                    'Output ONLY JSON: {"titles": ["..."]}', max_tokens=800)
+                    'Output ONLY JSON: {"titles": ["..."]}', max_tokens=800,
+                    expect={"titles": list})
         queries = [t.strip() for t in (data or {}).get("titles") or []
                    if isinstance(t, str) and 3 <= len(t.strip()) <= 80
                    and "..." not in t][:3]
@@ -310,7 +311,8 @@ def fact_sheet(pool, topic, article, call):
         '"numbers": [{"value": "", "what": ""}], "quotes": [{"text": "", '
         '"speaker": ""}], "legacy": [{"year": "", "what": ""}]}')
     data = call(pool, "You extract facts from a source text. Never add "
-                "anything. Output only JSON.", prompt, max_tokens=8000)
+                "anything. Output only JSON.", prompt, max_tokens=8000,
+                expect={"timeline": ("list", 8)})
     if not isinstance(data, dict) or not data.get("timeline"):
         return None
     sheet, dropped = verify_sheet(data, article["text"])
@@ -383,6 +385,20 @@ def fix_roles(chapters):
         c["role"] = ("open" if i == 0 else "close" if i == n - 1 else
                      "pivot" if i == pivot else "build" if i < pivot else "drive")
     return chapters
+
+
+def _outline_problem(data):
+    """What a usable outline reply needs, checked by the gateway so a bad one
+    is asked of another model at once (it used to cost one of the outline's
+    three attempts)."""
+    ch = data.get("chapters") if isinstance(data, dict) else None
+    if not isinstance(ch, list) or not (5 <= len(ch) <= 8):
+        return f"{len(ch) if isinstance(ch, list) else 0} chapters, 5-8 needed"
+    if any(not isinstance(c, dict) or not c.get("title") or not c.get("beats") for c in ch):
+        return "a chapter without title or beats"
+    if not isinstance(data.get("cast"), list) or not data["cast"]:
+        return "no cast"
+    return None
 
 
 def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
@@ -470,7 +486,7 @@ def outline(pool, topic, sheet, call, total_words=STORY_WORDS):
         '"span": "", "pov": [""], "role": "open|build|pivot|drive|close", "bridge": "", "moment": "", '
         '"beats": [""], "words": 0, "hook": ""}]}')
     data = call(pool, "You plan documentary stories. Output only JSON.",
-                prompt, max_tokens=5000)
+                prompt, max_tokens=5000, expect=_outline_problem)
     chapters = (data or {}).get("chapters") if isinstance(data, dict) else None
     if not chapters or not (5 <= len(chapters) <= 8):
         print(f"   ↩️  Outline had {len(chapters or [])} chapter(s); 5-8 needed.")

@@ -559,10 +559,117 @@ def _interleave_by_provider(models, pool):
 _last_model = None
 
 
-def _order_models(pool):
+# ---------------------------------------------------------------------------
+# The gateway (2026-10-01): every request is checked on the way out (does the
+# prompt fit this model?) and every reply on the way back (is it real?). It
+# replaces the one-off patches each step used to carry: a "..." title, an
+# empty maps list, a 116,000-character article sent to models that refuse it.
+# ---------------------------------------------------------------------------
+
+# What a free model will take in one request, in tokens (prompt plus reply
+# room). Conservative starting points; a "request too large" answer lowers a
+# model's own figure for the rest of the run (_size_limits).
+PROVIDER_REQUEST_TOKENS = {"gemini": 900_000, "anthropic": 180_000,
+                           "zhipu": 120_000, "openrouter": 30_000,
+                           "groq": 30_000, "cerebras": 30_000}
+_size_limits = {}
+_junk_replies = {}
+
+
+def _request_tokens(system, user, max_tokens):
+    """A rough token count for a request: ~3.5 characters a token, plus the
+    reply room the free tiers count against the same limit."""
+    return int((len(system or "") + len(user or "")) / 3.5) + min(int(max_tokens or 0), 4000)
+
+
+def _fits(pool, model, need):
+    limit = _size_limits.get(model) or PROVIDER_REQUEST_TOKENS.get(pool.provider_for(model), 30_000)
+    return need <= limit
+
+
+def _is_too_large(err):
+    low = err.lower()
+    return ("413" in err or "request too large" in low or "context length" in low
+            or "maximum context" in low or "too many tokens" in low
+            or "reduce the length" in low)
+
+
+def _placeholder(text):
+    """A template echo rather than an answer: "...", "…", "[[phrase]]"."""
+    bare = text.replace("...", " ").replace("\u2026", " ")
+    return (("..." in text or "\u2026" in text) and len(re.findall(r"[A-Za-z0-9]", bare)) < 3) \
+        or "[[phrase]]" in text
+
+
+def _first_placeholder(data, path=""):
+    if isinstance(data, str):
+        return path or "reply" if _placeholder(data) else None
+    if isinstance(data, dict):
+        for k, v in data.items():
+            got = _first_placeholder(v, f"{path}.{k}" if path else k)
+            if got:
+                return got
+    if isinstance(data, list):
+        for i, v in enumerate(data):
+            got = _first_placeholder(v, f"{path}[{i}]")
+            if got:
+                return got
+    return None
+
+
+def _chapter_reply_problem(data):
+    """A chapter reply needs segments, each with narration and an image
+    prompt; the chapter checks (length, simplicity, structure) come after."""
+    segs = data.get("segments") if isinstance(data, dict) else None
+    if not isinstance(segs, list) or not segs:
+        return "no segments"
+    for i, sg in enumerate(segs):
+        if not isinstance(sg, dict) or not isinstance(sg.get("narration"), str) \
+                or len(sg["narration"].split()) < 3:
+            return f"segment {i} has no narration"
+    return None
+
+
+def _reply_problem(data, expect=None):
+    """Why a parsed reply cannot be used, or None. Every reply is checked for
+    template echoes; `expect` adds what this step needs: a callable returning
+    the problem, or {key: rule} where rule is str (a real string), list (a
+    non-empty list), ("list", n) (at least n items), dict or int."""
+    if data is None:
+        return "no JSON"
+    where = _first_placeholder(data)
+    if where:
+        return f"placeholder text in {where}"
+    if expect is None:
+        return None
+    if callable(expect):
+        return expect(data)
+    if not isinstance(data, dict):
+        return "not a JSON object"
+    for key, rule in expect.items():
+        v = data.get(key)
+        if rule is str and not (isinstance(v, str) and len(re.findall(r"[A-Za-z0-9]", v)) >= 2):
+            return f"no {key}"
+        if rule is list and not (isinstance(v, list) and v):
+            return f"empty {key}"
+        if isinstance(rule, tuple) and rule[0] == "list" and not (
+                isinstance(v, list) and len(v) >= rule[1]):
+            return f"{key} has {len(v) if isinstance(v, list) else 0} item(s), {rule[1]} needed"
+        if rule is dict and not isinstance(v, dict):
+            return f"no {key}"
+        if rule is int:
+            try:
+                int(v)
+            except (TypeError, ValueError):
+                return f"no {key}"
+    return None
+
+
+def _order_models(pool, need=0):
     """Preferred model first, then the rest round-robined across providers,
-    capped so one call cannot walk the entire list."""
-    models = _usable_models(pool.models)
+    capped so one call cannot walk the entire list. Models this request is
+    too large for are left out before the cap, so they never use a slot."""
+    models = [m for m in _usable_models(pool.models) if not need or _fits(pool, m, need)]
     if _preferred_model and _preferred_model in models:
         rest = [m for m in models if m != _preferred_model]
         ordered = [_preferred_model] + _interleave_by_provider(rest, pool)
@@ -618,7 +725,7 @@ def _max_tokens_for(provider: str, requested: int) -> int:
     return requested
 
 
-def _call(pool, system, user, max_tokens, skip=()):
+def _call(pool, system, user, max_tokens, skip=(), expect=None):
     """Runs a prompt down the model chain, one attempt per model.
 
     The chain spans providers: Gemini's models first, then OpenRouter's free
@@ -643,8 +750,13 @@ def _call(pool, system, user, max_tokens, skip=()):
     # Without this every chapter re-tried the same exhausted model first and
     # paid the same 429 before moving on.
     exhausted = set()
+    need = _request_tokens(system, user, max_tokens)
+    order = _order_models(pool, need)
+    if not order and _usable_models(pool.models):
+        print(f"   ⚠️ This request (~{need:,} tokens) is larger than every working "
+              f"model takes.")
 
-    for model in _order_models(pool):
+    for model in order:
         if model in exhausted or model in skip:
             continue
         client = pool.client_for(model)
@@ -685,6 +797,19 @@ def _call(pool, system, user, max_tokens, skip=()):
                         if finish_reason == "length" else "")
                 raise ValueError(f"unparseable JSON{hint}: {parse_error}") from None
 
+            problem = _reply_problem(data, expect)
+            if problem:
+                # parsed but not usable: the next model is asked, and a model
+                # that keeps sending junk is dropped like one sending bad JSON
+                _log_raw_failure(model, content, problem, finish_reason)
+                _junk_replies[model] = _junk_replies.get(model, 0) + 1
+                if _preferred_model == model:
+                    _preferred_model = None
+                if _junk_replies[model] >= MAX_PARSE_FAILURES:
+                    _retired.add(model)
+                print(f"   ↩️  {model}: reply rejected ({problem}) — asking another model.")
+                continue
+
             if _preferred_model != model:
                 print(f"   📌 using {model} for the rest of this run")
                 _preferred_model = model
@@ -692,6 +817,13 @@ def _call(pool, system, user, max_tokens, skip=()):
             return data
         except Exception as e:
             err = str(e)
+            if _is_too_large(err):
+                # not this model's day, this request's size: remember the
+                # model's real limit and move on, without counting a failure
+                _size_limits[model] = int(need * 0.8)
+                print(f"   ↩️  {model}: request too large (~{need:,} tokens) — "
+                      f"next model.")
+                continue
             if _is_daily_quota(err):
                 # A daily allowance is gone for THIS PROVIDER, not for the run.
                 # This used to abort outright, which meant a spent OpenRouter
@@ -1422,7 +1554,7 @@ def select_historical_anchor(candidates, pool=None, avoid_titles=(),
         # single chapter was written.
         data = _call(pool,
                      "You choose historical documentary topics. Output only JSON.",
-                     prompt + feedback, max_tokens=3000)
+                     prompt + feedback, max_tokens=3000, expect={"topic": str})
         if not data or not data.get("topic"):
             # A total non-answer (every model this call tried came back
             # empty or erroring) is exactly the transient case worth using
@@ -1946,7 +2078,7 @@ def _select_real_quote(pool, topic, candidates, tone, context_before,
                      "You select and lightly format one real quote from a "
                      "given list. You never invent or alter quote text. "
                      "Output only JSON.",
-                     prompt, max_tokens=600)
+                     prompt, max_tokens=600, expect={"chosen": int})
     except QuotaExhausted:
         raise
     if not data:
@@ -2022,7 +2154,7 @@ def _extract_search_terms(pool, topic):
     try:
         data = _call(pool, "You extract short, clean search phrases from "
                      "a topic sentence. Output only JSON.",
-                     prompt, max_tokens=1000)
+                     prompt, max_tokens=1000, expect={"queries": list})
     except QuotaExhausted:
         raise
     except Exception as e:
@@ -2321,7 +2453,7 @@ def _generate_intro_epigraph(pool, topic, tone, context_before, era_year=None):
                      "You write one original, unattributed epigraph line "
                      "for a title card. Never a real quote. Output only "
                      "JSON.",
-                     prompt, max_tokens=1000, skip=tried)
+                     prompt, max_tokens=1000, skip=tried, expect={"text": str})
         if _last_model:
             tried.add(_last_model)
         raw = (data or {}).get("text", "").strip()
@@ -2621,7 +2753,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                                                   story_hook=(story_hooks[c_index]
                                                               if story_hooks else None),
                                                   segment_rule=seg_rule),
-                                  max_tokens=CHAPTER_MAX_TOKENS)
+                                  max_tokens=CHAPTER_MAX_TOKENS,
+                                  expect=_chapter_reply_problem)
             except QuotaExhausted as e:
                 print(f"🛑 {e}")
                 # Nothing further can succeed today, so stop rather than burning
@@ -2754,7 +2887,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
                     words_per_image=pacing["words_per_image"],
                     story_hook=story_hooks[c_index] if story_hooks else None,
                     segment_rule=seg_rule),
-                    max_tokens=CHAPTER_MAX_TOKENS),
+                    max_tokens=CHAPTER_MAX_TOKENS, expect=_chapter_reply_problem),
                 is_open=heading == opening_heading,
                 c_index=c_index, earlier_text=story_text, era_year=era_year)
             story_text += " " + " ".join(x["narration"] for x in data["segments"])
@@ -3192,7 +3325,8 @@ def _packaging_call(pool, topic, full_text, retitle=False, story=None, skip=()):
                  # Same headroom logic as the anchor call: reasoning models
                  # think inside max_tokens, and a truncated reply costs a
                  # request from the daily budget and returns nothing.
-                 max_tokens=2500, skip=skip) or {})
+                 max_tokens=2500, skip=skip,
+                 expect={"title": str, "description": str, "tags": list}) or {})
 
 
 # Silence deliberately left at a chapter seam. Not dead air — dead air is what
@@ -3690,13 +3824,14 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
         '"decision_maker": "..."}'
     )
     data = _call(pool, "You write documentary location stamps. Output only "
-                 "JSON.", prompt, max_tokens=1500)
+                 "JSON.", prompt, max_tokens=1500, expect={"maps": list} if cast else None)
     if not data and _last_model:
         # One more try on another model: the 2026-09-29 trend run lost every
         # map to a single busy (503) model at this call.
         print("   ↩️  Maps request came back empty — one more try on another model.")
         data = _call(pool, "You write documentary location stamps. Output only "
-                     "JSON.", prompt, max_tokens=1500, skip={_last_model})
+                     "JSON.", prompt, max_tokens=1500, skip={_last_model},
+                     expect={"maps": list} if cast else None)
     maps = (data or {}).get("maps") or [(data or {}).get("map")]
     # story mode: no map in the teaser or over a cast introduction
     # (docs/VIDEO_SPEC.md 1-2)
