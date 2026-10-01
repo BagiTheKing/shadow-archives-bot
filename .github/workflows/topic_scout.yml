@@ -1,0 +1,90 @@
+name: Topic Scout
+
+# Researches each long-form lane's next story a day ahead (tools/topic_scout.py):
+# topic from the watched channel / best-liked Short / ideas turned into events,
+# then Wikipedia research, verified fact sheet and outline. The video runs take
+# the ready story from the topic-queue branch and spend their quota on writing.
+#
+# 05:10 UTC: on what is left of the previous Pacific day's free Gemini quota
+# (it resets ~07:00 UTC), and before the trend lane's 07:40 run.
+
+on:
+  schedule:
+    - cron: '10 5 * * *'
+  workflow_dispatch:
+    inputs:
+      lanes:
+        description: 'Lanes to scout (comma-separated)'
+        type: string
+        default: 'timely,encore'
+
+concurrency:
+  group: topic-scout
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch the queue and saved progress
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch -q origin topic-queue; then
+            git worktree add -q queue origin/topic-queue
+          else
+            # first run: the branch is created empty
+            git worktree add -q --detach queue
+            cd queue && git checkout -q --orphan topic-queue && git rm -rqf . && \
+              echo "Stories researched ahead (tools/topic_scout.py)." > README.md && \
+              git add README.md && git commit -qm "Topic queue" && cd ..
+          fi
+          git fetch -q origin run-cache && git worktree add -q cache origin/run-cache || mkdir -p cache
+
+      - name: Scout
+        env:
+          STORY_QUEUE_DIR: queue
+          RUN_CACHE_ROOT: cache
+          SCOUT_LANES: ${{ inputs.lanes || 'timely,encore' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
+          WATCH_LOOKBACK_HOURS: '48'
+          HISTORY_CUTOFF_YEAR: '2010'
+        run: python tools/topic_scout.py
+
+      - name: Save the queue
+        if: always()
+        run: |
+          [ -e queue/.git ] || exit 0
+          cd queue
+          git add -A
+          git diff --cached --quiet || git commit -qm "Scouted stories (run #${{ github.run_number }})"
+          for i in 1 2 3; do
+            git pull -q --rebase origin topic-queue 2>/dev/null || true
+            git push -q origin HEAD:topic-queue && exit 0
+            sleep 5
+          done
+          exit 1

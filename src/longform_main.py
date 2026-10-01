@@ -369,6 +369,8 @@ def resolve_topic(lane: str, history=None, extra_avoid=()):
     long form, so a fallback week cannot quietly remake last week's video.
     """
     covered = covered_topics(history, longform_only=True) if history else set()
+    # topics queued or already tried this run must not be picked again
+    covered = set(covered) | set(extra_avoid or ())
     if covered:
         print(f"📕 {len(covered)} topic(s) already covered in long form.")
 
@@ -446,6 +448,75 @@ def resolve_topic(lane: str, history=None, extra_avoid=()):
     return fallback(), False, False, None
 
 
+def find_story(lane, history, avoid=()):
+    """A topic for this lane with its researched story, or None:
+    {"topic", "story", "enforce_history", "from_short", "era_year", "source"}.
+
+    The one path both the video run and the daily scout use. An idea is
+    turned into the real event that tells it (or skipped); a trend topic
+    that gives no story gets one more event on the watched channel's theme;
+    then the general list, up to six tries in all. avoid: topics already
+    taken (queued, or failed) that must not be chosen again."""
+    from longform_llm import _anchor_fits_niche, idea_to_event
+    avoid = set(avoid or ())
+
+    def as_event(t):
+        """t when it reads as an event; else the real event that best tells
+        the idea (Maimonides' principle -> the Boston Massacre trials), or
+        None. Checked before any research is spent."""
+        if _anchor_fits_niche(t, story=True):
+            return t
+        ev = idea_to_event(get_pool(), t,
+                           (recent_titles(history, 20) if history else []) + sorted(avoid))
+        if ev:
+            print(f"💡 Idea turned into its event: {t[:60]!r} -> {ev[:90]}")
+        else:
+            print(f"↩️  {t[:70]!r} reads as an idea and no event tells it — skipped.")
+        return ev
+
+    def attempt(t, enforce_history, from_short, era_year, source):
+        if not t or t in avoid:
+            return None
+        avoid.add(t)
+        event = as_event(t)
+        if not event or event in avoid:
+            return None
+        avoid.add(event)
+        story = build_story(event, BUILD_DIR)
+        if not story:
+            return None
+        return {"topic": event, "story": story, "enforce_history": enforce_history,
+                "from_short": from_short and event == t,
+                "era_year": era_year or story.get("era_year"), "source": source}
+
+    topic, enforce_history, from_short, era_year = resolve_topic(lane, history,
+                                                                 extra_avoid=sorted(avoid))
+    if not topic:
+        print("❌ Every topic in the pool is already published. "
+              "Add new entries to CORE_TOPICS in src/topics.py.")
+        return None
+    got = attempt(topic, enforce_history, from_short, era_year, lane)
+    if not got and lane == "timely":
+        # The watched channel is the point of this lane: before the general
+        # list, one more event for the same theme (on 2026-10-01 the Gulf War
+        # page could not be read and the run fell back to Rommel).
+        print("↩️  The trend topic gave no story — asking once more for another "
+              "event on the watched channel's theme.")
+        again = resolve_topic(lane, history, extra_avoid=sorted(avoid))
+        got = attempt(*again, lane)
+    tries = 0
+    while not got and tries < 4:
+        tries += 1
+        covered = covered_topics(history, longform_only=True) if history else set()
+        nxt = pick_topic(int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7")) - tries,
+                         exclude=covered | avoid)
+        if not nxt:
+            break
+        print(f"↩️  Trying another topic: {nxt[:80]}")
+        got = attempt(nxt, False, False, None, "rotation")
+    return got
+
+
 def main():
     lane = os.getenv("LONGFORM_LANE", "encore").strip().lower()
     print(f"🚀 {CHANNEL_NAME} — long-form pipeline [lane: {lane}]")
@@ -475,93 +546,49 @@ def main():
             print(f"♻️  Resuming the last run's story: {topic[:90]} "
                   f"({len(saved.get('chapters') or {})} chapter(s) already written).")
             run_cache.mark_resumed()
-        else:
-            if story_topic:
-                # A named story (e.g. the Six-Day War remake): no channel watch,
-                # no anchor — the topic is given, story mode tells it.
-                topic, enforce_history, from_short, era_year = story_topic, True, False, None
-                print(f"📖 Story topic given: {topic} (stage: {stage})")
-            else:
-                topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
-            if not topic:
-                print("❌ Halted: every topic in the pool is already published. "
-                      "Add new entries to CORE_TOPICS in src/topics.py.")
-                raise SystemExit(1)
-            if os.getenv("TOPIC_ONLY", "0") == "1":
-                # Stops after the selection calls: tests channel watch and anchor
-                # choice against a real model and the real channel for two or
-                # three LLM requests, instead of a full render and upload.
-                print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
-                print(f"   enforce_history={enforce_history} era_year={era_year}")
-                return
-            # Story mode is the only long-form format (owner, 2026-09-28): every
-            # lane, every topic. The old six-chapter arc is never a fallback — a
-            # run whose story cannot be built stops instead.
-            from longform_llm import _anchor_fits_niche, idea_to_event
-
-            def as_event(t):
-                """t when it reads as an event; else the real event that best
-                tells the idea (Maimonides' principle -> the Salem witch
-                trials), or None. Checked before any research is spent: the
-                2026-09-30 weekly run spent two runs' quota on that idea."""
-                if _anchor_fits_niche(t, story=True):
-                    return t
-                ev = idea_to_event(get_pool(), t, recent_titles(history, 20) if history else ())
-                if ev:
-                    print(f"💡 Idea turned into its event: {t[:60]!r} -> {ev[:90]}")
-                else:
-                    print(f"↩️  {t[:70]!r} reads as an idea and no event tells it — skipped.")
-                return ev
-
-            tried = {topic}
-            if story_topic:
-                story = build_story(topic, BUILD_DIR, given=True)
-            else:
-                event = as_event(topic)
-                if event:
-                    topic = event
-                    tried.add(topic)
-                    story = build_story(topic, BUILD_DIR)
-                else:
-                    story = None
-            if not story and not story_topic and lane == "timely":
-                # The watched channel is the point of this lane: before the
-                # general list, one more event for the same theme (the
-                # 2026-10-01 run fell back to Rommel when the Gulf War page
-                # could not be read).
-                print("↩️  The trend topic gave no story — asking once more for "
-                      "another event on the watched channel's theme.")
-                again, enforce_history, from_short, era_year = resolve_topic(
-                    lane, history, extra_avoid=sorted(tried))
-                if again and again not in tried:
-                    tried.add(again)
-                    event = as_event(again)
-                    if event:
-                        topic = event
-                        tried.add(topic)
-                        story = build_story(topic, BUILD_DIR)
-            while not story and not story_topic and len(tried) < 6:
-                # An automatic lane can pick another topic: its first pick may
-                # be an idea rather than an event (see build_story). A named
-                # topic never changes.
-                covered = covered_topics(history, longform_only=True) if history else set()
-                nxt = pick_topic(int(os.getenv("LONGFORM_TOPIC_OFFSET", "-7")) - len(tried),
-                                 exclude=covered | tried)
-                if not nxt or nxt in tried:
-                    break
-                tried.add(nxt)
-                event = as_event(nxt)
-                if not event:
-                    continue
-                topic, enforce_history, from_short = event, False, False
-                tried.add(topic)
-                print(f"↩️  Trying another topic: {topic[:80]}")
-                story = build_story(topic, BUILD_DIR)
+        elif story_topic:
+            # A named story (e.g. the Six-Day War remake): no channel watch,
+            # no anchor — the topic is given, story mode tells it.
+            topic, enforce_history, from_short, era_year = story_topic, True, False, None
+            print(f"📖 Story topic given: {topic} (stage: {stage})")
+            story = build_story(topic, BUILD_DIR, given=True)
             if not story:
                 print("❌ Story mode could not build a fact sheet and outline — "
                       "stopping rather than writing it in the old arc.")
                 raise SystemExit(1)
             era_year = era_year or story.get("era_year")
+            run_cache.save_story(topic, story, enforce_history, era_year, from_short)
+        else:
+            if os.getenv("TOPIC_ONLY", "0") == "1":
+                # Stops after the selection calls: tests channel watch and anchor
+                # choice against a real model and the real channel for two or
+                # three LLM requests, instead of a full render and upload.
+                topic, enforce_history, from_short, era_year = resolve_topic(lane, history)
+                print(f"🔎 TOPIC_ONLY — selected topic: {topic}")
+                print(f"   enforce_history={enforce_history} era_year={era_year}")
+                return
+            # A story researched ahead by the daily scout (story_queue.py):
+            # the run starts from a checked fact sheet and outline and spends
+            # its quota on writing, not on finding something to write about.
+            import story_queue
+            found = story_queue.take(lane)
+            covered = covered_topics(history, longform_only=True) if history else set()
+            while found and found["topic"] in covered:
+                print(f"🗑️  Queued story already published, dropped: {found['topic'][:70]}")
+                found = story_queue.take(lane)
+            if found:
+                print(f"📦 Using a story researched ahead ({found.get('source', '?')}, "
+                      f"{found.get('created', '')[:10]}): {found['topic'][:90]}")
+            else:
+                print("📦 No story researched ahead for this lane — researching now.")
+                found = find_story(lane, history)
+            if not found:
+                print("❌ Story mode could not build a fact sheet and outline — "
+                      "stopping rather than writing it in the old arc.")
+                raise SystemExit(1)
+            topic, story = found["topic"], found["story"]
+            enforce_history, from_short = found["enforce_history"], found["from_short"]
+            era_year = found.get("era_year") or story.get("era_year")
             run_cache.save_story(topic, story, enforce_history, era_year, from_short)
         if stage == "outline":
             print("🛑 STORY_STAGE=outline — stopping for approval of the plan.")

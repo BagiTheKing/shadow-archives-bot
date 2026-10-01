@@ -98,6 +98,10 @@ without the owner's say-so.
     carries on from them (at most twice, within 4 days) and a finished upload
     clears them. Automatic lanes skip a topic that reads as an idea rather
     than an event.
+18. **Topics are researched the day before.** The daily scout (05:10 UTC)
+    keeps one ready story per lane on the topic-queue branch (trend stories
+    kept 4 days, encore 21); a video run takes it and only researches for
+    itself when the queue is empty.
 
 ## Process
 14. Check a change against this list before pushing. Test writing with a

@@ -150,10 +150,18 @@ jobs:
         run: |
           git fetch -q origin run-cache && git worktree add -q cache origin/run-cache || mkdir -p cache
 
+      # Stories researched ahead by the daily scout (topic_scout.yml): the run
+      # takes the next one instead of finding and researching its own topic.
+      - name: Fetch researched stories
+        continue-on-error: true
+        run: |
+          git fetch -q origin topic-queue && git worktree add -q queue origin/topic-queue || mkdir -p queue
+
       - name: Run long-form pipeline
         id: pipeline
         env:
           RUN_CACHE_DIR: cache/encore
+          STORY_QUEUE_DIR: queue
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # Optional and the biggest script-quality upgrade available: a free
           # Google AI Studio key (https://aistudio.google.com/apikey) switches
@@ -237,6 +245,21 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -qm "Run progress (${{ github.workflow }} #${{ github.run_number }})"
           git push -q origin HEAD:run-cache
+
+      # The story this run took leaves the queue (it lives on in the run's
+      # saved progress until the video is up).
+      - name: Save researched stories
+        if: always()
+        continue-on-error: true
+        run: |
+          [ -e queue/.git ] || exit 0
+          cd queue
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Story taken (${{ github.workflow }} #${{ github.run_number }})"
+          for i in 1 2 3; do git pull -q --rebase origin topic-queue && git push -q origin HEAD:topic-queue && exit 0; sleep 5; done
 
       # Test & Compare has no API: the thumbnails are tried in turn by
       # rotate_thumbnails.yml once the video is public.
