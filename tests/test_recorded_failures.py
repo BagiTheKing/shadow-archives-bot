@@ -143,3 +143,43 @@ class Checklist(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FindStory(unittest.TestCase):
+    """Topic scout, 2026-10-01: every event topic was dropped unresearched."""
+
+    def setUp(self):
+        import longform_main as M
+        import longform_llm
+        self.M = M
+        self.saved = (M.resolve_topic, M.build_story, M.pick_topic,
+                      longform_llm._anchor_fits_niche, longform_llm.idea_to_event)
+        self.built = []
+        M.resolve_topic = lambda lane, history=None, extra_avoid=(): (
+            "The 1995 Qatari coup d'etat", False, False, 1995)
+        M.pick_topic = lambda *a, **k: None
+        M.build_story = lambda t, d, given=False: (self.built.append(t) or {"plan": {}})
+        longform_llm._anchor_fits_niche = lambda t, story=False: "principle" not in t
+        longform_llm.idea_to_event = lambda pool, idea, avoid: "The Dreyfus affair (1894)"
+
+    def tearDown(self):
+        import longform_llm
+        (self.M.resolve_topic, self.M.build_story, self.M.pick_topic,
+         longform_llm._anchor_fits_niche, longform_llm.idea_to_event) = self.saved
+
+    def test_event_topic_is_researched(self):
+        got = self.M.find_story("timely", None)
+        self.assertEqual(got["topic"], "The 1995 Qatari coup d'etat")
+        self.assertEqual(self.built, ["The 1995 Qatari coup d'etat"])
+
+    def test_idea_becomes_its_event(self):
+        self.M.resolve_topic = lambda lane, history=None, extra_avoid=(): (
+            "Maimonides' principle", True, True, None)
+        self.M.get_pool = lambda: None
+        got = self.M.find_story("encore", None)
+        self.assertEqual(got["topic"], "The Dreyfus affair (1894)")
+        self.assertFalse(got["from_short"])
+
+    def test_queued_topic_not_picked_again(self):
+        got = self.M.find_story("timely", None, avoid={"The 1995 Qatari coup d'etat"})
+        self.assertIsNone(got)

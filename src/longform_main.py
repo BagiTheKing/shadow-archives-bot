@@ -312,13 +312,19 @@ def build_story(topic, build_dir, given=False):
     if not sheet:
         print("⚠️ Story mode: the fact sheet came back too thin to tell a story.")
         return None
-    if not sheet["numbers"] and not sheet["quotes"] and not given:
+    if not sheet["numbers"] and not sheet["quotes"] and len(sheet["timeline"]) < 8 \
+            and not given:
         # An idea, not an event: the 2026-09-30 weekly run was handed
         # "Blackstone's ratio" (a legal principle) by the encore lane, found
         # no figure and no quote in it, and failed a chapter later.
-        print("⚠️ Story mode: no figure and no quote in the article — this "
+        print("⚠️ Story mode: no figure, no quote and a short timeline — this "
               "topic is an idea, not an event with a story.")
         return None
+    if not sheet["numbers"] and not sheet["quotes"]:
+        # Ideas are caught before research now (find_story.as_event): a full
+        # timeline with no figure or quote is a weak model's sheet, not an
+        # idea (the Dreyfus affair, 45 dated events, was refused for it).
+        print("   ⚠️ No figure and no quote in the sheet — telling it from the timeline.")
     # Three tries, each on a different model: one weak model's malformed
     # outline must not cost the whole story (it did on the fourth run).
     tried, plan = set(), None
@@ -479,7 +485,10 @@ def find_story(lane, history, avoid=()):
             return None
         avoid.add(t)
         event = as_event(t)
-        if not event or event in avoid:
+        # the event itself only counts as taken when it is a different topic:
+        # checking t against the set it was just added to dropped every topic
+        # that already read as an event (topic scout, 2026-10-01)
+        if not event or (event != t and event in avoid):
             return None
         avoid.add(event)
         story = build_story(event, BUILD_DIR)
