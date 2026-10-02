@@ -38,6 +38,19 @@
       "views_at_start": 1,
       "results": [],
       "registered": "2026-10-01T14:10:15.356075+00:00"
+    },
+    "PZSynfqA-DY": {
+      "files": [
+        "videos/PZSynfqA-DY/2_map.jpg",
+        "videos/PZSynfqA-DY/3_frame.jpg",
+        "videos/PZSynfqA-DY/3_person.jpg"
+      ],
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
+      "results": [],
+      "registered": "2026-10-02T09:09:41.322664+00:00"
     }
   }
 }
