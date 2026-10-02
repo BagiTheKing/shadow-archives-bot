@@ -44,10 +44,10 @@
         "videos/PZSynfqA-DY/3_person.jpg",
         "videos/PZSynfqA-DY/2_map.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-02T15:07:45.405846+00:00",
+      "views_at_start": 2,
       "results": [],
       "registered": "2026-10-02T09:09:41.322664+00:00"
     }
