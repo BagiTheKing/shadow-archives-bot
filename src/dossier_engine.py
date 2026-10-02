@@ -185,19 +185,57 @@ COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 _LIFESPAN = re.compile(r"\(?\s*(?:c\.\s*)?(\d{3,4})\s*[–—-]\s*(\d{3,4})\s*\)?")
 
 
-def person_file(name, out_dir):
+_RANK = re.compile(r"^(captain|capt\.?|general|gen\.?|colonel|col\.?|major|lieutenant|lt\.?|"
+                   r"admiral|sergeant|sgt\.?|private|governor|president|sir|lord|lady|"
+                   r"dr\.?|field marshal|marshal|chief|judge|justice)\s+", re.I)
+
+
+def _person_page(name, hint=""):
+    """The person's Wikipedia page (with lead image and description), or
+    None. The name as given first, then without a rank ("Captain Thomas
+    Preston" has no page of its own), then a search with the story's words
+    past a disambiguation page ("Thomas Hutchinson" lists several people)."""
+    from archive_engine import _polite_get
+    props = {"prop": "pageimages|description|pageprops", "piprop": "original|name",
+             "ppprop": "disambiguation", "redirects": 1, "format": "json", "action": "query"}
+    bare = name
+    while _RANK.match(bare):
+        bare = _RANK.sub("", bare, count=1)
+    surname = (bare.split() or [""])[-1].lower()
+    tried = []
+    for title in dict.fromkeys([name, bare]):
+        r = _polite_get(WIKI_API, params={**props, "titles": title}, timeout=30)
+        pages = list(((r.json().get("query") or {}).get("pages") or {}).values())
+        if pages and "missing" not in pages[0]:
+            page = pages[0]
+            if "disambiguation" not in (page.get("pageprops") or {}) \
+                    and (page.get("original") or {}).get("source"):
+                return page
+            tried.append(page.get("title"))
+    r = _polite_get(WIKI_API, params={**props, "generator": "search",
+                                      "gsrsearch": f"{bare} {hint}".strip(), "gsrlimit": 5},
+                    timeout=30)
+    pages = sorted(((r.json().get("query") or {}).get("pages") or {}).values(),
+                   key=lambda p: p.get("index", 9))
+    for page in pages:
+        if surname and surname in page.get("title", "").lower() \
+                and "disambiguation" not in (page.get("pageprops") or {}) \
+                and page.get("title") not in tried \
+                and (page.get("original") or {}).get("source"):
+            print(f"   🔎 {name}: portrait from {page['title']!r}.")
+            return page
+    return None
+
+
+def person_file(name, out_dir, hint=""):
     """{"photo", "lines", "credit"} from the person's Wikipedia article, or
-    None. lines = [DESCRIPTION, "1893 – 1976"]."""
+    None. lines = [DESCRIPTION, "1893 – 1976"]. hint: words of the story
+    (the person's role) to tell namesakes apart."""
     from archive_engine import _polite_get, _strip_html
-    r = _polite_get(WIKI_API, params={
-        "action": "query", "titles": name, "redirects": 1, "format": "json",
-        "prop": "pageimages|description", "piprop": "original|name"},
-        timeout=30)
-    pages = list(((r.json().get("query") or {}).get("pages") or {}).values())
-    if not pages or "missing" in pages[0]:
-        print(f"   ↩️  {name}: no Wikipedia article by that name.")
+    page = _person_page(name, hint)
+    if not page:
+        print(f"   ↩️  {name}: no Wikipedia article with a portrait.")
         return None
-    page = pages[0]
     desc = (page.get("description") or "").strip()
     # Wikipedia now appends tracking parameters ("...jpg?utm_source=...")
     # to image links; checked as-is, no portrait ever passed and the card
@@ -262,7 +300,8 @@ def render_dossier_scene(scene, out_mp4, duration, build_dir, era=None):
         from map_engine import spoken_at
         photo_dir = os.path.join(build_dir, f"cast_{d.get('file_no') or 1:02d}")
         os.makedirs(photo_dir, exist_ok=True)
-        info = person_file(name, photo_dir)
+        info = person_file(name, photo_dir, hint=" ".join(
+            re.findall(r"[A-Za-z]{4,}", d.get("role") or ""))[:60])
         if not info:
             print(f"   ↩️  No card for {name!r}: Wikipedia has no free "
                   f"portrait and description.")

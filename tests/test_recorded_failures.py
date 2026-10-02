@@ -313,3 +313,21 @@ class LastResort(unittest.TestCase):
         pool = Pool({"cloudflare/@cf/x": '{"ok": "cf"}', "gemini/g": Exception("Error code: 503"),
                      "groq/a": Exception("Error code: 503")})
         self.assertEqual(L._call(pool, "s", "u", 100, expect={"ok": str})["ok"], "cf")
+
+
+class CastCards(unittest.TestCase):
+    """2026-10-02 Boston Massacre video."""
+
+    def test_one_decision_maker_among_namesakes(self):
+        cast = [{"name": "John Adams"}, {"name": "Samuel Adams"}]
+        self.assertTrue(L._is_decider("John Adams", "John Adams", cast))
+        self.assertFalse(L._is_decider("Samuel Adams", "John Adams", cast))
+
+    def test_rank_ignored(self):
+        self.assertTrue(L._is_decider("Captain Thomas Preston", "Thomas Preston",
+                                      [{"name": "Captain Thomas Preston"}]))
+
+    def test_tag_cut_at_a_word(self):
+        from thumb_variants import _short_tag
+        self.assertEqual(_short_tag("Defending attorney and future president"),
+                         "DEFENDING ATTORNEY")

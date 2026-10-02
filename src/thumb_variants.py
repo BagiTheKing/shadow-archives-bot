@@ -435,6 +435,20 @@ def _side_name(role):
     return ""
 
 
+def _short_tag(role, limit=26):
+    """The role as a tag of at most `limit` characters, cut at a word and
+    never ending on a joining word ("DEFENDING ATTORNEY AND FUT" went on
+    the 2026-10-02 thumbnail)."""
+    words, out = (role or "").upper().split(), []
+    for w in words:
+        if len(" ".join(out + [w])) > limit:
+            break
+        out.append(w)
+    while out and out[-1] in ("AND", "OF", "THE", "FOR", "TO", "IN", "WHO", "A", "&", ","):
+        out.pop()
+    return " ".join(out).strip(" ,;-")
+
+
 def build(scenes, script, build_dir):
     """[(kind, path)] best first, all under build_dir/thumbnails/. Empty only
     if not even the plain thumbnail could be drawn."""
@@ -516,7 +530,7 @@ def build(scenes, script, build_dir):
     if bg is not None and decider and t["setup"]:
         for p in [decider] + [x for x in people if x is not decider]:
             try:
-                got = person(bg, p[3], t["setup"], t["twist"], (p[1] or "").upper()[:26],
+                got = person(bg, p[3], t["setup"], t["twist"], _short_tag(p[1]),
                              os.path.join(out_dir, "3_person.jpg"))
             except Exception as e:
                 print(f"   ↩️  Person thumbnail failed ({type(e).__name__}: {e}).")

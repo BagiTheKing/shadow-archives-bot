@@ -139,6 +139,17 @@ def cloudflare():
             print(f"   {model}: {type(e).__name__}: {str(e)[:150]}")
 
 
+def portraits():
+    import tempfile
+    from dossier_engine import person_file
+    for name, hint in (("Thomas Hutchinson", "acting royal governor Massachusetts"),
+                       ("Captain Thomas Preston", "British officer"),
+                       ("John Adams", ""), ("Samuel Adams", "")):
+        got = person_file(name, tempfile.mkdtemp(), hint=hint)
+        print(f"portrait {name!r}: {got['credit'][:90] if got else None} | "
+              f"{got['lines'] if got else ''}")
+
+
 if __name__ == "__main__":
     which = sys.argv[1:] or ["gemini", "wikimedia", "github"]
     if "gemini" in which:
@@ -150,3 +161,5 @@ if __name__ == "__main__":
         github_models()
     if "cloudflare" in which:
         cloudflare()
+    if "portraits" in which:
+        portraits()

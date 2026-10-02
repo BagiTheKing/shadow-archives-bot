@@ -3767,13 +3767,41 @@ def _place_cast(cast, decision_name, chapters):
             n = len(placed) + 1
             sc["dossier"] = {"name": c["name"], "shown": c["name"],
                              "role": (c.get("role") or "")[:30],
-                             "decision": bool(decider) and surname(c["name"]) == decider,
+                             "decision": _is_decider(c["name"], decision_name, people),
                              "file_no": n, "side": "left" if n % 2 else "right"}
             placed.append(c["name"])
     missing = [c["name"] for c in people if c["name"] not in placed]
     print(f"🎭 Cast cards planned in the cast chapter: {', '.join(placed) or 'none'}"
           + (f" (decision maker: {decision_name})" if decision_name else "")
           + (f"; not introduced there: {', '.join(missing)}" if missing else "") + ".")
+
+
+_RANKS = re.compile(r"^(captain|capt\.?|general|gen\.?|colonel|col\.?|major|lieutenant|lt\.?|"
+                    r"admiral|sergeant|sgt\.?|private|governor|president|king|queen|"
+                    r"prince|princess|sir|lord|lady|dr\.?|field marshal|marshal|"
+                    r"emperor|empress|chief|judge|justice)\s+", re.I)
+
+
+def _plain_name(n):
+    """'Captain Thomas Preston' -> 'thomas preston'."""
+    n = (n or "").strip()
+    while _RANKS.match(n):
+        n = _RANKS.sub("", n, count=1)
+    return " ".join(re.findall(r"[a-z]+", n.lower()))
+
+
+def _is_decider(name, decision_name, cast):
+    """Whether this cast member is the decision maker: the full name when
+    two of the cast share a surname (John and Samuel Adams were both
+    stamped DECISION MAKER on the 2026-10-02 video), the surname otherwise."""
+    a, b = _plain_name(name), _plain_name(decision_name)
+    if not a or not b:
+        return False
+    if a == b or a.endswith(" " + b) or b.endswith(" " + a):
+        return True
+    sur = lambda n: n.split()[-1]
+    shared = sum(1 for c in cast if _plain_name(c.get("name")).split()[-1:] == [sur(a)])
+    return shared == 1 and sur(a) == sur(b)
 
 
 def _chapter_stamps(pool, topic, chapters, era_year, cast=None):

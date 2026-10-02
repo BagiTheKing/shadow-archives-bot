@@ -109,6 +109,13 @@ def upload_check(title, description, thumb_path, variants=(), scenes=()):
     if planned:
         items.append((True if drawn == planned else False, "Maps drawn",
                       f"{drawn} of {planned}"))
+    cast = [s for s in scenes or () if s.get("dossier")]
+    if cast:
+        shown = sum(1 for s in cast if s.get("_is_map"))
+        missing = [s["dossier"].get("name") for s in cast if not s.get("_is_map")]
+        items.append((True if not missing else False, "Cast cards drawn",
+                      f"{shown} of {len(cast)}" + (f" (no portrait: {', '.join(missing)})"
+                                                    if missing else "")))
     if not _real(title):
         items.append(("block", "Final title", repr(title)))
     bad = [ln for ln in (description or "").splitlines() if ln.strip() and not _real(ln)
