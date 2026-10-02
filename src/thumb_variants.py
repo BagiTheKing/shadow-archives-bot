@@ -539,6 +539,13 @@ def build(scenes, script, build_dir):
                 made.append(("person", got))
                 break
 
+    # A map with no side lit is a dot on a dark field (the 2026-10-02 Boston
+    # video's map thumbnail): the person look goes ahead of it, because the
+    # first thumbnail of the rotation gets the video's early views.
+    kinds = [k for k, _ in made]
+    if not sides and "map" in kinds and "person" in kinds \
+            and kinds.index("map") < kinds.index("person"):
+        made.insert(kinds.index("map"), made.pop(kinds.index("person")))
     if len(made) < 3 and bg_photo:
         # the plain look fills a missing slot, so there is always something
         try:
@@ -549,6 +556,20 @@ def build(scenes, script, build_dir):
             made.append(("frame", got))
         except Exception as e:
             print(f"   ↩️  Plain thumbnail failed ({type(e).__name__}: {e}).")
+    # numbered in their final order: the rotation (tools/thumb_rotation.py)
+    # shows them in file-name order, the first one first
+    renamed = []
+    for i, (kind, path) in enumerate(made):
+        want = os.path.join(out_dir, f"{i + 1}_{kind}.jpg")
+        if path != want:
+            os.replace(path, want + ".tmp")
+        renamed.append((kind, want + ".tmp" if path != want else want))
+    made = []
+    for kind, path in renamed:
+        if path.endswith(".tmp"):
+            os.replace(path, path[:-4])
+            path = path[:-4]
+        made.append((kind, path))
     for kind, path in made:
         print(f"🖼️  Thumbnail variant: {kind} — {os.path.basename(path)} "
               f"({os.path.getsize(path) // 1024} KB)")
