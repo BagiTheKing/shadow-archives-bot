@@ -41,9 +41,8 @@
     },
     "PZSynfqA-DY": {
       "files": [
-        "videos/PZSynfqA-DY/2_map.jpg",
-        "videos/PZSynfqA-DY/3_frame.jpg",
-        "videos/PZSynfqA-DY/3_person.jpg"
+        "videos/PZSynfqA-DY/3_person.jpg",
+        "videos/PZSynfqA-DY/2_map.jpg"
       ],
       "status": "waiting",
       "current": null,
