@@ -7,10 +7,17 @@
         "videos/hmc-ROH7jfU/3_person.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-09-30T13:06:16.378142+00:00",
-      "views_at_start": 2,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-03T16:14:23.546479+00:00",
+      "views_at_start": 11,
+      "results": [
+        {
+          "file": "videos/hmc-ROH7jfU/1_faceoff.jpg",
+          "views": 9,
+          "days": 3.13,
+          "per_day": 2.87
+        }
+      ],
       "registered": "2026-09-30T13:05:54.515908+00:00"
     },
     "9x3thBUuzF4": {
@@ -20,10 +27,17 @@
         "videos/9x3thBUuzF4/3_person.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-09-30T13:00:25.579724+00:00",
-      "views_at_start": 1,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-03T16:14:23.546479+00:00",
+      "views_at_start": 5,
+      "results": [
+        {
+          "file": "videos/9x3thBUuzF4/1_faceoff.jpg",
+          "views": 4,
+          "days": 3.13,
+          "per_day": 1.28
+        }
+      ],
       "registered": "2026-09-30T13:00:04.652488+00:00"
     },
     "NPLsPRM6RH4": {
@@ -57,10 +71,10 @@
         "videos/fU3Bh_T6uSg/2_person.jpg",
         "videos/fU3Bh_T6uSg/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-03T16:14:23.546479+00:00",
+      "views_at_start": 1,
       "results": [],
       "registered": "2026-10-03T08:41:41.907991+00:00"
     }
