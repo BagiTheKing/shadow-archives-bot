@@ -50,6 +50,19 @@
       "views_at_start": 2,
       "results": [],
       "registered": "2026-10-02T09:09:41.322664+00:00"
+    },
+    "fU3Bh_T6uSg": {
+      "files": [
+        "videos/fU3Bh_T6uSg/1_map.jpg",
+        "videos/fU3Bh_T6uSg/2_person.jpg",
+        "videos/fU3Bh_T6uSg/3_frame.jpg"
+      ],
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
+      "results": [],
+      "registered": "2026-10-03T08:41:41.907991+00:00"
     }
   }
 }
