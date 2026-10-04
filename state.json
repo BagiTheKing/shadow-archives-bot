@@ -47,10 +47,17 @@
         "videos/NPLsPRM6RH4/3_cyanide.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-01T14:11:28.953448+00:00",
-      "views_at_start": 1,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-04T16:50:28.218434+00:00",
+      "views_at_start": 5,
+      "results": [
+        {
+          "file": "videos/NPLsPRM6RH4/1_faceoff.jpg",
+          "views": 4,
+          "days": 3.11,
+          "per_day": 1.29
+        }
+      ],
       "registered": "2026-10-01T14:10:15.356075+00:00"
     },
     "PZSynfqA-DY": {
