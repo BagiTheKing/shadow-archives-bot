@@ -66,10 +66,17 @@
         "videos/PZSynfqA-DY/2_map.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-02T15:07:45.405846+00:00",
-      "views_at_start": 2,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-05T22:07:00.610177+00:00",
+      "views_at_start": 3,
+      "results": [
+        {
+          "file": "videos/PZSynfqA-DY/3_person.jpg",
+          "views": 1,
+          "days": 3.29,
+          "per_day": 0.3
+        }
+      ],
       "registered": "2026-10-02T09:09:41.322664+00:00"
     },
     "fU3Bh_T6uSg": {
@@ -77,10 +84,10 @@
         "videos/fU3Bh_T6uSg/2_person.jpg",
         "videos/fU3Bh_T6uSg/1_map.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-05T22:07:00.610177+00:00",
+      "views_at_start": 6,
       "results": [],
       "registered": "2026-10-03T08:41:41.907991+00:00"
     }
