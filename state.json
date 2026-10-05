@@ -74,14 +74,13 @@
     },
     "fU3Bh_T6uSg": {
       "files": [
-        "videos/fU3Bh_T6uSg/1_map.jpg",
         "videos/fU3Bh_T6uSg/2_person.jpg",
-        "videos/fU3Bh_T6uSg/3_frame.jpg"
+        "videos/fU3Bh_T6uSg/1_map.jpg"
       ],
-      "status": "testing",
-      "current": 0,
-      "since": "2026-10-03T16:14:23.546479+00:00",
-      "views_at_start": 1,
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
       "results": [],
       "registered": "2026-10-03T08:41:41.907991+00:00"
     }
