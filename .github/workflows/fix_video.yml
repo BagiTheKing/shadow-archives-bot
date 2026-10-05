@@ -1,7 +1,8 @@
 name: Fix Video
 
 # Manual only. Fixes one uploaded video's title, placeholder description
-# lines and privacy through the channel's credentials (tools/fix_video.py).
+# lines, privacy or thumbnail, or posts a comment (a correction) as the
+# channel, through the channel's credentials (tools/fix_video.py).
 
 on:
   workflow_dispatch:
@@ -20,6 +21,9 @@ on:
         default: ""
       thumbnail:
         description: "Thumbnail path on the thumb-rotation branch, e.g. videos/<id>/1_faceoff.jpg (blank = keep)"
+        default: ""
+      comment:
+        description: "Comment to post as the channel, e.g. a correction (blank = none)"
         default: ""
 
 jobs:
@@ -44,6 +48,7 @@ jobs:
           TITLE: ${{ inputs.title }}
           INTRO: ${{ inputs.intro }}
           PRIVACY: ${{ inputs.privacy }}
+          COMMENT: ${{ inputs.comment }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: python tools/fix_video.py

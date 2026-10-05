@@ -435,6 +435,25 @@ def _side_name(role):
     return ""
 
 
+def _tiny(sides, min_span=4.0):
+    """Whether every lit country is too small to read at thumbnail size
+    (Qatar, about 1.5 degrees across, showed as a dot on the 2026-10-03
+    video). Spans in degrees of the country's largest outline."""
+    import map_engine as M
+    for name in sides:
+        try:
+            r = M.find_region(name)
+        except Exception:
+            r = None
+        if not r:
+            continue
+        ring = max(r[1], key=len)
+        xs, ys = [p[0] for p in ring], [p[1] for p in ring]
+        if max(max(xs) - min(xs), max(ys) - min(ys)) >= min_span:
+            return False
+    return True
+
+
 def _short_tag(role, limit=26):
     """The role as a tag of at most `limit` characters, cut at a word and
     never ending on a joining word ("DEFENDING ATTORNEY AND FUT" went on
@@ -539,11 +558,11 @@ def build(scenes, script, build_dir):
                 made.append(("person", got))
                 break
 
-    # A map with no side lit is a dot on a dark field (the 2026-10-02 Boston
-    # video's map thumbnail): the person look goes ahead of it, because the
-    # first thumbnail of the rotation gets the video's early views.
+    # A map with no side lit, or only a tiny country lit, is a dot on a dark
+    # field (Boston on 2 Oct, Qatar on 3 Oct): the person look goes ahead of
+    # it, because the first thumbnail of the rotation gets the early views.
     kinds = [k for k, _ in made]
-    if not sides and "map" in kinds and "person" in kinds \
+    if (not sides or _tiny(sides)) and "map" in kinds and "person" in kinds \
             and kinds.index("map") < kinds.index("person"):
         made.insert(kinds.index("map"), made.pop(kinds.index("person")))
     if len(made) < 3 and bg_photo:

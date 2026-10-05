@@ -6,7 +6,9 @@ YouTube credentials (run by .github/workflows/fix_video.yml):
 - placeholder lines in the description ("...", left by a model that echoed
   its template) replaced by the given text, every other line kept (credits,
   music attribution, chapters, sources);
-- the privacy status, when given.
+- the privacy status, when given;
+- a comment posted as the channel (a correction), when given. The API
+  cannot pin it: pinning is one click in Studio.
 
     VIDEO_ID=... TITLE=... INTRO=... PRIVACY=public python tools/fix_video.py
 """
@@ -66,6 +68,11 @@ def main():
     yt.videos().update(part=parts, body=body).execute()
     print(f"After:  {body['snippet']['title']!r} [{privacy or status['privacyStatus']}]")
     print("Description starts: " + desc[:200].replace("\n", " | "))
+    comment = os.getenv("COMMENT", "").strip()
+    if comment:
+        from youtube_publisher import post_first_comment
+        if not post_first_comment(yt, vid, comment):
+            sys.exit("The comment could not be posted.")
 
 
 if __name__ == "__main__":
