@@ -201,7 +201,10 @@ def _person_page(name, hint=""):
     bare = name
     while _RANK.match(bare):
         bare = _RANK.sub("", bare, count=1)
-    surname = (bare.split() or [""])[-1].lower()
+    # the whole name must be in the page title, in its order: matching the
+    # surname alone gave Khalifa bin Hamad Al Thani the portrait of his
+    # grandson Tamim bin Hamad Al Thani (2026-10-03 Qatar video)
+    want = " ".join(re.findall(r"[a-z]+", bare.lower()))
     tried = []
     for title in dict.fromkeys([name, bare]):
         r = _polite_get(WIKI_API, params={**props, "titles": title}, timeout=30)
@@ -218,7 +221,10 @@ def _person_page(name, hint=""):
     pages = sorted(((r.json().get("query") or {}).get("pages") or {}).values(),
                    key=lambda p: p.get("index", 9))
     for page in pages:
-        if surname and surname in page.get("title", "").lower() \
+        # the whole name, in its order: Hamad bin Khalifa Al Thani and
+        # Khalifa bin Hamad Al Thani are son and father, the same words
+        title_words = " ".join(re.findall(r"[a-z]+", page.get("title", "").lower()))
+        if want and f" {want} " in f" {title_words} " \
                 and "disambiguation" not in (page.get("pageprops") or {}) \
                 and page.get("title") not in tried \
                 and (page.get("original") or {}).get("source"):

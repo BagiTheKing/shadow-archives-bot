@@ -331,3 +331,41 @@ class CastCards(unittest.TestCase):
         from thumb_variants import _short_tag
         self.assertEqual(_short_tag("Defending attorney and future president"),
                          "DEFENDING ATTORNEY")
+
+
+class PortraitSearch(unittest.TestCase):
+    """2026-10-03 Qatar video: Khalifa bin Hamad Al Thani's card showed his
+    grandson Tamim bin Hamad Al Thani, found by surname alone."""
+
+    def run_search(self, name, hits, hint=""):
+        import dossier_engine as D
+        import archive_engine as A
+
+        class R:
+            def __init__(self, data):
+                self.data = data
+
+            def json(self):
+                return self.data
+
+        def fake_get(url, params=None, **kw):
+            if "titles" in params:              # exact title: no portrait
+                return R({"query": {"pages": {"1": {"title": params["titles"]}}}})
+            pages = {str(i): {"title": t, "index": i,
+                              "original": {"source": "https://upload.wikimedia.org/wikipedia/commons/a.jpg"}}
+                     for i, t in enumerate(hits)}
+            return R({"query": {"pages": pages}})
+        saved = A._polite_get
+        A._polite_get = fake_get
+        try:
+            return D._person_page(name, hint)
+        finally:
+            A._polite_get = saved
+
+    def test_namesake_not_taken(self):
+        self.assertIsNone(self.run_search("Khalifa bin Hamad Al Thani",
+                                          ["Tamim bin Hamad Al Thani", "Hamad bin Khalifa Al Thani"]))
+
+    def test_right_person_found(self):
+        got = self.run_search("Thomas Hutchinson", ["Thomas Hutchinson (governor)"])
+        self.assertEqual(got["title"], "Thomas Hutchinson (governor)")
