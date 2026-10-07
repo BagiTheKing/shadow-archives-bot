@@ -59,8 +59,8 @@
         "videos/NPLsPRM6RH4/3_cyanide.jpg"
       ],
       "status": "testing",
-      "current": 1,
-      "since": "2026-10-04T16:50:28.218434+00:00",
+      "current": 2,
+      "since": "2026-10-07T18:55:22.582241+00:00",
       "views_at_start": 5,
       "results": [
         {
@@ -68,6 +68,12 @@
           "views": 4,
           "days": 3.11,
           "per_day": 1.29
+        },
+        {
+          "file": "videos/NPLsPRM6RH4/2_person.jpg",
+          "views": 0,
+          "days": 3.09,
+          "per_day": 0.0
         }
       ],
       "registered": "2026-10-01T14:10:15.356075+00:00"
@@ -122,10 +128,10 @@
         "videos/SBpmJ8RlYNM/2_person.jpg",
         "videos/SBpmJ8RlYNM/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-07T18:55:22.582241+00:00",
+      "views_at_start": 2,
       "results": [],
       "registered": "2026-10-07T18:29:05.791689+00:00"
     }
