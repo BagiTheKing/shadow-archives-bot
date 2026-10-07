@@ -115,6 +115,19 @@
       "views_at_start": 2,
       "results": [],
       "registered": "2026-10-06T10:02:53.089617+00:00"
+    },
+    "SBpmJ8RlYNM": {
+      "files": [
+        "videos/SBpmJ8RlYNM/1_map.jpg",
+        "videos/SBpmJ8RlYNM/2_person.jpg",
+        "videos/SBpmJ8RlYNM/3_frame.jpg"
+      ],
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
+      "results": [],
+      "registered": "2026-10-07T18:29:05.791689+00:00"
     }
   }
 }
