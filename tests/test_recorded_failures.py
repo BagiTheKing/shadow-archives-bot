@@ -397,3 +397,15 @@ class DecisionMaker(unittest.TestCase):
                 {"name": "Auguste Mercier", "role": "Minister of War"}]
         self.assertFalse(L._is_decider("Alfred Dreyfus", "Alfred Dreyfus", cast))
         self.assertTrue(L._is_decider("Auguste Mercier", "Auguste Mercier", cast))
+class ShortsShots(unittest.TestCase):
+    """2026-10-08: a Short's 13-second scene was one picture zoomed four
+    times. With more pictures, each shot is a new one."""
+
+    def test_each_shot_a_new_picture(self):
+        import video_engine as V
+        sc = {"image_path": "p0", "image_paths": ["p0", "p1", "p2", "p3"],
+              "archive_paths": ["a0", "a1"], "archive_path": "a0"}
+        shots = V.plan_shots(sc, 13.7, 1)
+        pics = [img for img, _ in shots]
+        self.assertEqual(len(pics), len(set(pics)))
+        self.assertIn("a0", pics)

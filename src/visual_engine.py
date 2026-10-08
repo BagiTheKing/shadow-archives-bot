@@ -6,6 +6,7 @@ so a failed download never kills the video or shows an error page as a "photo".
 
 import base64
 import io
+import math
 import os
 import random
 import re
@@ -369,6 +370,20 @@ def make_fallback_image(output_path: str, seed: int = 0,
     img.save(output_path, "JPEG", quality=92)
 
 
+# Shorts: a generated picture per this many seconds of narration, at most
+# EXTRA_SHOTS_MAX more than the first. The real archive pictures
+# (shorts_archive.py) add to these.
+SHOT_PICTURE_SECONDS = float(os.getenv("SHORTS_PICTURE_SECONDS", "3.5"))
+EXTRA_SHOTS_MAX = int(os.getenv("SHORTS_EXTRA_PICTURES", "3"))
+
+
+def _vary_prompt(prompt: str, shot: int) -> str:
+    """Another angle of the same moment, so the next shot is a new picture."""
+    angles = ["", "extreme close-up detail of the scene, ",
+              "wide establishing shot of the scene, ", "low-angle view, "]
+    return angles[shot % len(angles)] + prompt
+
+
 def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> dict:
     print("🎨 Initializing Visual Engine (flux @ 1080x1920)...")
     os.makedirs(output_dir, exist_ok=True)
@@ -407,6 +422,20 @@ def generate_visual_pipeline(script_data: dict, output_dir: str = "build") -> di
             make_fallback_image(image_path, seed=idx)
             source = "designed-fallback"
         scene["image_path"] = image_path
+        scene["image_paths"] = [image_path]
+        # More pictures for a long scene: one per shot, each from a different
+        # angle, so a 12-second scene is not one picture zoomed four times
+        # (owner, 2026-10-08: "looks like lags").
+        extra = 0 if scene.get("is_outro") else min(
+            EXTRA_SHOTS_MAX, max(0, math.ceil((scene.get("duration") or 0) / SHOT_PICTURE_SECONDS) - 1))
+        for k in range(1, extra + 1):
+            more = os.path.join(output_dir, f"scene_{idx}_{k}.jpg")
+            time.sleep(2)
+            if download_image(_vary_prompt(prompt, k), more, era_year=scene_era):
+                scene["image_paths"].append(more)
+        if extra:
+            print(f"   🖼️  scene {idx}: {len(scene['image_paths'])} picture(s) for "
+                  f"{scene.get('duration', 0):.1f}s")
         # Which generator drew this frame. main.py gates the upload on it: the
         # look of the channel depends on WHICH model rendered the prompt, not
         # merely on whether a frame came back.

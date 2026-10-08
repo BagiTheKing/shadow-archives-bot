@@ -408,7 +408,24 @@ def plan_shots(scene: dict, clip_len: float, idx: int):
                                   math.ceil(clip_len / MAX_SHOT_SECONDS))))
     if archive and n < 2 and clip_len >= 2.4:
         n = 2                     # a real picture is worth a quick cut
-    if archive:
+    paintings = [p for p in (scene.get("image_paths") or [image]) if p]
+    if image not in paintings:
+        paintings = [image] + paintings
+    archives = [a for a in (scene.get("archive_paths") or ([archive] if archive else []))
+                if a and a != image]
+    if len(paintings) + len(archives) > 2:
+        # Enough pictures for every shot to be a new one: painting, real
+        # picture, painting, ... each with its own move; punch-ins only once
+        # the pictures run out.
+        distinct, a, p = [], list(archives), list(paintings)
+        while a or p:
+            if p:
+                distinct.append((p.pop(0), (base + len(distinct)) % 4))
+            if a:
+                distinct.append((a.pop(0), _ARCHIVE_MOTIONS[len(distinct) % 2]))
+        n = max(n, min(MAX_SHOTS, len(distinct))) if clip_len >= 2.4 * len(distinct) else n
+        pool = distinct + [(img, PUNCH) for img, _ in distinct]
+    elif archive:
         pool = [(image, base), (archive, _ARCHIVE_MOTIONS[idx % 2]),
                 (image, PUNCH), (archive, PUNCH)]
     else:
@@ -539,7 +556,7 @@ def generate_video_pipeline(script_data: dict, build_dir: str = "build") -> str:
         shots = plan_shots(scene, scene["duration"] + XFADE, idx)
         described = ", ".join(
             "static card" if m is None else
-            ("archive" if img == scene.get("archive_path") else "painting")
+            ("archive" if img in (scene.get("archive_paths") or [scene.get("archive_path")]) else "painting")
             + (" punch-in" if m == PUNCH else "")
             for img, m in shots)
         print(f"🎞️ Rendering scene {idx} ({scene['duration']:.1f}s, "

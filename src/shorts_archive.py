@@ -25,18 +25,23 @@ from archive_engine import (article_lead_image, download_archival_image,
                             fit_vertical, footage_matches, format_credit,
                             search_archives)
 
-ARCHIVE_FRAMES = int(os.getenv("SHORTS_ARCHIVE_FRAMES", "2"))
+ARCHIVE_FRAMES = int(os.getenv("SHORTS_ARCHIVE_FRAMES", "6"))
+PER_SCENE = int(os.getenv("SHORTS_ARCHIVE_PER_SCENE", "2"))
 W, H = 1080, 1920
 CANDIDATES_PER_QUERY = 6
 
 
 def _fetch(candidate, scene, idx, build_dir):
-    path = os.path.join(build_dir, f"archive_{idx}.jpg")
+    k = len(scene.get("archive_paths") or [])
+    path = os.path.join(build_dir, f"archive_{idx}{'_' + str(k) if k else ''}.jpg")
     if not download_archival_image(candidate, path, W, H, fit=fit_vertical):
         return False
-    scene["archive_path"] = path
-    scene["archive_credit"] = format_credit(candidate)
-    print(f"🗄️  Scene {idx}: archive frame — {scene['archive_credit'][:90]}")
+    credit = format_credit(candidate)
+    scene.setdefault("archive_paths", []).append(path)
+    scene.setdefault("archive_credits", []).append(credit)
+    scene.setdefault("archive_path", path)
+    scene.setdefault("archive_credit", credit)
+    print(f"🗄️  Scene {idx}: archive frame — {credit[:90]}")
     return True
 
 
@@ -56,7 +61,7 @@ def add_archive_frames(script_data: dict, build_dir: str = "build") -> int:
             query = (scene.get("archive_query") or "").strip()
             if not query:
                 continue
-            for cand in search_archives(query, limit=10)[:CANDIDATES_PER_QUERY]:
+            for cand in search_archives(query, limit=12)[:CANDIDATES_PER_QUERY * PER_SCENE]:
                 if cand["url"] in used:
                     continue
                 if not footage_matches(query, (cand.get("title") or "").lower()):
@@ -64,8 +69,10 @@ def add_archive_frames(script_data: dict, build_dir: str = "build") -> int:
                 if _fetch(cand, scene, idx, build_dir):
                     used.add(cand["url"])
                     found += 1
-                    break
-            else:
+                    if (len(scene["archive_paths"]) >= PER_SCENE
+                            or found >= ARCHIVE_FRAMES):
+                        break
+            if not scene.get("archive_paths"):
                 print(f"   🗄️  Scene {idx}: nothing on the archives matches "
                       f"{query!r}.")
 
@@ -86,5 +93,9 @@ def add_archive_frames(script_data: dict, build_dir: str = "build") -> int:
 
 
 def archive_credits(script_data: dict) -> list:
-    return [s["archive_credit"] for s in script_data.get("scenes") or []
-            if s.get("archive_path") and s.get("archive_credit")]
+    out = []
+    for s in script_data.get("scenes") or []:
+        for c in s.get("archive_credits") or ([s["archive_credit"]] if s.get("archive_credit") else []):
+            if c not in out:
+                out.append(c)
+    return out
