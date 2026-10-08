@@ -134,6 +134,19 @@
       "views_at_start": 2,
       "results": [],
       "registered": "2026-10-07T18:29:05.791689+00:00"
+    },
+    "ltzuZKA2OsE": {
+      "files": [
+        "videos/ltzuZKA2OsE/1_map.jpg",
+        "videos/ltzuZKA2OsE/2_person.jpg",
+        "videos/ltzuZKA2OsE/3_frame.jpg"
+      ],
+      "status": "waiting",
+      "current": null,
+      "since": null,
+      "views_at_start": null,
+      "results": [],
+      "registered": "2026-10-08T10:31:30.592400+00:00"
     }
   }
 }
