@@ -369,3 +369,21 @@ class PortraitSearch(unittest.TestCase):
     def test_right_person_found(self):
         got = self.run_search("Thomas Hutchinson", ["Thomas Hutchinson (governor)"])
         self.assertEqual(got["title"], "Thomas Hutchinson (governor)")
+
+
+class ShortsResearch(unittest.TestCase):
+    """2026-10-07: every Short since 1 Oct lost its fact sheet — the Shorts'
+    call() did not accept the gateway's expect= argument."""
+
+    def test_fact_sheet_call_takes_expect(self):
+        import inspect
+        import shorts_facts
+        src = inspect.getsource(shorts_facts)
+        import story_mode as sm
+        seen = {}
+        def fake_call(pool, system, user, max_tokens, **kw):
+            seen.update(kw)
+            return None
+        sm.fact_sheet(None, "t", {"title": "T", "text": "x", "url": "u"}, fake_call)
+        self.assertIn("expect", seen)                   # story mode sends it
+        self.assertIn("def call(p, system, user, max_tokens, **kw)", src)

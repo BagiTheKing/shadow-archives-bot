@@ -82,8 +82,11 @@ def research_short(topic):
         print(f"📚 Research: {article['title']} ({len(article['text']):,} chars)")
         short = dict(article, text=article["text"][:SHORT_ARTICLE_CHARS])
 
-        def call(p, system, user, max_tokens):
-            return _call(p, system, user, max_tokens=max_tokens)
+        # **kw passes the reply check (expect=...) through to the gateway:
+        # without it every Short since 2026-10-01 lost its fact sheet
+        # ("unexpected keyword argument 'expect'") and was written unverified
+        def call(p, system, user, max_tokens, **kw):
+            return _call(p, system, user, max_tokens=max_tokens, **kw)
 
         sheet = sm.fact_sheet(pool, topic, short, call)
     except Exception as e:

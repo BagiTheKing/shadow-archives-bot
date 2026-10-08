@@ -157,6 +157,7 @@ jobs:
         id: render
         continue-on-error: true
         run: |
+          [ -f cache/encore/state.json ] || exit 0
           python -c "import json; r=json.load(open('cache/encore/state.json')).get('rendered') or {}; print('run_id=' + str(r.get('run_id') or ''))" >> "$GITHUB_OUTPUT" || true
 
       - name: Restore last run's render
