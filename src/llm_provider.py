@@ -191,8 +191,8 @@ def zhipu_available() -> bool:
 # catalogue also lists DeepSeek V4 and GLM-5.3, which the free plan refuses).
 # Its free daily allowance is SHARED with the images, so it is the last
 # resort of the chain (longform_llm._order_models), tried only after every
-# other model failed. CLOUDFLARE_TEXT=0 turns it off; CLOUDFLARE_MODELS
-# overrides the list.
+# other model failed. Off by default (see cloudflare_available);
+# CLOUDFLARE_TEXT=1 turns it on, CLOUDFLARE_MODELS overrides the list.
 CLOUDFLARE_MODELS = ["@cf/qwen/qwen3.8-27b",
                      "@cf/mistralai/mistral-small-3.1-24b-instruct",
                      "@cf/openai/gpt-oss-120b"]
@@ -200,8 +200,11 @@ LAST_RESORT_PROVIDERS = ("cloudflare",)
 
 
 def cloudflare_available() -> bool:
+    # Off unless CLOUDFLARE_TEXT=1: on 2026-10-08 two cut-off Qwen replies
+    # spent the shared 10,000-neuron daily allowance, and 11 of the May 1968
+    # video's 15 AI images fell back to Pollinations.
     return bool(os.getenv("CF_ACCOUNT_ID") and os.getenv("CF_API_TOKEN")
-                and os.getenv("CLOUDFLARE_TEXT", "1") != "0")
+                and os.getenv("CLOUDFLARE_TEXT", "0") == "1")
 
 
 def anthropic_available() -> bool:
