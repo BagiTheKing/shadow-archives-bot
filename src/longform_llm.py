@@ -2057,6 +2057,11 @@ def _select_real_quote(pool, topic, candidates, tone, context_before,
         f"however relevant — answer 0 and an original line in the right "
         f"register is written instead. The same if none would make sense "
         f"read alone out of context.\n"
+        f"THE QUOTE MUST BE ABOUT THIS STORY: its events, its people or "
+        f"what was at stake in them. A line its speaker said on another "
+        f"subject (a president's academic writing on public "
+        f"administration, in a story about a jailed dissident) does NOT "
+        f"qualify, even though the speaker is in the story — answer 0.\n"
         "HARD RULES:\n"
         "- Copy the chosen quote's wording EXACTLY, word for word — do "
         "not paraphrase, trim, modernise or correct it in any way. Split "
@@ -3790,12 +3795,23 @@ def _plain_name(n):
     return " ".join(re.findall(r"[a-z]+", n.lower()))
 
 
+_ACTED_ON = re.compile(r"\b(accused|convicted|condemned|prisoner|imprisoned|victim|"
+                       r"defendant|framed|exiled|executed|wrongly|scapegoat|"
+                       r"hostage|deported)\b", re.I)
+
+
 def _is_decider(name, decision_name, cast):
     """Whether this cast member is the decision maker: the full name when
     two of the cast share a surname (John and Samuel Adams were both
     stamped DECISION MAKER on the 2026-10-02 video), the surname otherwise."""
     a, b = _plain_name(name), _plain_name(decision_name)
     if not a or not b:
+        return False
+    # the person a decision was made against is never stamped DECISION
+    # MAKER (Dreyfus was, on the 2026-10-07 video)
+    role = next((c.get("role") or "" for c in cast
+                 if _plain_name(c.get("name")) == a), "")
+    if _ACTED_ON.search(role):
         return False
     if a == b or a.endswith(" " + b) or b.endswith(" " + a):
         return True
@@ -3860,9 +3876,13 @@ def _chapter_stamps(pool, topic, chapters, era_year, cast=None):
         "chain_dates: one entry per chain step, the date the text gives for "
         "that step, copied as the text says it (e.g. \"22 May 1967\", "
         "\"the fifth of June\"), or \"\" when the text gives no day for it.\n\n"
-        "ALSO name the decision_maker: the one person who made the story's "
-        "decision, full name exactly as the text says it (e.g. \"Mao "
-        "Zedong\"). Empty if the text names no single person.\n\n"
+        "ALSO name the decision_maker: the one person who MADE the story's "
+        "central decision (ordered, chose, launched it), full name exactly "
+        "as the text says it (e.g. \"Mao Zedong\"). Never the person the "
+        "decision was made against: not the accused, the prisoner or the "
+        "victim (in the Dreyfus affair, the War Minister who ordered the "
+        "prosecution, not Dreyfus). Empty if the text names no single "
+        "person.\n\n"
         'Output ONLY JSON: {"stamps": [{"chapter": 0, "place": "...", '
         '"date": "..."}], "maps": [{"target": "...", "origin": "...", '
         '"action": "strike", "light": ["..."]}], "chain": ["...", "..."], "chain_dates": ["...", "..."], '

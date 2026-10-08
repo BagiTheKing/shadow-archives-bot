@@ -387,3 +387,13 @@ class ShortsResearch(unittest.TestCase):
         sm.fact_sheet(None, "t", {"title": "T", "text": "x", "url": "u"}, fake_call)
         self.assertIn("expect", seen)                   # story mode sends it
         self.assertIn("def call(p, system, user, max_tokens, **kw)", src)
+
+
+class DecisionMaker(unittest.TestCase):
+    """2026-10-07 Dreyfus video: the accused was stamped DECISION MAKER."""
+
+    def test_accused_never_decider(self):
+        cast = [{"name": "Alfred Dreyfus", "role": "Jewish artillery officer wrongly accused of treason"},
+                {"name": "Auguste Mercier", "role": "Minister of War"}]
+        self.assertFalse(L._is_decider("Alfred Dreyfus", "Alfred Dreyfus", cast))
+        self.assertTrue(L._is_decider("Auguste Mercier", "Auguste Mercier", cast))
