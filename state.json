@@ -137,14 +137,13 @@
     },
     "ltzuZKA2OsE": {
       "files": [
-        "videos/ltzuZKA2OsE/1_map.jpg",
-        "videos/ltzuZKA2OsE/2_person.jpg",
-        "videos/ltzuZKA2OsE/3_frame.jpg"
+        "videos/ltzuZKA2OsE/1_person.jpg",
+        "videos/ltzuZKA2OsE/2_map.jpg"
       ],
       "status": "testing",
       "current": 0,
-      "since": "2026-10-08T18:49:48.751426+00:00",
-      "views_at_start": 2,
+      "since": "2026-10-09T14:54:29.720782+00:00",
+      "views_at_start": 5,
       "results": [],
       "registered": "2026-10-08T10:31:30.592400+00:00"
     }
