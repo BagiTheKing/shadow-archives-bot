@@ -68,13 +68,18 @@ PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 #   -> BLACK_BUFFER (black)
 # A single short sentence with no attribution reduces to exactly the
 # fixed 10.0s card (1.5 + 4.0 + 1.0 + 2.0 + 1.0 + 0.5).
-SENTENCE_FADE = 1.5
-INTER_SENTENCE_WAIT = 1.5
-INTRO_HOLD = 4.0
-BODY_FADE = 1.0
-KEYWORD_HOLD = 2.0
-KEYWORD_FADE = 1.0
-BLACK_BUFFER = 0.5
+# Shortened 2026-10-09 (owner): long-form viewers left at ~2:20 on average,
+# and the cold-open card was 10-19 silent seconds at ~0:45. The quote now
+# stays up as long as it takes to read (READ_SECONDS_PER_WORD), not a fixed
+# four seconds after a slow cascade.
+SENTENCE_FADE = 0.6
+INTER_SENTENCE_WAIT = 0.4
+INTRO_HOLD = 1.5              # the least time the full quote stays up
+READ_SECONDS_PER_WORD = 0.25
+BODY_FADE = 0.5
+KEYWORD_HOLD = 1.2
+KEYWORD_FADE = 0.5
+BLACK_BUFFER = 0.3
 ATTRIBUTION_FONT_SIZE = 40  # smaller than the quote's own 66pt Epigraph style
 RED_ASS = r"&H0000FF&"
 WHITE_ASS = r"&HFFFFFF&"
@@ -1303,7 +1308,8 @@ def _intro_card_schedule(epigraph: dict):
         attribution_start = settle + INTER_SENTENCE_WAIT
         settle = attribution_start + SENTENCE_FADE
 
-    hold_end = settle + INTRO_HOLD
+    words = len(" ".join(sentences + [attribution]).split())
+    hold_end = settle + max(INTRO_HOLD, READ_SECONDS_PER_WORD * words - settle)
     fade_to_kw_end = hold_end + BODY_FADE
     kw_hold_end = fade_to_kw_end + KEYWORD_HOLD
     kw_fade_end = kw_hold_end + KEYWORD_FADE

@@ -99,6 +99,12 @@ def pick_clips(scenes, limit):
         later = [c for c in order if c > pivot]
         if later:
             candidates.append(("aftermath", later[0], True))
+    # More clips (owner, 2026-10-09: clips bring ~85% of the Shorts views):
+    # the other story chapters, in order, never the closing verdict.
+    named = {c for _, c, _ in candidates}
+    for c in order[1:-1]:
+        if c not in named:
+            candidates.append(("chapter", c, True))
 
     clips, used = [], set()
     for label, c_idx, skip_bridge in candidates:
