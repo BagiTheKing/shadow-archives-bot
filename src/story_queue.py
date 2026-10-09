@@ -20,7 +20,9 @@ import os
 
 # A trend story is about this week's news: it goes stale fast. An encore
 # story (a best-liked Short, the general list) keeps.
-MAX_AGE_DAYS = {"timely": 4, "encore": 21}
+# Two days: the scout refills it twice a day, and a trend picked on the 6th
+# was still waiting on the 8th, the anniversary of 7 October.
+MAX_AGE_DAYS = {"timely": 2, "encore": 21}
 
 
 def _dir(lane):
@@ -43,8 +45,13 @@ def entries(lane):
             with open(path, encoding="utf-8") as f:
                 e = json.load(f)
             age = _now() - dt.datetime.fromisoformat(e["created"])
-            if age.days >= MAX_AGE_DAYS.get(lane, 7) or not e.get("story"):
-                print(f"🗑️  Queued story too old, dropped: {e.get('topic', '')[:70]}")
+            # the trend lane holds trend stories only: a general-list
+            # fallback (the Great Fire of London, 8 Oct) would take the
+            # slot of whatever the news is about by the time it runs
+            off_lane = lane == "timely" and e.get("source") != "timely"
+            if age.days >= MAX_AGE_DAYS.get(lane, 7) or not e.get("story") or off_lane:
+                why = "not from the news" if off_lane else "too old"
+                print(f"🗑️  Queued story {why}, dropped: {e.get('topic', '')[:70]}")
                 os.remove(path)
                 continue
             out.append((path, e))
@@ -71,6 +78,9 @@ def take(lane):
 def put(lane, entry):
     d = _dir(lane)
     if not d:
+        return None
+    if lane == "timely" and entry.get("source") != "timely":
+        print(f"↩️  Not queued for timely — not from the news: {entry['topic'][:70]}")
         return None
     os.makedirs(d, exist_ok=True)
     entry = {**entry, "created": _now().isoformat(), "lane": lane}

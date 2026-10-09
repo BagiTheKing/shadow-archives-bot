@@ -447,3 +447,29 @@ class TrendPackaging(unittest.TestCase):
         scenes = [{"image_path": card, "is_real": True},
                   {"image_path": photo, "is_real": True}]
         self.assertEqual(pick_source_scene(scenes), photo)
+
+
+class TrendLaneTopic(unittest.TestCase):
+    """2026-10-08: Piers Morgan's 7 October theme anchored to the 1948 war,
+    every article was refused over an en dash, and a Great Fire of London
+    fallback was queued as the next trend video."""
+
+    def test_en_dash_article_names_the_topic(self):
+        import story_mode as sm
+        art = {"title": "1948 Arab–Israeli War",
+               "text": "The 1948 Arab–Israeli War was fought in 1948 " * 3}
+        self.assertIsNone(sm.article_problem(
+            "The Arab-Israeli War, fought between the newly declared State of Israel", art))
+
+    def test_trend_queue_takes_news_stories_only(self):
+        import tempfile
+        import story_queue as q
+        os.environ["STORY_QUEUE_DIR"] = tempfile.mkdtemp()
+        try:
+            self.assertIsNone(q.put("timely", {"topic": "The Great Fire of London (1666)",
+                                               "story": {"x": 1}, "source": "rotation"}))
+            self.assertTrue(q.put("timely", {"topic": "1948 war", "story": {"x": 1},
+                                             "source": "timely"}))
+            self.assertEqual(q.topics("timely"), ["1948 war"])
+        finally:
+            del os.environ["STORY_QUEUE_DIR"]

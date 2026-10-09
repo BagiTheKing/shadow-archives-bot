@@ -62,7 +62,10 @@ def main():
             if not found:
                 print(f"↩️  No story found for {lane} this time.")
                 break
-            story_queue.put(lane, found)
+            if not story_queue.put(lane, found):
+                # a trend slot is only filled from the news: the video run
+                # tries the news again itself rather than take a fallback
+                break
     for lane in lanes:
         print(f"📦 {lane}: {len(story_queue.entries(lane))} story(ies) ready — "
               + "; ".join(t[:60] for t in story_queue.topics(lane)))

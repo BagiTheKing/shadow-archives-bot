@@ -204,10 +204,22 @@ def _years(text):
     return sorted(int(y) for y in _YEAR_RE.findall(text or ""))
 
 
+_DASHES = re.compile("[\u2010-\u2015\u2212]")
+
+
+def _plain_dashes(text):
+    """Wikipedia writes "Arab–Israeli" with an en dash, models write
+    "Arab-Israeli": on 8 Oct every 1948 war article was refused as not
+    naming "The Arab-Israeli War", and the trend lane fell back to the
+    Great Fire of London on the third anniversary of 7 October."""
+    return _DASHES.sub("-", text or "")
+
+
 def topic_words(topic):
     """The topic's naming words: from its name part (before any long
     description), 4+ letters, possessives cut."""
     name = re.split(r"\s*[:—]\s|,| was | is | and the ", topic or "", maxsplit=1)[0]
+    name = _plain_dashes(name)
     words = [re.sub(r"'s$", "", w.lower()) for w in re.findall(r"[A-Za-z][A-Za-z'-]+", name)]
     return [w for w in dict.fromkeys(words) if len(w) >= 4 and w not in _TOPIC_STOP][:8]
 
@@ -231,7 +243,7 @@ def article_problem(topic, art, cutoff=LEGACY_CUTOFF):
                 and not any(str(y) in lead for y in asked):
             return f"it is mostly about {top}, the topic is {asked[0]}"
     words = topic_words(topic)
-    head = (art["title"] + " " + art["text"][:3000]).lower()
+    head = _plain_dashes(art["title"] + " " + art["text"][:3000]).lower()
     need = min(2, len(words))
     if need and sum(1 for w in words if w in head) < need:
         return "its opening does not name the topic"
