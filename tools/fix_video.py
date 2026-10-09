@@ -49,6 +49,8 @@ def main():
     if intro and not replaced:
         out.insert(0, intro)
     desc = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    if os.getenv("DESCRIPTION", "").strip():
+        desc = os.environ["DESCRIPTION"].strip()
     body = {"id": vid, "snippet": {
         "title": title or snip["title"], "description": desc[:4990],
         "categoryId": snip.get("categoryId", "27"), "tags": snip.get("tags", []),

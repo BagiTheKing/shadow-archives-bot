@@ -30,9 +30,23 @@ def main():
     with open(os.environ["SCRIPT"], encoding="utf-8") as f:
         script = json.load(f)
     add_archive_frames(script, tempfile.mkdtemp())
+    # only as many pictures as the video holds (ARCHIVES, from the run's
+    # log): the search repeated today can find more than the run did
+    keep = int(os.getenv("ARCHIVES", "99"))
+    for s in script.get("scenes") or []:
+        creds = s.get("archive_credits") or []
+        s["archive_credits"] = creds[:max(0, keep)]
+        keep -= len(s["archive_credits"])
+        if not s["archive_credits"]:
+            s.pop("archive_credit", None)
+            s.pop("archive_path", None)
     music = os.getenv("MUSIC", "").strip()
     if music:
-        script["music_attribution"] = attribution_for(music)
+        root = os.path.join(os.path.dirname(__file__), "..", "music")
+        script["music_attribution"] = attribution_for(
+            music if os.path.exists(music) else os.path.join(root, music))
+        if not script["music_attribution"]:
+            sys.exit(f"No credit found for the music track {music!r}.")
     episode = int(os.getenv("EPISODE", "0")) or None
     title, description, tags = build_metadata(script, episode)
     print(f"📋 Title: {title}\n--- description ---\n{description}\n---")

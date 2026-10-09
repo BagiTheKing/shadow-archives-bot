@@ -17,6 +17,9 @@ on:
       music:
         description: "Music file the run used (from its log)"
         default: ""
+      archives:
+        description: "How many archive pictures the video holds (from its log)"
+        default: "99"
       privacy:
         description: "public / private"
         default: "public"
@@ -53,6 +56,7 @@ jobs:
           SCRIPT: out/script.json
           EPISODE: ${{ inputs.episode }}
           MUSIC: ${{ inputs.music }}
+          ARCHIVES: ${{ inputs.archives }}
           PRIVACY_STATUS: ${{ inputs.privacy }}
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
