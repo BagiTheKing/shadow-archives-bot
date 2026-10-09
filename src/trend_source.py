@@ -176,7 +176,10 @@ def news_now(subject, days=7, limit=3):
     [] when nothing was reported in the last `days` days (the story went
     quiet while it waited in the queue) or the feed is down. Read at
     packaging time, so a trend video's title says what is happening now."""
-    subject = (subject or "").strip()
+    # the theme label only: channel watch hands "the Israel-Hamas war —
+    # The conflict directly impacts millions...", and the explanation
+    # after the dash would make the search match nothing
+    subject = re.split(r"\s+[\u2014\u2013-]\s+", (subject or "").strip(), maxsplit=1)[0]
     if not subject:
         return []
     import urllib.parse
