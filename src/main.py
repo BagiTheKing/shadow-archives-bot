@@ -61,7 +61,7 @@ def sanitize_title(title: str, series: str = "") -> str:
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "The Archive Paradox")
 
 # Stated in the description so the promise matches what the schedule delivers.
-UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "five days a week")
+UPLOAD_CADENCE = os.getenv("UPLOAD_CADENCE", "every week")
 
 # A deliberate 1-2 week A/B test between Kokoro voices (see audio_engine.py's
 # module docstring for why Kokoro replaced Gemini TTS): the long-form lanes

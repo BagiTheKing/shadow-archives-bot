@@ -1,0 +1,61 @@
+name: Upload Short
+
+# Manual. Uploads a Short a dry run already rendered (its video and script
+# artifacts), as it is (tools/upload_short.py).
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run id of the dry run"
+        required: true
+      number:
+        description: "That run's number (artifacts video-N and script-N)"
+        required: true
+      episode:
+        description: "Episode number shown in the title (e.g. 32)"
+        required: true
+      music:
+        description: "Music file the run used (from its log)"
+        default: ""
+      privacy:
+        description: "public / private"
+        default: "public"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: video-${{ inputs.number }}
+          path: out
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: script-${{ inputs.number }}
+          path: out
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - env:
+          VIDEO: out/final_short.mp4
+          SCRIPT: out/script.json
+          EPISODE: ${{ inputs.episode }}
+          MUSIC: ${{ inputs.music }}
+          PRIVACY_STATUS: ${{ inputs.privacy }}
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+          SERIES_NAME: Catastrophe Files
+        run: python tools/upload_short.py
