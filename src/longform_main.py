@@ -360,6 +360,12 @@ def build_story(topic, build_dir, given=False):
             "era_year": years.most_common(1)[0][0] if years else None}
 
 
+# The news subject the last resolve_topic call anchored its topic to (the
+# trend lane only). find_story keeps it with the story, so the packaging can
+# tie the title and thumbnail to what is in the news now.
+LAST_TREND = {"subject": None}
+
+
 def resolve_topic(lane: str, history=None, extra_avoid=()):
     """Chooses this run's topic.
     Returns (topic, enforce_history, from_short, era_year).
@@ -378,6 +384,7 @@ def resolve_topic(lane: str, history=None, extra_avoid=()):
     never the video itself. The fallback now skips anything already covered in
     long form, so a fallback week cannot quietly remake last week's video.
     """
+    LAST_TREND["subject"] = None
     covered = covered_topics(history, longform_only=True) if history else set()
     # topics queued or already tried this run must not be picked again
     covered = set(covered) | set(extra_avoid or ())
@@ -431,6 +438,7 @@ def resolve_topic(lane: str, history=None, extra_avoid=()):
                 if anchor:
                     print(f"📺 Anchored to a channel-watch theme: "
                           f"{anchor['topic'][:70]}")
+                    LAST_TREND["subject"] = anchor.get("subject") or None
                     return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
             raise
@@ -445,6 +453,7 @@ def resolve_topic(lane: str, history=None, extra_avoid=()):
             anchor = select_historical_anchor(
                 candidates, pool=pool, avoid_titles=avoid_titles, story=True)
             if anchor:
+                LAST_TREND["subject"] = anchor.get("subject") or None
                 return anchor["topic"], True, False, anchor.get("anchor_year")
         except QuotaExhausted:
             # Falling back to the rotation here would be pointless: the chapter
@@ -499,9 +508,12 @@ def find_story(lane, history, avoid=()):
         if not event or (event != t and event in avoid):
             return None
         avoid.add(event)
+        trend = LAST_TREND["subject"] if source == "timely" and enforce_history else None
         story = build_story(event, BUILD_DIR)
         if not story:
             return None
+        if trend:
+            story["trend"] = trend
         return {"topic": event, "story": story, "enforce_history": enforce_history,
                 "from_short": from_short and event == t,
                 "era_year": era_year or story.get("era_year"), "source": source}

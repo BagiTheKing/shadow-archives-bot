@@ -409,3 +409,41 @@ class ShortsShots(unittest.TestCase):
         pics = [img for img, _ in shots]
         self.assertEqual(len(pics), len(set(pics)))
         self.assertIn("a0", pics)
+
+
+class TrendPackaging(unittest.TestCase):
+    """2026-10-09: the May 1968 trend video was packaged as plain history
+    while France's students were marching again, and its third thumbnail
+    was a scanned UNESCO archive card."""
+
+    def test_news_reaches_the_packaging_prompt(self):
+        seen = {}
+        def fake_call(pool, system, user, **kw):
+            seen["user"] = user
+            return {"title": "t", "description": "d", "tags": []}
+        real = L._call
+        L._call = fake_call
+        try:
+            L._packaging_call(None, "May 1968", "text", story={"sheet": {}},
+                              now=["Students shut 900 French schools"])
+        finally:
+            L._call = real
+        self.assertIn("Students shut 900 French schools", seen["user"])
+        self.assertIn("IN THE NEWS THIS WEEK", seen["user"])
+
+    def test_news_numbers_pass_the_thumbnail_check(self):
+        v = {"person": {"setup": "900 SCHOOLS SHUT", "twist": "IN 1968 IT SHUT FRANCE"}}
+        kept = L._checked_thumb_texts(v, {"sheet": {}}, "In 1968 ... 900 schools shut")
+        self.assertEqual(kept["person"]["setup"], "900 SCHOOLS SHUT")
+
+    def test_document_scan_never_the_thumbnail(self):
+        import tempfile
+        from PIL import Image
+        from thumbnail_engine import pick_source_scene
+        d = tempfile.mkdtemp()
+        card, photo = os.path.join(d, "card.jpg"), os.path.join(d, "photo.jpg")
+        Image.new("RGB", (200, 120), (236, 234, 228)).save(card)
+        Image.new("RGB", (200, 120), (70, 60, 50)).save(photo)
+        scenes = [{"image_path": card, "is_real": True},
+                  {"image_path": photo, "is_real": True}]
+        self.assertEqual(pick_source_scene(scenes), photo)

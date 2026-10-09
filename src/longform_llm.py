@@ -3112,13 +3112,26 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
     if not payoff_ok({"chapters": chapters}):
         print("⚠️ The closing chapter names none of the people the opening "
               "did — the video may not pay off what it promised.")
+    # A trend video is a lesson from the past about something in the news
+    # now; packaged as plain history ("France's May 1968 Student Uprising
+    # Sparks Nationwide Strikes", 8 Oct, while France's students were out
+    # again) nobody sees why to click it today. This week's headlines tie it.
+    now = []
+    if story and story.get("trend"):
+        try:
+            from trend_source import news_now
+            now = news_now(story["trend"])
+        except Exception as e:
+            print(f"⚠️ News hook skipped ({type(e).__name__}: {e}).")
+        print(f"📰 In the news now ({story['trend']}): "
+              + (" | ".join(now) if now else "nothing this week — packaged as history."))
     meta = {}
     try:
-        meta = _packaging_call(pool, topic, full_text, story=story)
+        meta = _packaging_call(pool, topic, full_text, story=story, now=now)
         if not meta.get("title"):
             # an empty or placeholder reply: once more, on another model
             print("   ↩️  Packaging reply had no real title — asking another model.")
-            meta = _packaging_call(pool, topic, full_text, story=story,
+            meta = _packaging_call(pool, topic, full_text, story=story, now=now,
                                    skip={_last_model} if _last_model else ()) or meta
         # One correction pass, and only when the title is the problem. The
         # published long-form titles include "Soviet Invasion of Kuril Islands
@@ -3126,7 +3139,8 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # ever fought, attached to a name almost nobody recognises. That
         # combination is the whole reason these videos are not clicked.
         if not validate_title((meta.get("title") or "").strip()):
-            retry = _packaging_call(pool, topic, full_text, retitle=True, story=story)
+            retry = _packaging_call(pool, topic, full_text, retitle=True, story=story,
+                                    now=now)
             if retry.get("title") and validate_title(retry["title"].strip()):
                 meta = retry
             else:
@@ -3189,7 +3203,7 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # story mode: the texts of the three thumbnails (thumb_variants.py),
         # every number checked against the fact sheet and the narration
         "thumbnail_variants": _checked_thumb_texts(
-            meta.get("thumbnail_variants"), story, full_text),
+            meta.get("thumbnail_variants"), story, full_text + " " + " ".join(now)),
         # Posted as the first comment under the video. See
         # youtube_publisher.post_first_comment for why the channel needs one.
         "comment_question": str(meta.get("comment_question") or "").strip()[:280],
@@ -3234,7 +3248,33 @@ def _real_meta(meta):
     return out
 
 
-def _packaging_call(pool, topic, full_text, retitle=False, story=None, skip=()):
+def _now_rules(now):
+    """The packaging rules for a trend video while its subject is in the news."""
+    heads = "\n".join(f"- {h}" for h in now)
+    return (
+        "THIS VIDEO IS THE HISTORY BEHIND A STORY IN THE NEWS THIS WEEK. "
+        f"This week's headlines:\n{heads}\n"
+        "People click because of what is happening NOW, so the packaging "
+        "ties the two together. These rules override the title and thumbnail "
+        "rules above where they differ:\n"
+        "- title: what is happening now, in plain words from the headlines, "
+        "then what happened last time. Under 75 characters. The shape, from a "
+        "different story (never reuse its words): 'Ships Are Being Hit in the "
+        "Red Sea Again. In 1987 It Started a War'.\n"
+        "- thumbnail_text: today's hook, e.g. 'IT HAPPENED BEFORE'.\n"
+        "- thumbnail_variants: person setup = what is happening now (2-4 "
+        "words, e.g. 'THE SHIPS ARE BURNING AGAIN'), twist = what it led to "
+        "last time; map question = today's hook as a question (e.g. 'IS IT "
+        "1987 AGAIN?'), tag = what happened last time; faceoff as above.\n"
+        "- description: the first sentence says what is happening now, as "
+        "the headlines report it; the rest is the history.\n"
+        "Say nothing about today beyond what these headlines state, never "
+        "take a side or blame anyone in the present-day story, and every "
+        "claim about the past must be in the narration.\n")
+
+
+def _packaging_call(pool, topic, full_text, retitle=False, story=None, skip=(),
+                    now=()):
     """Title, description, tags and thumbnail text, written against the finished
     script rather than guessed up front.
 
@@ -3319,6 +3359,7 @@ def _packaging_call(pool, topic, full_text, retitle=False, story=None, skip=()):
                  "about this story.\n"
                  "And thumbnail_badge: a year or a single number, e.g. '1628'.\n"
                  + (STORY_THUMB_RULES if story else "") +
+                 (_now_rules(now) if now else "") +
                  "And comment_question: ONE question to post as the first comment, "
                  "answerable by someone who just watched this and has an opinion — "
                  "who was at fault, which moment was the point of no return, what "

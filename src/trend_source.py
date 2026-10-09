@@ -28,6 +28,8 @@ UA = "Mozilla/5.0 (compatible; ArchiveParadoxBot/1.0)"
 TRENDS_URL = "https://trends.google.com/trending/rss?geo={geo}"
 NEWS_URL = ("https://news.google.com/rss/headlines/section/topic/{topic}"
             "?hl=en-US&gl={gl}&ceid={gl}:en")
+NEWS_SEARCH_URL = ("https://news.google.com/rss/search?q={q}+when:{days}d"
+                   "&hl=en-US&gl=US&ceid=US:en")
 
 # ---------------------------------------------------------------------------
 # Two separate questions, deliberately not conflated:
@@ -167,6 +169,31 @@ def _items(xml_bytes):
                 out[name] = child.text.strip()
         if out:
             yield out
+
+
+def news_now(subject, days=7, limit=3):
+    """This week's headlines about a trend subject, newest reporting first;
+    [] when nothing was reported in the last `days` days (the story went
+    quiet while it waited in the queue) or the feed is down. Read at
+    packaging time, so a trend video's title says what is happening now."""
+    subject = (subject or "").strip()
+    if not subject:
+        return []
+    import urllib.parse
+    try:
+        items = list(_items(_get(NEWS_SEARCH_URL.format(
+            q=urllib.parse.quote(subject), days=days))))
+    except Exception as e:
+        print(f"⚠️ Google News search unavailable: {e}")
+        return []
+    heads = []
+    for it in items:
+        title = re.sub(r"\s+-\s+[^-]+$", "", it.get("title", "")).strip()
+        if title and title not in heads:
+            heads.append(title)
+        if len(heads) >= limit:
+            break
+    return heads
 
 
 def fetch_google_trends(geos=("US", "GB")):

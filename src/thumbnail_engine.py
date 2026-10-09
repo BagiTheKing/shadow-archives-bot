@@ -154,6 +154,18 @@ def make_thumbnail(source_image: str, headline: str, output_path: str,
     return output_path
 
 
+def looks_like_document(path) -> bool:
+    """A scanned page, catalogue card or blank sheet rather than a picture:
+    mostly near-white. The 8 Oct May 1968 thumbnail was a UNESCO archive
+    card (a caption, a stamp and a QR code) under "20,000 PROTESTERS"."""
+    try:
+        im = Image.open(path).convert("L").resize((64, 64))
+    except Exception:
+        return True
+    hist = im.histogram()
+    return sum(hist[201:]) / sum(hist) > 0.6
+
+
 def pick_source_scene(scenes):
     """The most usable frame for a thumbnail, from the middle of the video
     where the drama sits. A real archival photograph is preferred over a
@@ -161,7 +173,8 @@ def pick_source_scene(scenes):
     # Never the outro: that frame is the NEXT episode's card, so using it would
     # put another video's title on this one's thumbnail.
     with_images = [s for s in scenes
-                   if s.get("image_path") and not s.get("is_outro")]
+                   if s.get("image_path") and not s.get("is_outro")
+                   and not looks_like_document(s["image_path"])]
     candidates = [s for s in with_images if s.get("is_real")] or with_images
     if not candidates:
         return None
