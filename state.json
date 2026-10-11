@@ -72,8 +72,8 @@
         "videos/NPLsPRM6RH4/2_person.jpg",
         "videos/NPLsPRM6RH4/3_cyanide.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-07T18:55:22.582241+00:00",
       "views_at_start": 5,
       "results": [
@@ -88,9 +88,16 @@
           "views": 0,
           "days": 3.09,
           "per_day": 0.0
+        },
+        {
+          "file": "videos/NPLsPRM6RH4/3_cyanide.jpg",
+          "views": 0,
+          "days": 3.95,
+          "per_day": 0.0
         }
       ],
-      "registered": "2026-10-01T14:10:15.356075+00:00"
+      "registered": "2026-10-01T14:10:15.356075+00:00",
+      "winner": "videos/NPLsPRM6RH4/1_faceoff.jpg"
     },
     "PZSynfqA-DY": {
       "files": [
@@ -164,10 +171,17 @@
         "videos/SBpmJ8RlYNM/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-07T18:55:22.582241+00:00",
-      "views_at_start": 2,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-11T17:40:32.858950+00:00",
+      "views_at_start": 3,
+      "results": [
+        {
+          "file": "videos/SBpmJ8RlYNM/1_map.jpg",
+          "views": 1,
+          "days": 3.95,
+          "per_day": 0.25
+        }
+      ],
       "registered": "2026-10-07T18:29:05.791689+00:00"
     },
     "ltzuZKA2OsE": {
