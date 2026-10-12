@@ -23,7 +23,8 @@ The source is lf_merged.mp4, the picture and narration before the long-form
 captions and music are burned in. The 16:9 picture is trimmed to 3:2 and set
 across the middle of a 9:16 frame over a blurred copy of itself; the Shorts'
 own big captions (video_engine.generate_subtitles, with its yellow figures)
-go below it, the video's headline above it, and "FULL STORY ON THE CHANNEL"
+go below it, the video's headline above it, a red "FULL STORY ON THE
+CHANNEL" bar between the two for the whole clip, and "WATCH THE FULL VIDEO"
 takes the headline's place for the last seconds.
 
 WHERE THEY GO
@@ -142,6 +143,36 @@ def _wrap(text, width=18):
     return r"\N".join(lines[:3])
 
 
+# The way to the full video stays on screen the whole clip: with only the
+# last 4 seconds, four clips drew ~2,000 views and the video they cut from 7
+# (10 Oct). A red bar just above the picture, in the thumbnails' red.
+BAR_Y = 520                       # bar centre; the picture starts at 600
+BAR_SIZE = 76
+BAR_RED = "&H2028D6&"             # thumb_variants.RED (214, 40, 32), as BGR
+CLIP_END = "WATCH THE FULL VIDEO"
+
+
+def _cta_bar(length):
+    from video_engine import FONTS_DIR, _ass_time
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), BAR_SIZE)
+        # libass draws Anton at about two thirds of PIL's size for the
+        # same number (measured on a rendered frame)
+        text_w = font.getlength(CLIP_CTA) * 0.68
+    except Exception:
+        text_w = len(CLIP_CTA) * BAR_SIZE * 0.33
+    bw, bh = int(text_w + 64), int(BAR_SIZE * 1.15)
+    x0, y0 = 540 - bw // 2, BAR_Y - bh // 2
+    span = f"{_ass_time(0)},{_ass_time(length)}"
+    return [
+        f"Dialogue: 3,{span},Cta,,0,0,0,,{{\\an7\\pos({x0},{y0})\\bord0\\shad0"
+        f"\\1c{BAR_RED}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
+        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{BAR_Y})\\fs{BAR_SIZE}"
+        f"\\bord0\\shad0\\1c&H00FFFFFF&\\fad(250,0)}}{CLIP_CTA}",
+    ]
+
+
 def _headline_events(headline, length):
     from video_engine import _ass_time
     head = _wrap(headline.upper().replace("{", "").replace("}", ""))
@@ -151,8 +182,8 @@ def _headline_events(headline, length):
         f"Dialogue: 3,{_ass_time(0)},{_ass_time(cta_at)},Cta,,0,0,0,,"
         f"{style}\\c&H00FFFFFF&}}{head}",
         f"Dialogue: 3,{_ass_time(cta_at)},{_ass_time(length)},Cta,,0,0,0,,"
-        f"{style}}}{_wrap(CLIP_CTA)}",
-    ]
+        f"{style}}}{_wrap(CLIP_END, 22)}",
+    ] + _cta_bar(length)
 
 
 def render_clip(merged, clip_scenes, headline, out_path, build_dir, k):
