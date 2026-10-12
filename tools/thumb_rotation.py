@@ -11,7 +11,11 @@ State lives on the `thumb-rotation` branch (checked out at ROT_DIR by the
 workflow): state.json plus videos/<video_id>/<n>_<kind>.jpg.
 
     python tools/thumb_rotation.py register <video_id> <thumbnails dir>
+    python tools/thumb_rotation.py comments <pending_comments.json>
     python tools/thumb_rotation.py rotate
+
+It also posts each upload's first comment once the video is public:
+YouTube refuses comments on a private video.
 
 Weakness, stated plainly: the periods are sequential, and a video gets most
 of its views early, so the first thumbnail has a head start. Views per day
@@ -70,6 +74,39 @@ def register(video_id, thumbs_dir):
     print(f"Registered {video_id} for rotation: {', '.join(files)}")
 
 
+def hold_comments(path):
+    """Adds a run's held first comments (youtube_publisher.hold_comment)."""
+    with open(path, encoding="utf-8") as f:
+        held = json.load(f)
+    state = _load()
+    state.setdefault("comments", {}).update(held)
+    _save(state)
+    print(f"Holding {len(held)} first comment(s) until their videos are public.")
+
+
+def _post_comments(youtube, state):
+    """Posts each held comment whose video is public now."""
+    from youtube_publisher import post_first_comment
+    held = state.get("comments") or {}
+    if not held:
+        return
+    ids = list(held)
+    info = {}
+    for i in range(0, len(ids), 50):
+        got = youtube.videos().list(part="status", id=",".join(ids[i:i + 50])).execute()
+        info.update({x["id"]: x for x in got.get("items", [])})
+    for vid in ids:
+        item = info.get(vid)
+        if not item:
+            print(f"{vid}: comment dropped — video not found.")
+            held.pop(vid)
+        elif item["status"].get("privacyStatus") == "public":
+            if post_first_comment(youtube, vid, held[vid]):
+                held.pop(vid)
+        else:
+            print(f"{vid}: comment waits — video not public yet.")
+
+
 def _set(youtube, video_id, path):
     from youtube_publisher import set_thumbnail
     return set_thumbnail(youtube, video_id, os.path.join(ROT_DIR, path))
@@ -79,10 +116,14 @@ def rotate():
     from youtube_publisher import get_authenticated_service
     state = _load()
     live = {k: v for k, v in state["videos"].items() if v["status"] != "done"}
-    if not live:
+    if not live and not state.get("comments"):
         print("No video is being rotated.")
         return
     youtube = get_authenticated_service()
+    _post_comments(youtube, state)
+    if not live:
+        _save(state)
+        return
     got = youtube.videos().list(part="status,statistics", id=",".join(live)).execute()
     info = {i["id"]: i for i in got.get("items", [])}
     now = _now()
@@ -133,6 +174,8 @@ def rotate():
 if __name__ == "__main__":
     if len(sys.argv) >= 4 and sys.argv[1] == "register":
         register(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "comments":
+        hold_comments(sys.argv[2])
     elif len(sys.argv) >= 2 and sys.argv[1] == "rotate":
         rotate()
     else:

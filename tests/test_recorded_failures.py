@@ -473,3 +473,44 @@ class TrendLaneTopic(unittest.TestCase):
             self.assertEqual(q.topics("timely"), ["1948 war"])
         finally:
             del os.environ["STORY_QUEUE_DIR"]
+
+
+class HeldComments(unittest.TestCase):
+    """2026-10-08/10: every first comment failed with 403 — uploads are
+    private and YouTube refuses comments on a private video."""
+
+    def test_comment_waits_then_posts_when_public(self):
+        import importlib, json, tempfile
+        import youtube_publisher as yp
+        d = tempfile.mkdtemp()
+        cwd = os.getcwd()
+        real_post = yp.post_first_comment
+        os.chdir(d)
+        try:
+            yp.hold_comment("vid1", "Who was to blame?")
+            yp.hold_comment("vid2", "Which moment?")
+            os.environ["ROT_DIR"] = os.path.join(d, "rot")
+            sys.path.insert(0, os.path.join(cwd, "tools"))
+            import thumb_rotation as tr
+            importlib.reload(tr)
+            tr.hold_comments(yp.PENDING_COMMENTS)
+            posted = []
+            yp.post_first_comment = lambda yt, vid, text: posted.append(vid) or True
+            class Req:
+                def __init__(self, out): self.out = out
+                def execute(self): return self.out
+            class Videos:
+                def list(self, part, id):
+                    return Req({"items": [
+                        {"id": "vid1", "status": {"privacyStatus": "public"}},
+                        {"id": "vid2", "status": {"privacyStatus": "private"}}]})
+            class YT:
+                def videos(self): return Videos()
+            state = tr._load()
+            tr._post_comments(YT(), state)
+            self.assertEqual(posted, ["vid1"])
+            self.assertEqual(list(state["comments"]), ["vid2"])
+        finally:
+            yp.post_first_comment = real_post
+            os.chdir(cwd)
+            os.environ.pop("ROT_DIR", None)

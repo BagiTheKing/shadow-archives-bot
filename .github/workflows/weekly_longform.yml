@@ -306,17 +306,24 @@ jobs:
         if: success()
         continue-on-error: true
         run: |
-          [ -f build/uploaded.json ] && [ -d build/thumbnails ] || exit 0
-          vid=$(python -c "import json; print(json.load(open('build/uploaded.json'))['video_id'])")
+          [ -f build/uploaded.json ] || [ -f build/pending_comments.json ] || exit 0
           git fetch -q origin thumb-rotation
           git worktree add -q rot origin/thumb-rotation
-          ROT_DIR=rot python tools/thumb_rotation.py register "$vid" build/thumbnails
+          if [ -f build/uploaded.json ] && [ -d build/thumbnails ]; then
+            vid=$(python -c "import json; print(json.load(open('build/uploaded.json'))['video_id'])")
+            ROT_DIR=rot python tools/thumb_rotation.py register "$vid" build/thumbnails
+          fi
+          # first comments wait there until the video is public (private
+          # uploads refuse comments)
+          if [ -f build/pending_comments.json ]; then
+            ROT_DIR=rot python tools/thumb_rotation.py comments build/pending_comments.json
+          fi
           cd rot
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && exit 0
-          git commit -qm "Register $vid for thumbnail rotation"
+          git commit -qm "Register uploads for thumbnail rotation and held comments"
           git push -q origin HEAD:thumb-rotation
 
       # Diagnostics only — never allowed to fail the run. Same reasoning as the

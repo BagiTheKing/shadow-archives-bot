@@ -231,6 +231,30 @@ def upload_video_to_youtube(video_path: str, title: str, description: str, tags=
         add_to_playlist(youtube, playlist_id, video_id)
 
     if first_comment and video_id:
-        post_first_comment(youtube, video_id, first_comment)
+        if privacy == "public":
+            post_first_comment(youtube, video_id, first_comment)
+        else:
+            hold_comment(video_id, first_comment)
 
     return video_id
+
+
+PENDING_COMMENTS = os.path.join("build", "pending_comments.json")
+
+
+def hold_comment(video_id: str, text: str):
+    """YouTube refuses a comment on a private video (403 "insufficient
+    permissions": every upload since 8 Oct, uploaded private). The comment
+    waits in build/pending_comments.json; the workflow hands it to the
+    thumbnail rotation, which posts it once the video is public."""
+    import json
+    try:
+        with open(PENDING_COMMENTS, encoding="utf-8") as f:
+            held = json.load(f)
+    except (FileNotFoundError, ValueError):
+        held = {}
+    held[video_id] = text.strip()
+    os.makedirs(os.path.dirname(PENDING_COMMENTS), exist_ok=True)
+    with open(PENDING_COMMENTS, "w", encoding="utf-8") as f:
+        json.dump(held, f, ensure_ascii=False, indent=2)
+    print(f"💬 First comment held until the video is public: {text.strip()[:70]}")
