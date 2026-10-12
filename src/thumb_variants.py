@@ -495,7 +495,9 @@ def build(scenes, script, build_dir):
     sides = [_side_name(p[1]) for p in pair] if pair else \
         [x for x in dict.fromkeys(_side_name(p[1]) for p in people) if x][:2]
 
-    # the video's own map places
+    # the story's main place when it can be found, else the places the
+    # video's map scenes show
+    main = list((script.get("places") or [])[:1])
     target_names, lit = [], []
     for s in scenes:
         m = s.get("map") if s.get("_is_map") else None
@@ -503,7 +505,7 @@ def build(scenes, script, build_dir):
             target_names.append(m["target"])
             lit += list(m.get("light") or [])
     targets, points, label = [], [], ""
-    for name in dict.fromkeys(target_names):
+    for name in dict.fromkeys(main + target_names):
         try:
             r = M.find_region(name)
             if r and r[0] == "province":
@@ -516,6 +518,8 @@ def build(scenes, script, build_dir):
                     label = label or name
         except Exception as e:
             print(f"   ↩️  Map place {name!r} not found ({type(e).__name__}).")
+        if targets or points:
+            break
     sides = [s for s in sides if _country(s)] or [x for x in lit if _country(x)][:2]
 
     # the background: the map of the two sides when it can be drawn, the

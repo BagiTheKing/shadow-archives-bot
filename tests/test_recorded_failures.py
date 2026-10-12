@@ -514,3 +514,37 @@ class HeldComments(unittest.TestCase):
             yp.post_first_comment = real_post
             os.chdir(cwd)
             os.environ.pop("ROT_DIR", None)
+
+
+class GazaThumbnails(unittest.TestCase):
+    """2026-10-10 Gaza 1987 video: the map thumbnail pointed at Tunis, and a
+    2020s London protest photo was its frame thumbnail."""
+
+    def test_modern_photo_refused_for_1987_story(self):
+        import longform_visual as LV
+        self.assertFalse(LV._era_appropriate({"title": "Protest", "year": 2023}, 1987))
+        self.assertTrue(LV._era_appropriate({"title": "Jabalia", "year": 1988}, 1987))
+        self.assertTrue(LV._era_appropriate({"title": "Undated"}, 1987))
+
+    def test_scan_date_does_not_hide_the_photo_year(self):
+        import archive_engine as A
+        meta = {"DateTimeOriginal": {"value": "2015-03-02"}}
+        self.assertEqual(A._photo_year("Rommel in Libya 1941", meta), 1941)
+
+    def test_thumbnail_map_points_at_the_main_place(self):
+        import map_engine as M
+        import thumb_variants as T
+        seen = []
+        real = (M.find_region, M.geocode)
+        M.find_region = lambda n: None
+        M.geocode = lambda n: seen.append(n) or (34.4, 31.5)
+        try:
+            scenes = [{"_is_map": True, "map": {"target": "Tunis"}, "narration": "x"}]
+            import tempfile
+            T.build(scenes, {"places": ["Gaza"], "thumbnail_text": "X"}, tempfile.mkdtemp())
+        except Exception:
+            pass
+        finally:
+            M.find_region, M.geocode = real
+        self.assertEqual(seen[:1], ["Gaza"])
+        self.assertNotIn("Tunis", seen)

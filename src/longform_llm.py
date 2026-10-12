@@ -3207,6 +3207,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         # Posted as the first comment under the video. See
         # youtube_publisher.post_first_comment for why the channel needs one.
         "comment_question": str(meta.get("comment_question") or "").strip()[:280],
+        # the story's places, main one first: the thumbnail map points there
+        # (10 Oct, Gaza 1987: its one map scene was Tunis, so was the thumbnail)
+        "places": [p for p in ((story or {}).get("plan") or {}).get("places") or [] if p],
         "chapters": chapters,
         "word_count": words,
         "era_year": era_year,

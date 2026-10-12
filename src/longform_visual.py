@@ -163,8 +163,21 @@ def _subject_key(query: str) -> str:
     return _YEAR_RE.sub("", query).strip().lower()
 
 
+# How much later than the story's year a photo may be taken: a story's
+# legacy chapter reaches a decade or two on (Gaza 1987 to the 2007 takeover),
+# never past the history cutoff.
+PHOTO_YEARS_AFTER = 20
+HISTORY_CUTOFF = int(os.getenv("HISTORY_CUTOFF_YEAR", "2010"))
+
+
 def _era_appropriate(candidate: dict, era_year) -> bool:
     """Whether a Commons candidate can appear in a story set in era_year."""
+    year = candidate.get("year")
+    if era_year and year and (year > era_year + PHOTO_YEARS_AFTER
+                              or year > HISTORY_CUTOFF):
+        # a 2020s London protest photo stood in for Gaza 1987 (10 Oct) and
+        # became the video's thumbnail under "4 WORKERS KILLED 1987"
+        return False
     if not era_year or era_year >= PHOTOGRAPHY_YEAR:
         return True
     low = candidate.get("title", "").lower()

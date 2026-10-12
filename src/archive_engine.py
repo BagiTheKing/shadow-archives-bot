@@ -196,6 +196,9 @@ def _candidates(pages: dict) -> list:
             continue
         meta = info.get("extmetadata") or {}
         scored.append((score, {
+            # when it was taken (the file's own date, else its title):
+            # longform_visual drops photos far newer than the story
+            "year": _photo_year(title, meta),
             "url": info.get("thumburl") or info.get("url"),
             "width": info.get("width"), "height": info.get("height"),
             "title": title.replace("File:", "").rsplit(".", 1)[0],
@@ -670,6 +673,16 @@ def _video_year(title: str, meta: dict):
     if not m:
         m = _YEAR_RE.search(title)
     return int(m.group(1)) if m else None
+
+
+def _photo_year(title: str, meta: dict):
+    """When a still was taken: the earlier of its date field and a year in
+    its title. A scan uploaded in 2015 of a 1944 print carries 2015 as its
+    date and 1944 in its title; the earlier one is the photograph."""
+    years = [int(m.group(1)) for m in (
+        _YEAR_RE.search(_strip_html((meta.get("DateTimeOriginal") or {}).get("value", ""))),
+        _YEAR_RE.search(title)) if m]
+    return min(years) if years else None
 
 
 def _best_derivative(info: dict):
