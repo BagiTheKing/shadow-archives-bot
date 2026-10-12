@@ -130,8 +130,8 @@
         "videos/fU3Bh_T6uSg/2_person.jpg",
         "videos/fU3Bh_T6uSg/1_map.jpg"
       ],
-      "status": "testing",
-      "current": 1,
+      "status": "done",
+      "current": null,
       "since": "2026-10-09T18:19:54.013987+00:00",
       "views_at_start": 13,
       "results": [
@@ -140,9 +140,16 @@
           "views": 7,
           "days": 3.84,
           "per_day": 1.82
+        },
+        {
+          "file": "videos/fU3Bh_T6uSg/1_map.jpg",
+          "views": 0,
+          "days": 3.12,
+          "per_day": 0.0
         }
       ],
-      "registered": "2026-10-03T08:41:41.907991+00:00"
+      "registered": "2026-10-03T08:41:41.907991+00:00",
+      "winner": "videos/fU3Bh_T6uSg/2_person.jpg"
     },
     "5N4UiG9qhoU": {
       "files": [
@@ -151,15 +158,21 @@
         "videos/5N4UiG9qhoU/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 1,
-      "since": "2026-10-09T18:19:54.013987+00:00",
-      "views_at_start": 7,
+      "current": 2,
+      "since": "2026-10-12T21:15:06.832705+00:00",
+      "views_at_start": 10,
       "results": [
         {
           "file": "videos/5N4UiG9qhoU/1_person.jpg",
           "views": 5,
           "days": 3.0,
           "per_day": 1.67
+        },
+        {
+          "file": "videos/5N4UiG9qhoU/2_map.jpg",
+          "views": 3,
+          "days": 3.12,
+          "per_day": 0.96
         }
       ],
       "registered": "2026-10-06T10:02:53.089617+00:00"
@@ -190,10 +203,17 @@
         "videos/ltzuZKA2OsE/2_person.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-09T14:59:45.345378+00:00",
-      "views_at_start": 5,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-12T21:15:06.832705+00:00",
+      "views_at_start": 10,
+      "results": [
+        {
+          "file": "videos/ltzuZKA2OsE/1_map.jpg",
+          "views": 5,
+          "days": 3.26,
+          "per_day": 1.53
+        }
+      ],
       "registered": "2026-10-08T10:31:30.592400+00:00"
     },
     "Je9K5YuIMCw": {
