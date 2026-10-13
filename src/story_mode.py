@@ -402,12 +402,16 @@ def verify_sheet(sheet, article_text):
     for key, check in (
             ("quotes", lambda q: _norm(q.get("text")) in art and len(q.get("text", "")) > 8
              and names_ok(q.get("speaker"))),
-            ("numbers", lambda n: digits_ok(str(n.get("value"))) and names_ok(n.get("what"))),
+            ("numbers", lambda n: n.get("value") and n.get("what")
+             and digits_ok(str(n.get("value"))) and names_ok(n.get("what"))),
             ("people", lambda p: names_ok(p.get("name")) and p.get("name")),
             ("places", lambda p: names_ok(p if isinstance(p, str) else p.get("name"))),
-            ("timeline", lambda t: digits_ok(t.get("date")) and names_ok(t.get("event"))
+            ("timeline", lambda t: t.get("date") and t.get("event")
+             and digits_ok(t.get("date")) and names_ok(t.get("event"))
              and names_ok(" ".join(t.get("people") or []))),
-            ("legacy", lambda l: _legacy_year(l) is not None
+            # every field the prompt prints must be there: a legacy line
+            # without "what" crashed the 12 Oct scout (KeyError)
+            ("legacy", lambda l: l.get("what") and _legacy_year(l) is not None
              and _legacy_year(l) <= LEGACY_CUTOFF
              and digits_ok(str(l.get("year"))) and names_ok(l.get("what"))
              and digits_ok(l.get("what")))):

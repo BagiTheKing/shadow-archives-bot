@@ -140,11 +140,19 @@ _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _reserved_notice_shown = False
 
 
+# With it set, the reservation holds only before this UTC hour: the scout
+# leaves Gemini to a video day's morning run, then has the leftovers. On
+# 13 Oct the 07:15 scout researched with Gemini and the 07:41 trend run ran
+# out of it in its fourth chapter.
+GEMINI_RESERVED_BEFORE = int(os.getenv("GEMINI_RESERVED_BEFORE", "24") or 24)
+
+
 def gemini_reserved() -> bool:
-    """Whether today (UTC) is one of GEMINI_RESERVED_DAYS."""
+    """Whether now (UTC) falls in the GEMINI_RESERVED_DAYS reservation."""
     import datetime
-    today = _WEEKDAYS[datetime.datetime.now(datetime.timezone.utc).weekday()]
-    return today in GEMINI_RESERVED_DAYS
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return (_WEEKDAYS[now.weekday()] in GEMINI_RESERVED_DAYS
+            and now.hour < GEMINI_RESERVED_BEFORE)
 
 
 # A second Gemini key (owner, 2026-09-30): its models join the chain right

@@ -548,3 +548,30 @@ class GazaThumbnails(unittest.TestCase):
             M.find_region, M.geocode = real
         self.assertEqual(seen[:1], ["Gaza"])
         self.assertNotIn("Tunis", seen)
+
+
+class ScoutCrashAndQuota(unittest.TestCase):
+    """2026-10-12 scout: a legacy line with no "what" crashed it.
+    2026-10-13: the morning scout spent the trend run's Gemini quota."""
+
+    def test_legacy_line_without_text_is_dropped(self):
+        import story_mode as sm
+        out, dropped = sm.verify_sheet({"legacy": [{"year": "1990"}]},
+                                       "In 1990 it ended.")
+        self.assertEqual(out["legacy"], [])
+        sm.sheet_text({**out, "timeline": [], "people": [], "numbers": [], "quotes": []})
+
+    def test_reservation_ends_at_the_hour(self):
+        import datetime, importlib
+        import llm_provider as P
+        os.environ["GEMINI_RESERVED_DAYS"] = "mon,tue,wed,thu,fri,sat,sun"
+        os.environ["GEMINI_RESERVED_BEFORE"] = str(datetime.datetime.now(datetime.timezone.utc).hour)
+        try:
+            importlib.reload(P)
+            self.assertFalse(P.gemini_reserved())
+            os.environ["GEMINI_RESERVED_BEFORE"] = "24"
+            importlib.reload(P)
+            self.assertTrue(P.gemini_reserved())
+        finally:
+            del os.environ["GEMINI_RESERVED_DAYS"], os.environ["GEMINI_RESERVED_BEFORE"]
+            importlib.reload(P)

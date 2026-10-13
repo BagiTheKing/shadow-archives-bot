@@ -79,6 +79,10 @@ jobs:
           WATCH_CHANNEL_HANDLE: '@PiersMorganUncensored'
           WATCH_LOOKBACK_HOURS: '48'
           HISTORY_CUTOFF_YEAR: '2010'
+          # on long-video days the morning's Gemini quota is the video's:
+          # the scout researches with the rest of the chain until 13:00 UTC
+          GEMINI_RESERVED_DAYS: 'tue,wed,thu,sat'
+          GEMINI_RESERVED_BEFORE: '13'
         run: python tools/topic_scout.py
 
       - name: Save the queue
