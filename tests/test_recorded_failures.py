@@ -575,3 +575,30 @@ class ScoutCrashAndQuota(unittest.TestCase):
         finally:
             del os.environ["GEMINI_RESERVED_DAYS"], os.environ["GEMINI_RESERVED_BEFORE"]
             importlib.reload(P)
+
+
+class LongChapterInHalves(unittest.TestCase):
+    """2026-10-13: the free fallbacks cut "Armies on Five Fronts" (550
+    words) off mid-reply twice; two halves each fit."""
+
+    def test_two_halves_joined(self):
+        calls = []
+        def seg(i):
+            return {"narration": f"Sentence number {i} tells what the army did at dawn near the river.",
+                    "image_prompt": "x", "archive_query": None}
+        def fake_call(pool, system, user, **kw):
+            calls.append(user)
+            base = 0 if len(calls) == 1 else 100
+            return {"segments": [seg(base + i) for i in range(12)]}
+        real = L._call
+        L._call = fake_call
+        try:
+            got = L._chapter_in_halves(None, "sys", lambda w, t, fb, cov: f"{w} words. {fb}",
+                                       300, "", [], False)
+        finally:
+            L._call = real
+        self.assertEqual(len(calls), 2)
+        self.assertIn("PART 1", calls[0])
+        self.assertIn("PART 2", calls[1])
+        self.assertIn("150 words", calls[0])
+        self.assertEqual(len(got["segments"]), 24)

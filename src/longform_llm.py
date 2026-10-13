@@ -2864,6 +2864,20 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             print(f"   ⚠️ Accepting the best attempt at {heading!r} ({got} "
                   f"words) rather than losing the run.")
 
+        if not data and story and words >= SPLIT_MIN_WORDS:
+            # The free fallbacks cut a long chapter off mid-reply (13 Oct,
+            # "Armies on Five Fronts", 550 words, twice): two halves each fit.
+            print(f"   ✂️  Writing {heading!r} in two halves...")
+            prompt_for = lambda w, t, fb, cov: _chapter_prompt(
+                topic, heading, brief, w, t, fb, era_year=era_year,
+                covered=cov, episode_format=episode_format,
+                next_heading=next_heading,
+                words_per_image=pacing["words_per_image"],
+                story_hook=story_hooks[c_index] if story_hooks else None,
+                segment_rule=seg_rule)
+            data = _chapter_in_halves(pool, system_prompt, prompt_for, words,
+                                      tail, said_lines, enforce_history)
+
         if not data:
             print(f"❌ Chapter {heading!r} could not be generated.")
             if story:
@@ -3227,6 +3241,54 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
         print(f"⚠️ {words} words is well under the ~1,220 target — the video will "
               f"run short. Usually means the free models were degraded today.")
     return script
+
+
+# A story chapter at least this long is written in two halves when every
+# attempt at it whole has failed.
+SPLIT_MIN_WORDS = 300
+
+
+def _chapter_in_halves(pool, system_prompt, prompt_for, words, tail, covered,
+                       enforce_history):
+    """One chapter as two requests of half the length, joined, or None.
+    prompt_for(words, tail, feedback, covered) builds the chapter prompt."""
+    half = words // 2
+    parts = []
+    for n in (1, 2):
+        if n == 1:
+            note = (f"THIS CHAPTER IS WRITTEN IN TWO PARTS. Write ONLY PART 1: "
+                    f"the first half of the beats above, in order, about {half} "
+                    "words. Stop at the middle of the beats; the chapter does "
+                    "not end here, so ignore the rule about its last sentence.")
+            lines = list(covered)
+        else:
+            done = " ".join(x["narration"] for x in parts[0]["segments"])
+            note = ("THIS CHAPTER IS WRITTEN IN TWO PARTS. PART 1 is written: "
+                    f"\"{done[-1200:]}\" Write ONLY PART 2: the remaining beats, "
+                    f"about {half} words, carrying straight on from part 1 "
+                    "without repeating anything in it, and end the chapter as "
+                    "the rules above say.")
+            lines = list(covered) + re.split(r"(?<=[.!?])\s+", done)
+            tail = parts[0]["segments"][-1]["narration"][-160:]
+        try:
+            got = _call(pool, system_prompt, prompt_for(half, tail, note, lines),
+                        max_tokens=CHAPTER_MAX_TOKENS, expect=_chapter_reply_problem)
+        except QuotaExhausted:
+            raise
+        except Exception as e:
+            print(f"   ↩️  Part {n} failed ({type(e).__name__}: {e}).")
+            return None
+        if not _chapter_usable(got, enforce_history):
+            print(f"   ↩️  Part {n} of the chapter came back unusable.")
+            return None
+        parts.append(got)
+    joined = {**parts[1], "segments": parts[0]["segments"] + parts[1]["segments"]}
+    got_words = _chapter_words(joined)
+    if got_words < words * 0.5:
+        print(f"   ↩️  The two halves came to {got_words} of ~{words} words.")
+        return None
+    print(f"   ✅ Written in two halves: {got_words} words.")
+    return joined
 
 
 def _real_meta(meta):
