@@ -222,10 +222,17 @@
         "videos/Je9K5YuIMCw/2_map.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-10T17:19:44.596153+00:00",
-      "views_at_start": 3,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-13T19:14:04.718907+00:00",
+      "views_at_start": 10,
+      "results": [
+        {
+          "file": "videos/Je9K5YuIMCw/1_person.jpg",
+          "views": 7,
+          "days": 3.08,
+          "per_day": 2.27
+        }
+      ],
       "registered": "2026-10-10T09:29:24.448628+00:00"
     },
     "b-7o4MxBmnY": {
@@ -234,17 +241,15 @@
         "videos/b-7o4MxBmnY/2_person.jpg",
         "videos/b-7o4MxBmnY/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-13T19:14:04.718907+00:00",
+      "views_at_start": 2,
       "results": [],
       "registered": "2026-10-13T16:56:30.011984+00:00"
     }
   },
   "comments": {
-    "b-7o4MxBmnY": "Do you believe the 1948 armistice lines were a necessary outcome of the war or a mistake that prolonged the conflict?",
-    "pZwaL61pdS8": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
     "EkPnJOQisKI": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
     "OaylhR47lew": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
     "vtGXhfNLTCQ": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY"
