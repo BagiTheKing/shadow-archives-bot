@@ -9,6 +9,7 @@ how many subscribers you have.
 """
 
 import json
+import datetime
 import os
 import re
 import shutil
@@ -863,7 +864,18 @@ def publish_clips(scenes, script, video_id):
     except Exception as e:
         print(f"⚠️ Clips skipped ({type(e).__name__}: {e}).")
         return
-    for clip in clips:
+    # The first clip goes public with the video; each next one is scheduled
+    # CLIP_GAP_HOURS after the one before (owner, 2026-10-14), so the clips
+    # reach the Shorts feed one by one instead of competing with each other.
+    gap = float(os.getenv("CLIP_GAP_HOURS", "6"))
+    public = os.getenv("PRIVACY_STATUS", "public") == "public"
+    start = datetime.datetime.now(datetime.timezone.utc)
+    for k, clip in enumerate(clips):
+        publish_at = None
+        if public and k and gap > 0:
+            publish_at = (start + datetime.timedelta(hours=gap * k)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            print(f"🗓️  Clip {k + 1} scheduled for {publish_at}.")
         clip_title, clip_description, comment = clip_metadata(
             clip, script, video_id, credit_block=build_credit_block(clip["scenes"]))
         print(f"📋 Clip: {clip_title}")
@@ -878,7 +890,7 @@ def publish_clips(scenes, script, video_id):
         try:
             upload_video_to_youtube(clip["path"], clip_title, clip_description,
                                     ["history", "shorts", "documentary"],
-                                    first_comment=comment)
+                                    first_comment=comment, publish_at=publish_at)
         except Exception as e:
             print(f"⚠️ Clip upload failed ({type(e).__name__}: {e}).")
 

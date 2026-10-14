@@ -602,3 +602,32 @@ class LongChapterInHalves(unittest.TestCase):
         self.assertIn("PART 2", calls[1])
         self.assertIn("150 words", calls[0])
         self.assertEqual(len(got["segments"]), 24)
+
+
+class ClipSchedule(unittest.TestCase):
+    """2026-10-14 (owner): video and first clip public at upload, each
+    next clip 6 hours after the one before."""
+
+    def test_clips_spaced_six_hours(self):
+        import longform_clips as LC
+        import longform_main as LM
+        seen = []
+        real = (LC.LONGFORM_CLIPS, LC.make_clips, LC.clip_metadata,
+                LM.upload_video_to_youtube, LM.build_credit_block)
+        LC.LONGFORM_CLIPS = 4
+        LC.make_clips = lambda *a: [{"path": f"c{i}", "scenes": []} for i in range(4)]
+        LC.clip_metadata = lambda clip, script, vid, credit_block=None: ("t", "d", "c")
+        LM.build_credit_block = lambda scenes: ""
+        LM.upload_video_to_youtube = lambda *a, **kw: seen.append(kw.get("publish_at"))
+        os.environ["PRIVACY_STATUS"] = "public"
+        try:
+            LM.publish_clips([], {}, "vid")
+        finally:
+            (LC.LONGFORM_CLIPS, LC.make_clips, LC.clip_metadata,
+             LM.upload_video_to_youtube, LM.build_credit_block) = real
+            os.environ.pop("PRIVACY_STATUS")
+        self.assertEqual(len(seen), 4)
+        self.assertIsNone(seen[0])
+        import datetime
+        t = [datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ") for x in seen[1:]]
+        self.assertEqual((t[1] - t[0]).total_seconds(), 6 * 3600)

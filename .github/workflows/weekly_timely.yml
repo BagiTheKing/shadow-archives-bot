@@ -269,7 +269,9 @@ jobs:
           # published unlisted, which is why seven of them total ~90 views: they
           # were never visible to anyone who did not have the link. Nothing about
           # the content was the problem. Keep this 'public'.
-          PRIVACY_STATUS: private
+          # public at upload again (owner, 2026-10-14); the clips after the
+          # first are scheduled 6 hours apart (longform_main.publish_clips)
+          PRIVACY_STATUS: public
           # Named in the description so both formats read as one
           # channel. Not put in the long-form title on purpose —
           # these videos live on search, and a prefix pushes the

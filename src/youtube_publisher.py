@@ -185,13 +185,17 @@ def post_first_comment(youtube, video_id: str, text: str) -> bool:
 def upload_video_to_youtube(video_path: str, title: str, description: str, tags=None,
                             thumbnail_path: str = None, first_comment: str = None,
                             caption_path: str = None, playlist_title: str = None,
-                            playlist_description: str = ""):
+                            playlist_description: str = "", publish_at: str = None):
     youtube = get_authenticated_service()
     print(f"📤 Uploading: {title}")
 
     # Set PRIVACY_STATUS=unlisted (or private) in the workflow while you're
     # tuning quality — review the output, then flip to public.
     privacy = os.environ.get("PRIVACY_STATUS", "public")
+    # publish_at (RFC 3339, UTC): uploaded private, YouTube makes it public
+    # at that time on its own
+    if publish_at:
+        privacy = "private"
 
     body = {
         "snippet": {
@@ -208,6 +212,7 @@ def upload_video_to_youtube(video_path: str, title: str, description: str, tags=
             # and disclosed AI content is NOT excluded from monetization.
             # Getting caught *not* disclosing is what gets channels penalized.
             "containsSyntheticMedia": True,
+            **({"publishAt": publish_at} if publish_at else {}),
         },
     }
 
