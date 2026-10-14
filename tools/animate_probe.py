@@ -15,7 +15,10 @@ SPACE = os.getenv("ANIMATE_SPACE", "kulkas2pintu/wan777")
 
 
 def main():
-    client = Client(SPACE, hf_token=os.environ.get("HF_TOKEN") or None)
+    token = os.environ.get("HF_TOKEN") or None
+    import inspect
+    key = "token" if "token" in inspect.signature(Client).parameters else "hf_token"
+    client = Client(SPACE, **{key: token})
     if os.getenv("MODE", "describe") == "describe":
         client.view_api(all_endpoints=True)
         return
