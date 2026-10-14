@@ -1,0 +1,58 @@
+name: Preview Image
+
+# Manual. Draws one image with the pipeline's own generator (Cloudflare
+# FLUX, Pollinations as fallback) and puts it on the preview-media branch,
+# for a look at a frame outside a full run (e.g. to test image-to-video).
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Scene, as the script writes it"
+        required: true
+      era:
+        description: "Story year"
+        default: "1987"
+      size:
+        description: "long (1920x1080) or short (1080x1920)"
+        default: "long"
+
+permissions:
+  contents: write
+
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests Pillow
+      - name: Draw
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          PROMPT: ${{ inputs.prompt }}
+          ERA: ${{ inputs.era }}
+          SIZE: ${{ inputs.size }}
+        run: |
+          mkdir -p out
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, "src")
+          from visual_engine import download_image
+          w, h = (1920, 1080) if os.environ["SIZE"] == "long" else (1080, 1920)
+          ok = download_image(os.environ["PROMPT"], "out/frame.jpg", width=w, height=h,
+                              era_year=int(os.environ["ERA"] or 0) or None)
+          sys.exit(0 if ok else 1)
+          PY
+      - name: Push to preview-media
+        run: |
+          cd out
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Preview image (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
