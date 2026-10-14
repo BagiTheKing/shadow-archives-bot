@@ -1,0 +1,60 @@
+name: Probe Animate
+
+# Manual. Reads the image-to-video Space's API (mode describe) or animates
+# the frame on the preview-media branch (mode test) and puts the clip there.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "describe or test"
+        default: "describe"
+      api_name:
+        description: "Endpoint, e.g. /generate_video (test mode)"
+        default: ""
+      args:
+        description: "Python list of arguments; IMAGE and PROMPT are filled in"
+        default: ""
+      prompt:
+        description: "Motion prompt (test mode)"
+        default: "The crowd walks forward, smoke drifts slowly in the sky, the camera pushes in gently."
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install gradio_client
+      - name: Fetch the frame
+        if: inputs.mode == 'test'
+        run: |
+          git fetch -q origin preview-media
+          git show origin/preview-media:frame.jpg > frame.jpg
+      - name: Probe
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          API_NAME: ${{ inputs.api_name }}
+          ARGS: ${{ inputs.args }}
+          IMAGE: frame.jpg
+          PROMPT: ${{ inputs.prompt }}
+        run: |
+          mkdir -p out
+          python tools/animate_probe.py out/animated.mp4
+      - name: Push to preview-media
+        if: inputs.mode == 'test'
+        run: |
+          cp frame.jpg out/
+          cd out
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Animate probe (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
