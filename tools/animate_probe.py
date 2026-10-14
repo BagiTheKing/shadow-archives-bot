@@ -21,6 +21,11 @@ def main():
     client = Client(SPACE, **{key: token})
     if os.getenv("MODE", "describe") == "describe":
         client.view_api(all_endpoints=True)
+        for c in (client.config or {}).get("components", []):
+            p = c.get("props") or {}
+            if c.get("type") == "slider" or "minimum" in p:
+                print("SLIDER", p.get("label"), "min", p.get("minimum"),
+                      "max", p.get("maximum"), "value", p.get("value"))
         return
     api = os.environ["API_NAME"]
     args = eval(os.environ["ARGS"], {"handle_file": handle_file,
