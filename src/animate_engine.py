@@ -22,7 +22,10 @@ import re
 import shutil
 
 ANIMATE_SPACE = os.getenv("ANIMATE_SPACE", "kulkas2pintu/wan777")
-ANIMATE_MAX = int(os.getenv("ANIMATE_MAX", "2"))
+# One a run on the free tier: a 9-second shot reserves ~290 s of GPU, about
+# the whole free daily ZeroGPU allowance (14 Oct). Hugging Face PRO (40 min
+# a day) would carry ~8; raise ANIMATE_MAX then.
+ANIMATE_MAX = int(os.getenv("ANIMATE_MAX", "1"))
 # The Space renders 0.5-10 s. An animated scene is animated for its whole
 # length (owner, 2026-10-14: no frozen frame after the motion), so only
 # scenes that fit are picked; the renderer stretches the clip by at most
