@@ -2,7 +2,7 @@
 Image-to-video for a few AI-generated frames (owner, 2026-10-14).
 
 A Wan 2.2 Space on Hugging Face (ANIMATE_SPACE) turns one generated still
-into ~3.5 seconds of motion, on the free ZeroGPU quota of the account behind
+into motion as long as its scene (up to 10 s), on the free ZeroGPU quota of the account behind
 HF_TOKEN: a handful of shots a day, so they are spent where they count.
 
 The rules, in order:
@@ -23,7 +23,12 @@ import shutil
 
 ANIMATE_SPACE = os.getenv("ANIMATE_SPACE", "kulkas2pintu/wan777")
 ANIMATE_MAX = int(os.getenv("ANIMATE_MAX", "2"))
-ANIMATE_SECONDS = 3.5
+# The Space renders 0.5-10 s. An animated scene is animated for its whole
+# length (owner, 2026-10-14: no frozen frame after the motion), so only
+# scenes that fit are picked; the renderer stretches the clip by at most
+# MAX_STRETCH to land on the exact length.
+MAX_SECONDS = 10.0
+MAX_STRETCH = 1.12
 # where the story is told: the hook, then the rising action
 ROLE_ORDER = ("open", "build")
 
@@ -32,8 +37,15 @@ def available() -> bool:
     return bool(os.getenv("HF_TOKEN")) and ANIMATE_MAX > 0
 
 
+def clip_seconds(scene) -> float:
+    """How long the scene is on screen (narration plus the dissolve)."""
+    from longform_video import XFADE
+    return float(scene.get("duration") or 0) + XFADE
+
+
 def _generated(scene) -> bool:
     return (scene.get("image_path") and not scene.get("is_real")
+            and 0 < clip_seconds(scene) <= MAX_SECONDS * MAX_STRETCH
             and not scene.get("video_path") and not scene.get("map")
             and not scene.get("dossier") and not scene.get("_is_map"))
 
@@ -75,10 +87,11 @@ def _client():
     return Client(ANIMATE_SPACE, **{key: os.environ["HF_TOKEN"]})
 
 
-def animate(image_path, prompt, out_path, client=None) -> bool:
+def animate(image_path, prompt, out_path, seconds, client=None) -> bool:
     from gradio_client import handle_file
     client = client or _client()
-    got = client.predict(handle_file(image_path), None, prompt,
+    got = client.predict(input_image=handle_file(image_path), last_image=None,
+                         prompt=prompt, duration_seconds=min(seconds, MAX_SECONDS),
                          api_name="/generate_video")
     path = got[0] if isinstance(got, (list, tuple)) else got
     if isinstance(path, dict):
@@ -108,7 +121,8 @@ def animate_scenes(scenes, output_dir):
         s = scenes[i]
         out = os.path.join(output_dir, f"lf_anim_{i:03d}.mp4")
         try:
-            ok = animate(s["image_path"], motion_prompt(s.get("image_prompt")), out, client)
+            ok = animate(s["image_path"], motion_prompt(s.get("image_prompt")), out,
+                         round(clip_seconds(s), 1), client)
         except Exception as e:
             print(f"🎬 Animation stopped at scene {i} ({type(e).__name__}: "
                   f"{str(e)[:160]}) — the rest keep their Ken Burns.")

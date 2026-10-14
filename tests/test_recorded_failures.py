@@ -640,12 +640,14 @@ class Animation(unittest.TestCase):
     def test_picks_hook_then_rising_action(self):
         import animate_engine as A
         sc = lambda role, ch, **kw: {"chapter_role": role, "chapter_index": ch,
-                                     "image_path": "x.jpg", **kw}
+                                     "image_path": "x.jpg", "duration": 6.0, **kw}
         scenes = [sc("open", 0, is_real=True), sc("open", 0), sc("open", 0),
                   sc("build", 1, video_path="v.mp4"), sc("build", 1),
                   sc("build", 2), sc("drive", 4), sc("close", 5)]
         self.assertEqual(A.pick_scenes(scenes, limit=2), [1, 4])
         self.assertEqual(A.pick_scenes(scenes, limit=5), [1, 4, 5])
+        scenes[1]["duration"] = 14.0      # longer than the Space can animate
+        self.assertEqual(A.pick_scenes(scenes, limit=1), [2])
 
     def test_motion_prompt_drops_style(self):
         import animate_engine as A

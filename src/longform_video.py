@@ -682,35 +682,21 @@ def _shot_starts(duration: float, n: int, overlap: float = INNER_XFADE):
 # ---------------------------------------------------------------------------
 
 def _anim_clip(scene, clip_len, style, graded, audio, tail):
-    """An animated generated frame (animate_engine.py): the motion first,
-    then its own last frame carries on in Ken Burns for the rest of the
-    narration, so the picture never jumps back to the still."""
+    """An animated generated frame (animate_engine.py), made at its scene's
+    length and fitted to it exactly: no frozen frame after the motion. A clip
+    that would need more than a slight stretch is refused (Ken Burns then)."""
+    from animate_engine import MAX_STRETCH
     anim = scene["anim_path"]
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
                             "format=duration", "-of", "csv=p=0", anim],
                            capture_output=True, text=True)
-    a = min(float(probe.stdout.strip()), clip_len)
-    last = anim[:-4] + "_last.jpg"
-    _run(["ffmpeg", "-y", "-sseof", "-0.2", "-i", anim, "-frames:v", "1",
-          "-vf", f"scale={W * 3 // 2}:{H * 3 // 2}:force_original_aspect_ratio=increase"
-          f":flags=lanczos,crop={W * 3 // 2}:{H * 3 // 2}",   # the Ken Burns working size
-          last])
-    rest = clip_len - a
-    head = (f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,"
-            f"crop={W}:{H},setsar=1,fps={FPS},trim=0:{a:.3f},setpts=PTS-STARTPTS"
-            f"{graded}[h]")
-    if rest < 0.3:
-        _run(["ffmpeg", "-y", "-i", anim, "-i", audio, "-filter_complex", head,
-              "-map", "[h]", "-map", "1:a", *tail])
-        return
-    _run(["ffmpeg", "-y", "-i", anim,
-          "-loop", "1", "-framerate", str(FPS), "-t", f"{rest + 0.1:.3f}", "-i", last,
-          "-i", audio, "-filter_complex",
-          # style 0: a slow push-in from the full frame, carrying on the
-          # Space's own camera push without a jump at the seam
-          f"{head};[1:v]{_ken_burns(rest, 0)}{graded},setsar=1[k];"
-          f"[h][k]concat=n=2:v=1:a=0,fps={FPS}[vout]",
-          "-map", "[vout]", "-map", "2:a", *tail])
+    factor = clip_len / float(probe.stdout.strip())
+    if factor > MAX_STRETCH:
+        raise ValueError(f"the motion is {factor:.2f}x too short for its scene")
+    vf = (f"setpts={factor:.4f}*PTS,scale={W}:{H}:force_original_aspect_ratio=increase"
+          f":flags=lanczos,crop={W}:{H},setsar=1,fps={FPS}{graded}")
+    _run(["ffmpeg", "-y", "-i", anim, "-i", audio, "-map", "0:v", "-map", "1:a",
+          "-vf", vf, *tail])
 
 
 def _scene_clip(scene, out, style):

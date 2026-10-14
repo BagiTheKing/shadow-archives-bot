@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "describe or test"
+        description: "describe, test or engine"
         default: "describe"
       api_name:
         description: "Endpoint, e.g. /generate_video (test mode)"
@@ -32,7 +32,7 @@ jobs:
           python-version: '3.11'
       - run: pip install gradio_client
       - name: Fetch the frame
-        if: inputs.mode == 'test'
+        if: inputs.mode != 'describe'
         run: |
           git fetch -q origin preview-media
           git show origin/preview-media:frame.jpg > frame.jpg
@@ -44,11 +44,12 @@ jobs:
           ARGS: ${{ inputs.args }}
           IMAGE: frame.jpg
           PROMPT: ${{ inputs.prompt }}
+          ANIM_SECONDS: '9'
         run: |
           mkdir -p out
           python tools/animate_probe.py out/animated.mp4
       - name: Push to preview-media
-        if: inputs.mode == 'test'
+        if: inputs.mode != 'describe'
         run: |
           cp frame.jpg out/
           cd out

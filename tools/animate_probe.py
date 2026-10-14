@@ -15,6 +15,14 @@ SPACE = os.getenv("ANIMATE_SPACE", "kulkas2pintu/wan777")
 
 
 def main():
+    if os.getenv("MODE") == "engine":
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+        import animate_engine, time
+        t = time.time()
+        ok = animate_engine.animate(os.environ["IMAGE"], os.environ["PROMPT"], sys.argv[1],
+                                    float(os.getenv("ANIM_SECONDS", "9")))
+        print("OK" if ok else "FAILED", f"in {time.time() - t:.0f}s")
+        sys.exit(0 if ok else 1)
     token = os.environ.get("HF_TOKEN") or None
     import inspect
     key = "token" if "token" in inspect.signature(Client).parameters else "hf_token"
