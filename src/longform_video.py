@@ -681,6 +681,38 @@ def _shot_starts(duration: float, n: int, overlap: float = INNER_XFADE):
 # Speech is continuous and untouched; only the image dissolves.
 # ---------------------------------------------------------------------------
 
+def _anim_clip(scene, clip_len, style, graded, audio, tail):
+    """An animated generated frame (animate_engine.py): the motion first,
+    then its own last frame carries on in Ken Burns for the rest of the
+    narration, so the picture never jumps back to the still."""
+    anim = scene["anim_path"]
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                            "format=duration", "-of", "csv=p=0", anim],
+                           capture_output=True, text=True)
+    a = min(float(probe.stdout.strip()), clip_len)
+    last = anim[:-4] + "_last.jpg"
+    _run(["ffmpeg", "-y", "-sseof", "-0.2", "-i", anim, "-frames:v", "1",
+          "-vf", f"scale={W * 3 // 2}:{H * 3 // 2}:force_original_aspect_ratio=increase"
+          f":flags=lanczos,crop={W * 3 // 2}:{H * 3 // 2}",   # the Ken Burns working size
+          last])
+    rest = clip_len - a
+    head = (f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={W}:{H},setsar=1,fps={FPS},trim=0:{a:.3f},setpts=PTS-STARTPTS"
+            f"{graded}[h]")
+    if rest < 0.3:
+        _run(["ffmpeg", "-y", "-i", anim, "-i", audio, "-filter_complex", head,
+              "-map", "[h]", "-map", "1:a", *tail])
+        return
+    _run(["ffmpeg", "-y", "-i", anim,
+          "-loop", "1", "-framerate", str(FPS), "-t", f"{rest + 0.1:.3f}", "-i", last,
+          "-i", audio, "-filter_complex",
+          # style 0: a slow push-in from the full frame, carrying on the
+          # Space's own camera push without a jump at the seam
+          f"{head};[1:v]{_ken_burns(rest, 0)}{graded},setsar=1[k];"
+          f"[h][k]concat=n=2:v=1:a=0,fps={FPS}[vout]",
+          "-map", "[vout]", "-map", "2:a", *tail])
+
+
 def _scene_clip(scene, out, style):
     """One scene -> one clip, XFADE longer than its narration. Three shapes:
     - video_path: real muted b-roll, cover-cropped, looped to the narration.
@@ -700,6 +732,14 @@ def _scene_clip(scene, out, style):
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
             "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
             "-pix_fmt", "yuv420p", "-t", f"{clip_len:.3f}", out]
+
+    if scene.get("anim_path"):
+        try:
+            _anim_clip(scene, clip_len, style, graded, audio, tail)
+            return
+        except Exception as e:
+            print(f"   ↩️  Animated shot unusable ({type(e).__name__}: {e}) "
+                  "— Ken Burns instead.")
 
     if scene.get("video_path"):
         vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"

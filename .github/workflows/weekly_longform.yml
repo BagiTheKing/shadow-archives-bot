@@ -240,6 +240,8 @@ jobs:
           # public at upload again (owner, 2026-10-14); the clips after the
           # first are scheduled 6 hours apart (longform_main.publish_clips)
           PRIVACY_STATUS: public
+          # image-to-video for the hook and rising action (animate_engine.py)
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           # Named in the description so both formats read as one
           # channel. Not put in the long-form title on purpose —
           # these videos live on search, and a prefix pushes the

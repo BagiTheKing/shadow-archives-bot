@@ -703,6 +703,12 @@ def main():
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
         scenes, BUILD_DIR, topic=script.get("topic"))
 
+    try:
+        import animate_engine
+        animate_engine.animate_scenes(scenes, BUILD_DIR)
+    except Exception as e:
+        print(f"🎬 Animation skipped ({type(e).__name__}: {e}).")
+
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
     if len(usable) < 8:
         print(f"❌ Halted: only {len(usable)} usable scenes.")

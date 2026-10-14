@@ -28,3 +28,4 @@ anthropic>=0.69.0
 # SFace) to make sure footage shows the right person. Headless build, no GUI.
 opencv-python-headless>=4.9
 numpy>=1.24
+gradio_client>=1.0  # image-to-video Space (animate_engine.py)

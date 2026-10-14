@@ -631,3 +631,25 @@ class ClipSchedule(unittest.TestCase):
         import datetime
         t = [datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ") for x in seen[1:]]
         self.assertEqual((t[1] - t[0]).total_seconds(), 6 * 3600)
+
+
+class Animation(unittest.TestCase):
+    """2026-10-14 (owner): animate generated frames only, the hook first,
+    then the rising action, never the payoff; real photos always win."""
+
+    def test_picks_hook_then_rising_action(self):
+        import animate_engine as A
+        sc = lambda role, ch, **kw: {"chapter_role": role, "chapter_index": ch,
+                                     "image_path": "x.jpg", **kw}
+        scenes = [sc("open", 0, is_real=True), sc("open", 0), sc("open", 0),
+                  sc("build", 1, video_path="v.mp4"), sc("build", 1),
+                  sc("build", 2), sc("drive", 4), sc("close", 5)]
+        self.assertEqual(A.pick_scenes(scenes, limit=2), [1, 4])
+        self.assertEqual(A.pick_scenes(scenes, limit=5), [1, 4, 5])
+
+    def test_motion_prompt_drops_style(self):
+        import animate_engine as A
+        p = A.motion_prompt("Wide shot, crowd in a street, set in the year 1987, "
+                            "dramatic chiaroscuro lighting, oil painting")
+        self.assertTrue(p.startswith("crowd in a street."))
+        self.assertNotIn("chiaroscuro", p)
