@@ -254,21 +254,15 @@
         "videos/9ohX8imSwzI/2_person.jpg",
         "videos/9ohX8imSwzI/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-14T17:06:46.450397+00:00",
+      "views_at_start": 0,
       "results": [],
       "registered": "2026-10-14T11:06:42.349305+00:00"
     }
   },
   "comments": {
-    "EkPnJOQisKI": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
-    "OaylhR47lew": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
-    "vtGXhfNLTCQ": "The full story, start to finish: https://youtu.be/b-7o4MxBmnY",
-    "9ohX8imSwzI": "Did the judges make a mistake that allowed the war criminal to escape?",
-    "ZYPod5n2b0w": "The full story, start to finish: https://youtu.be/9ohX8imSwzI",
-    "c5kz7u64GXc": "The full story, start to finish: https://youtu.be/9ohX8imSwzI",
     "E-XVlflC8HA": "The full story, start to finish: https://youtu.be/9ohX8imSwzI",
     "UyVK-GY_OLE": "The full story, start to finish: https://youtu.be/9ohX8imSwzI"
   }
