@@ -184,15 +184,21 @@
         "videos/SBpmJ8RlYNM/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 1,
-      "since": "2026-10-11T17:40:32.858950+00:00",
-      "views_at_start": 3,
+      "current": 2,
+      "since": "2026-10-15T16:56:13.150482+00:00",
+      "views_at_start": 12,
       "results": [
         {
           "file": "videos/SBpmJ8RlYNM/1_map.jpg",
           "views": 1,
           "days": 3.95,
           "per_day": 0.25
+        },
+        {
+          "file": "videos/SBpmJ8RlYNM/2_person.jpg",
+          "views": 9,
+          "days": 3.97,
+          "per_day": 2.27
         }
       ],
       "registered": "2026-10-07T18:29:05.791689+00:00"
@@ -262,8 +268,5 @@
       "registered": "2026-10-14T11:06:42.349305+00:00"
     }
   },
-  "comments": {
-    "E-XVlflC8HA": "The full story, start to finish: https://youtu.be/9ohX8imSwzI",
-    "UyVK-GY_OLE": "The full story, start to finish: https://youtu.be/9ohX8imSwzI"
-  }
+  "comments": {}
 }
