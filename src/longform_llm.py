@@ -536,9 +536,16 @@ def _interleave_by_provider(models, pool):
     — one provider's outage should never be able to cost a call every slot
     it has.
     """
+    from llm_provider import SECOND_KEY_SUFFIX
     groups, order = {}, []
+    # overloaded models (503) go to the back of their group, so the next
+    # call tries a sibling instead of the same busy model again
+    models = sorted(models, key=lambda m: m in _overloaded)
     for m in models:
-        p = pool.provider_for(m)
+        # each Gemini key is its own group: grouped by provider alone, the
+        # second key's models sat behind the first key's and never got one
+        # of the call's slots (15 Oct: key 2 untouched while key 1 was spent)
+        p = pool.provider_for(m) + (SECOND_KEY_SUFFIX if m.endswith(SECOND_KEY_SUFFIX) else "")
         if p not in groups:
             groups[p] = []
             order.append(p)
@@ -557,6 +564,7 @@ def _interleave_by_provider(models, pool):
 
 
 _last_model = None
+_overloaded = set()
 
 
 # ---------------------------------------------------------------------------
@@ -853,6 +861,8 @@ def _call(pool, system, user, max_tokens, skip=(), expect=None):
                 continue
             # Truncate: these payloads are hundreds of lines of nested JSON.
             print(f"⚠️ {model} failed: {err[:160]}")
+            if "503" in err or "high demand" in err.lower():
+                _overloaded.add(model)
             if _parse_failures.get(model, 0) >= MAX_PARSE_FAILURES:
                 print(f"   ⛔ dropping {model} for the rest of this run "
                       f"({MAX_PARSE_FAILURES} unparseable replies).")
@@ -2858,11 +2868,12 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
             if got < words * 0.8:
                 short_chapters += 1
             if story and got < words * 0.5:
-                print(f"❌ Story mode: {heading!r} came back at {got} of ~{words} "
-                      f"words — stopping rather than publishing a gutted story.")
-                return None
-            print(f"   ⚠️ Accepting the best attempt at {heading!r} ({got} "
-                  f"words) rather than losing the run.")
+                # too thin to publish: the halves below get one more chance
+                print(f"   ↩️  Best attempt at {heading!r} is {got} of ~{words} words.")
+                data = None
+            else:
+                print(f"   ⚠️ Accepting the best attempt at {heading!r} ({got} "
+                      f"words) rather than losing the run.")
 
         if not data and story and words >= SPLIT_MIN_WORDS:
             # The free fallbacks cut a long chapter off mid-reply (13 Oct,
@@ -3244,8 +3255,9 @@ def generate_longform_script(topic: str = None, enforce_history: bool = False,
 
 
 # A story chapter at least this long is written in two halves when every
-# attempt at it whole has failed.
-SPLIT_MIN_WORDS = 300
+# attempt at it whole has failed or came back under half its length (15 Oct:
+# "The First Shot", 260 words, came back at 117 and the run stopped).
+SPLIT_MIN_WORDS = 200
 
 
 def _chapter_in_halves(pool, system_prompt, prompt_for, words, tail, covered,

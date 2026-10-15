@@ -655,3 +655,21 @@ class Animation(unittest.TestCase):
                             "dramatic chiaroscuro lighting, oil painting")
         self.assertTrue(p.startswith("crowd in a street."))
         self.assertNotIn("chiaroscuro", p)
+
+
+class SecondGeminiKey(unittest.TestCase):
+    """2026-10-15: with four slots a call and Gemini grouped as one provider,
+    the second key's models never got a slot."""
+
+    def test_each_key_gets_a_slot(self):
+        class Pool:
+            def provider_for(self, m):
+                return "gemini" if m.startswith("gemini") else m.split("/")[0]
+        models = ["gemini-a", "gemini-b", "gemini-a@2", "gemini-b@2", "groq/x", "zhipu/y"]
+        L._overloaded.clear()
+        got = L._interleave_by_provider(models, Pool())[:4]
+        self.assertIn("gemini-a@2", got)
+        L._overloaded.add("gemini-a")
+        got = L._interleave_by_provider(models, Pool())[:4]
+        self.assertEqual(got[0], "gemini-b")
+        L._overloaded.clear()
