@@ -157,8 +157,8 @@
         "videos/5N4UiG9qhoU/2_map.jpg",
         "videos/5N4UiG9qhoU/3_frame.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-12T21:15:06.832705+00:00",
       "views_at_start": 10,
       "results": [
@@ -173,9 +173,16 @@
           "views": 3,
           "days": 3.12,
           "per_day": 0.96
+        },
+        {
+          "file": "videos/5N4UiG9qhoU/3_frame.jpg",
+          "views": 0,
+          "days": 3.81,
+          "per_day": 0.0
         }
       ],
-      "registered": "2026-10-06T10:02:53.089617+00:00"
+      "registered": "2026-10-06T10:02:53.089617+00:00",
+      "winner": "videos/5N4UiG9qhoU/1_person.jpg"
     },
     "SBpmJ8RlYNM": {
       "files": [
@@ -208,8 +215,8 @@
         "videos/ltzuZKA2OsE/1_map.jpg",
         "videos/ltzuZKA2OsE/2_person.jpg"
       ],
-      "status": "testing",
-      "current": 1,
+      "status": "done",
+      "current": null,
       "since": "2026-10-12T21:15:06.832705+00:00",
       "views_at_start": 10,
       "results": [
@@ -218,9 +225,16 @@
           "views": 5,
           "days": 3.26,
           "per_day": 1.53
+        },
+        {
+          "file": "videos/ltzuZKA2OsE/2_person.jpg",
+          "views": 4,
+          "days": 3.81,
+          "per_day": 1.05
         }
       ],
-      "registered": "2026-10-08T10:31:30.592400+00:00"
+      "registered": "2026-10-08T10:31:30.592400+00:00",
+      "winner": "videos/ltzuZKA2OsE/1_map.jpg"
     },
     "Je9K5YuIMCw": {
       "files": [
@@ -273,17 +287,15 @@
         "videos/xKGsLP0RZN4/2_person.jpg",
         "videos/xKGsLP0RZN4/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-16T16:34:38.661854+00:00",
+      "views_at_start": 3,
       "results": [],
       "registered": "2026-10-15T23:13:11.973756+00:00"
     }
   },
   "comments": {
-    "sCnvDFZoDAE": "The full story, start to finish: https://youtu.be/xKGsLP0RZN4",
-    "P32WYpftL4g": "The full story, start to finish: https://youtu.be/xKGsLP0RZN4",
     "pEjDyv8e-7I": "The full story, start to finish: https://youtu.be/xKGsLP0RZN4"
   }
 }
