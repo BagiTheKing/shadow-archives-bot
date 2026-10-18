@@ -289,10 +289,17 @@
         "videos/9ohX8imSwzI/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-14T17:06:46.450397+00:00",
-      "views_at_start": 0,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-18T15:49:05.012626+00:00",
+      "views_at_start": 8,
+      "results": [
+        {
+          "file": "videos/9ohX8imSwzI/1_map.jpg",
+          "views": 8,
+          "days": 3.95,
+          "per_day": 2.03
+        }
+      ],
       "registered": "2026-10-14T11:06:42.349305+00:00"
     },
     "xKGsLP0RZN4": {
@@ -327,19 +334,15 @@
         "videos/Xr_M1XPyA6c/2_person.jpg",
         "videos/Xr_M1XPyA6c/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-18T15:49:05.012626+00:00",
+      "views_at_start": 0,
       "results": [],
       "registered": "2026-10-18T08:57:25.987422+00:00"
     }
   },
   "comments": {
-    "MUcjG05oWhs": "The full story, start to finish: https://youtu.be/IkkPjzvfsGY",
-    "et1QUmKNCzw": "The full story, start to finish: https://youtu.be/IkkPjzvfsGY",
-    "4IRe6GHET5k": "The full story, start to finish: https://youtu.be/IkkPjzvfsGY",
-    "yWC6G9KCra0": "The full story, start to finish: https://youtu.be/Xr_M1XPyA6c",
     "CDhY6841q3w": "The full story, start to finish: https://youtu.be/Xr_M1XPyA6c",
     "pIC7E4wm0_Q": "The full story, start to finish: https://youtu.be/Xr_M1XPyA6c"
   }
