@@ -712,12 +712,27 @@ def main():
     if os.getenv("SKIP_UPLOAD") == "1":
         print("⏭️ SKIP_UPLOAD=1 — video rendered but not uploaded (dry run).")
     else:
+        # at most 3 Shorts a UTC day across the channel (short_slots.py): on
+        # a day the long-form clips already fill, this one waits for the
+        # next free slot instead of crowding them
+        publish_at = None
+        if os.getenv("PRIVACY_STATUS", "public") == "public":
+            try:
+                import short_slots
+                from youtube_publisher import get_authenticated_service
+                publish_at = short_slots.iso(
+                    short_slots.plan(get_authenticated_service(), 1)[0])
+                if publish_at:
+                    print(f"🗓️  Today already has its Shorts — scheduled for {publish_at}.")
+            except Exception as e:
+                print(f"⚠️ Shorts schedule unreadable ({type(e).__name__}: {e}) — publishing now.")
         upload_video_to_youtube(final_video_path, title, description, tags,
                                 thumbnail_path=thumb_path,
                                 first_comment=first_comment,
                                 caption_path=caption_path,
                                 playlist_title=SERIES_NAME,
-                                playlist_description=PLAYLIST_DESCRIPTION)
+                                playlist_description=PLAYLIST_DESCRIPTION,
+                                publish_at=publish_at)
 
     print("🎉 Pipeline complete.")
 

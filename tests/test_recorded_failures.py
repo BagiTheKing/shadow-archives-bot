@@ -619,12 +619,17 @@ class ClipSchedule(unittest.TestCase):
         LC.clip_metadata = lambda clip, script, vid, credit_block=None: ("t", "d", "c")
         LM.build_credit_block = lambda scenes: ""
         LM.upload_video_to_youtube = lambda *a, **kw: seen.append(kw.get("publish_at"))
+        import short_slots as SS, youtube_publisher as YP
+        real_times, real_auth = SS.channel_short_times, YP.get_authenticated_service
+        SS.channel_short_times = lambda yt: []
+        YP.get_authenticated_service = lambda: None
         os.environ["PRIVACY_STATUS"] = "public"
         try:
             LM.publish_clips([], {}, "vid")
         finally:
             (LC.LONGFORM_CLIPS, LC.make_clips, LC.clip_metadata,
              LM.upload_video_to_youtube, LM.build_credit_block) = real
+            SS.channel_short_times, YP.get_authenticated_service = real_times, real_auth
             os.environ.pop("PRIVACY_STATUS")
         self.assertEqual(len(seen), 4)
         self.assertIsNone(seen[0])
@@ -673,3 +678,23 @@ class SecondGeminiKey(unittest.TestCase):
         got = L._interleave_by_provider(models, Pool())[:4]
         self.assertEqual(got[0], "gemini-b")
         L._overloaded.clear()
+
+
+class ShortsPerDay(unittest.TestCase):
+    """2026-10-18: six Shorts in twenty hours, the last three at zero views.
+    At most three a UTC day; nothing dropped, a full day moves it on."""
+
+    def test_fourth_short_moves_to_next_day(self):
+        import datetime as dt
+        import short_slots as S
+        u = lambda h, m=0, d=18: dt.datetime(2026, 10, d, h, m, tzinfo=dt.timezone.utc)
+        taken = [u(1), u(8), u(14)]
+        got = S.next_slot(taken, u(18))
+        self.assertEqual(got.date(), dt.date(2026, 10, 19))
+        self.assertGreaterEqual((got - u(14)).total_seconds(), 6 * 3600)
+
+    def test_gap_respected_within_a_day(self):
+        import datetime as dt
+        import short_slots as S
+        u = lambda h: dt.datetime(2026, 10, 20, h, tzinfo=dt.timezone.utc)
+        self.assertEqual(S.next_slot([u(9)], u(10)), u(15))

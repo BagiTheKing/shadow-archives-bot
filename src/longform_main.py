@@ -871,16 +871,24 @@ def publish_clips(scenes, script, video_id):
         print(f"⚠️ Clips skipped ({type(e).__name__}: {e}).")
         return
     # The first clip goes public with the video; each next one is scheduled
-    # CLIP_GAP_HOURS after the one before (owner, 2026-10-14), so the clips
-    # reach the Shorts feed one by one instead of competing with each other.
-    gap = float(os.getenv("CLIP_GAP_HOURS", "6"))
+    # at least 6 hours after the one before (owner, 2026-10-14), and never as
+    # a UTC day's fourth Short (short_slots.py, owner, 2026-10-18): every
+    # clip still goes out, a full day only moves it to the next.
     public = os.getenv("PRIVACY_STATUS", "public") == "public"
-    start = datetime.datetime.now(datetime.timezone.utc)
+    slots = [None] * len(clips)
+    if public and os.getenv("SKIP_UPLOAD") != "1":
+        try:
+            import short_slots
+            from youtube_publisher import get_authenticated_service
+            slots = short_slots.plan(get_authenticated_service(), len(clips))
+        except Exception as e:
+            print(f"⚠️ Clip schedule failed ({type(e).__name__}: {e}) — "
+                  "clips go out now.")
     for k, clip in enumerate(clips):
         publish_at = None
-        if public and k and gap > 0:
-            publish_at = (start + datetime.timedelta(hours=gap * k)).strftime(
-                "%Y-%m-%dT%H:%M:%SZ")
+        if slots[k]:
+            import short_slots
+            publish_at = short_slots.iso(slots[k])
             print(f"🗓️  Clip {k + 1} scheduled for {publish_at}.")
         clip_title, clip_description, comment = clip_metadata(
             clip, script, video_id, credit_block=build_credit_block(clip["scenes"]))

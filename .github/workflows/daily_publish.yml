@@ -46,6 +46,10 @@ concurrency:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    # contents: write for the held first comment (thumb-rotation branch)
+    permissions:
+      contents: write
+      actions: read
     # This was the only workflow with no ceiling, so a hung run inherited
     # GitHub's 6-hour default. On 2026-08-19 two runs had to be killed by hand
     # at 79 and 77 minutes — 157 minutes for nothing, against a 2,000/month
@@ -218,6 +222,24 @@ jobs:
       # marked failed because the artifact quota was full, which also made
       # failure() true and dragged the video-upload step in behind it.
       # Whether we can save a debug copy must never decide whether the run passed.
+
+      - name: Hold the first comment of a scheduled Short
+        # a Short scheduled by the 3-a-day cap (short_slots.py) is private
+        # until then and refuses comments: the rotation posts it once public
+        if: success()
+        continue-on-error: true
+        run: |
+          [ -f build/pending_comments.json ] || exit 0
+          git fetch -q origin thumb-rotation
+          git worktree add -q rot origin/thumb-rotation
+          ROT_DIR=rot python tools/thumb_rotation.py comments build/pending_comments.json
+          cd rot
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Held first comment of a scheduled Short"
+          git push -q origin HEAD:thumb-rotation
 
       - name: Upload script for review
         if: always()
