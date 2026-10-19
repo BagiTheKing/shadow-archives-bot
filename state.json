@@ -190,8 +190,8 @@
         "videos/SBpmJ8RlYNM/2_person.jpg",
         "videos/SBpmJ8RlYNM/3_frame.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-15T16:56:13.150482+00:00",
       "views_at_start": 12,
       "results": [
@@ -206,9 +206,16 @@
           "views": 9,
           "days": 3.97,
           "per_day": 2.27
+        },
+        {
+          "file": "videos/SBpmJ8RlYNM/3_frame.jpg",
+          "views": 2,
+          "days": 4.07,
+          "per_day": 0.49
         }
       ],
-      "registered": "2026-10-07T18:29:05.791689+00:00"
+      "registered": "2026-10-07T18:29:05.791689+00:00",
+      "winner": "videos/SBpmJ8RlYNM/2_person.jpg"
     },
     "ltzuZKA2OsE": {
       "files": [
@@ -309,10 +316,17 @@
         "videos/xKGsLP0RZN4/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-16T16:34:38.661854+00:00",
-      "views_at_start": 3,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-19T18:42:26.857502+00:00",
+      "views_at_start": 8,
+      "results": [
+        {
+          "file": "videos/xKGsLP0RZN4/1_map.jpg",
+          "views": 5,
+          "days": 3.09,
+          "per_day": 1.62
+        }
+      ],
       "registered": "2026-10-15T23:13:11.973756+00:00"
     },
     "IkkPjzvfsGY": {
@@ -342,8 +356,5 @@
       "registered": "2026-10-18T08:57:25.987422+00:00"
     }
   },
-  "comments": {
-    "CDhY6841q3w": "The full story, start to finish: https://youtu.be/Xr_M1XPyA6c",
-    "pIC7E4wm0_Q": "The full story, start to finish: https://youtu.be/Xr_M1XPyA6c"
-  }
+  "comments": {}
 }
