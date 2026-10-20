@@ -50,6 +50,9 @@ LONGFORM_CLIPS = int(os.getenv("LONGFORM_CLIPS", "0"))
 # at ~660 viewers. Short enough to finish, ending on its strongest line.
 CLIP_MIN = 20.0
 CLIP_MAX = 35.0
+# The teaser keeps the old length and always ends on the video's question
+# (owner, 2026-10-20: the question is what makes people comment).
+TEASER_MAX = 58.0
 CLIP_TAIL = 0.35                  # after the last word, before the cut
 CTA_SECONDS = 4.0
 CLIP_CTA = "FULL STORY ON THE CHANNEL"
@@ -70,14 +73,14 @@ def _opens_with_bridge(scene) -> bool:
     return any(w in low for w in sm.BRIDGE_WORDS)
 
 
-def _span(chapter_scenes, start):
-    """Whole scenes from `start`, as many as fit in CLIP_MAX, or None when
+def _span(chapter_scenes, start, max_len=CLIP_MAX):
+    """Whole scenes from `start`, as many as fit in max_len, or None when
     the result is shorter than CLIP_MIN."""
     first = chapter_scenes[start]
     t0 = first["_global_start"]
     picked = []
     for s in chapter_scenes[start:]:
-        if s["_global_start"] + s["duration"] - t0 > CLIP_MAX:
+        if s["_global_start"] + s["duration"] - t0 > max_len:
             break
         picked.append(s)
     if not picked:
@@ -169,7 +172,10 @@ def pick_clips(scenes, limit):
         if skip_bridge:
             while start < len(group) - 1 and _opens_with_bridge(group[start]):
                 start += 1
-        span = _best_span(group, start, fixed_start=(label == "teaser"))
+        if label == "teaser":
+            span = _span(group, start, TEASER_MAX)
+        else:
+            span = _best_span(group, start)
         if span:
             clips.append((label, span))
             used.add(c_idx)
