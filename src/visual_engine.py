@@ -30,7 +30,11 @@ CANONICAL_STYLE = ("dramatic chiaroscuro lighting, dark moody cinematic oil "
                    "detailed, completely free of any text, letters, words, "
                    "writing, numbers, captions, signage or watermarks — any "
                    "page, book, document, sign or screen in frame is blank "
-                   "or angled away so no text is visible")
+                   "or angled away so no text is visible, and no flags, star "
+                   "emblems or national insignia on vehicles or uniforms")
+# (The insignia clause: a Yemen 1994 tank came out with a US white star, 20
+# Oct. A generator's guess at a country's markings is wrong more often than
+# right, and a wrong one reads as a factual error.)
 
 # Style directions that fight the painterly look. Any comma-clause containing
 # one of these is dropped from the prompt before CANONICAL_STYLE is applied —
