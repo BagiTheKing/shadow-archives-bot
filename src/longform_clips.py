@@ -306,12 +306,7 @@ def find_paradox(script):
     return script["paradox"]
 
 
-# The channel's sound: one deep hit as the paradox lands (the long-form
-# videos' own "hit", longform_video._sfx_sources), always the same, so the
-# ear learns it.
-STING = ("(sin(2*PI*48*t)*0.9+sin(2*PI*96*t)*0.35"
-         "+(random(0)*2-1)*exp(-22*t)*0.8)*exp(-2.2*t)")
-STING_LEAD = 0.6                  # the hit, then the voice
+STING_LEAD = 0.4                  # silence after the dip, then the voice
 DIP = 0.35                        # the story fades to black, the reveal fades in
 
 
@@ -331,26 +326,20 @@ def make_reveal(script, scenes, build_dir, hook=None):
         words = _synthesize(text, voice)
         seconds = get_audio_duration(voice)
         lead_ms = int(STING_LEAD * 1000)
+        # a breath of silence after the dip, then the voice alone (the
+        # owner found the hit's noise burst harsh, 20 Oct)
         subprocess.run(
-            ["ffmpeg", "-y", "-i", voice, "-filter_complex",
-             f"aevalsrc='{STING}':s=44100:d=2.2,volume=0.5,"
-             f"aformat=channel_layouts=stereo[hit];"
-             f"[0:a]aformat=channel_layouts=stereo:sample_rates=44100,"
-             f"adelay={lead_ms}|{lead_ms}[v];"
-             f"[hit][v]amix=inputs=2:duration=longest:normalize=0[a]",
-             "-map", "[a]", "-c:a", "aac", "-b:a", "192k", audio],
+            ["ffmpeg", "-y", "-i", voice, "-af",
+             f"aformat=channel_layouts=stereo:sample_rates=44100,"
+             f"adelay={lead_ms}|{lead_ms}",
+             "-c:a", "aac", "-b:a", "192k", audio],
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
     except Exception as e:
         print(f"⚠️ Paradox not voiced ({type(e).__name__}: {e}).")
         return None
     length = STING_LEAD + seconds + 1.0
     taken = hook["start"] if hook else None
-    # the story's map, when it has one long enough (owner, 20 Oct: "the map
-    # is a good part"), else its strongest real picture
-    maps = [s for s in scenes if s.get("map") and s.get("_global_start") is not None
-            and s.get("_global_start") != taken and s.get("duration", 0) >= length]
-    pic = maps[0] if maps else _hook_picture(
-        [s for s in scenes if s.get("_global_start") != taken], length)
+    pic = _hook_picture([s for s in scenes if s.get("_global_start") != taken], length)
     if not pic:
         return None
     # Captions carry the paradox only: the signature line is heard, never
@@ -359,8 +348,7 @@ def make_reveal(script, scenes, build_dir, hook=None):
     shown = len(line.split())
     words = [dict(w, start=w["start"] + STING_LEAD, end=w["end"] + STING_LEAD)
              for w in words[:shown]]
-    print(f"💡 Paradox ({length:.1f}s): {line!r} over "
-          + ("the map" if maps else "the strongest picture"))
+    print(f"💡 Paradox ({length:.1f}s): {line!r}")
     return {"text": line, "audio": audio, "words": words, "length": length,
             "start": pic["_global_start"], "promise": promise_for(script)[1],
             "scene": pic}
@@ -493,9 +481,10 @@ def _full_frame(windows):
 
 
 def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None,
-                reveal=None):
+                reveal=None, swap=None):
     """One vertical clip, opened by `hook` (make_hook) and closed by `reveal`
-    (make_reveal) when given. Returns (path, length, music_attribution)."""
+    (make_reveal) when given; `swap` (real_swaps) puts real pictures over
+    the scenes that had generated ones. Returns (path, length, music_attribution)."""
     from music_attribution import attribution_for
     from video_engine import FONTS_DIR, _pick_music, generate_subtitles
 
@@ -547,18 +536,45 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
                        "-i", merged, "-i", seg["audio"]]
             parts.append((n, n + 1, seg["length"], False))
             n += 2
+    swap = swap or []
+    swap_in = []
+    for sw in swap:
+        inputs += ["-ss", f"{sw['start']:.3f}", "-t", f"{sw['seconds']:.3f}",
+                   "-i", merged]
+        swap_in.append(n)
+        n += 1
     join, labels = "", ""
 
     def seg_is_reveal(i):
         return bool(reveal) and i == len(parts) - 1
     for i, part in enumerate(parts):
         if part == "body":
-            # a short dip to black before the reveal, so the sting lands on
-            # a cut that means something (owner, 20 Oct: "a poor cut")
+            # a short dip to black before the reveal (owner, 20 Oct: "a poor
+            # cut")
             dip = (f",fade=t=out:st={body - DIP:.3f}:d={DIP}" if reveal else "")
             adip = (f",afade=t=out:st={body - DIP:.3f}:d={DIP}" if reveal else "")
-            join += (f"[0:v]setpts=PTS-STARTPTS{dip}[v{i}];"
-                     f"[0:a]asetpts=PTS-STARTPTS{adip}[a{i}];")
+            if swap:
+                # real pictures over the scenes that had generated ones, the
+                # narration kept: the body cut at each swap
+                pieces, t, lab = "", 0.0, []
+                cuts = len(swap) * 2 + 1
+                join += f"[0:v]split={len(swap) + 1}" + "".join(
+                    f"[bs{i}_{j}]" for j in range(len(swap) + 1)) + ";"
+                for j, sw in enumerate(swap):
+                    a, b = sw["at"], sw["at"] + sw["seconds"]
+                    pieces += (f"[bs{i}_{j}]trim={t:.3f}:{a:.3f},setpts=PTS-STARTPTS[bp{i}_{j}];"
+                               f"[{swap_in[j]}:v]trim=0:{sw['seconds']:.3f},"
+                               f"setpts=PTS-STARTPTS[bm{i}_{j}];")
+                    lab += [f"[bp{i}_{j}]", f"[bm{i}_{j}]"]
+                    t = b
+                pieces += (f"[bs{i}_{len(swap)}]trim={t:.3f},setpts=PTS-STARTPTS"
+                           f"[bq{i}];")
+                lab.append(f"[bq{i}]")
+                join += (pieces + "".join(lab) + f"concat=n={cuts}:v=1:a=0,"
+                         f"setpts=PTS-STARTPTS{dip}[v{i}];")
+            else:
+                join += f"[0:v]setpts=PTS-STARTPTS{dip}[v{i}];"
+            join += f"[0:a]asetpts=PTS-STARTPTS{adip}[a{i}];"
         else:
             vi, ai, seconds, own = part
             # outside footage is brought to the long-form picture's size and
@@ -580,7 +596,12 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
     for i, sc in enumerate(clip_scenes):
         nxt = (clip_scenes[i + 1]["_global_start"] if i + 1 < len(clip_scenes)
                else t0 + body)
-        spans.append((nxt - sc["_global_start"], sc))
+        span = nxt - sc["_global_start"]
+        sw = next((x for x in (swap or []) if x["over"] is sc), None)
+        if sw:
+            spans += [(sw["seconds"], sw["map"]), (span - sw["seconds"], sc)]
+        else:
+            spans.append((span, sc))
     if reveal:
         spans.append((tail, reveal.get("scene")))
     video = (
@@ -622,6 +643,60 @@ def _fit(clip_scenes, seconds):
     return kept or clip_scenes[:1]
 
 
+def _generated_frame(sc):
+    return not (sc.get("is_real") or sc.get("video_path") or sc.get("_is_map"))
+
+
+def _names(asset):
+    m = asset.get("map") or {}
+    d = asset.get("dossier") or {}
+    # names inside a sentence, not its capitalised first word
+    inner = re.findall(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z']{3,}\b",
+                       asset.get("narration") or "")
+    return [n for n in ([m.get("target")] + list(m.get("light") or [])
+                        + [d.get("name") if isinstance(d, dict) else None] + inner)
+            if n]
+
+
+def real_swaps(clip_scenes, scenes, taken=()):
+    """[{"over", "map", "at", "seconds", "start"}]: for each teaser scene
+    still showing a generated image, a real picture from elsewhere in the
+    video instead (owner, 20 Oct: maps and people from something real, not
+    AI): the story's maps first, then its cast cards, then its real photos
+    and footage, the one naming the scene's place or person before any
+    other. The scene's narration is kept; only its picture changes."""
+    inside = {id(s) for s in clip_scenes}
+    pool = [s for s in scenes if s.get("_global_start") is not None
+            and s.get("duration") and id(s) not in inside
+            and s.get("_global_start") not in taken
+            and (s.get("map") or s.get("dossier") or s.get("is_real")
+                 or (s.get("video_path") and not s.get("_is_map")))]
+    pool.sort(key=lambda s: (0 if s.get("map") else 1 if s.get("dossier") else 2))
+    t0 = clip_scenes[0]["_global_start"]
+    want = [(i, sc) for i, sc in enumerate(clip_scenes[:-1]) if _generated_frame(sc)]
+    chosen = {}
+    # first the scenes whose place or person an asset names, then the rest
+    for named_only in (True, False):
+        for i, sc in want:
+            if i in chosen or not pool:
+                continue
+            text = (sc.get("narration") or "").lower()
+            named = [s for s in pool if any(n.lower() in text for n in _names(s))]
+            if named_only and not named:
+                continue
+            asset = (named or pool)[0]
+            pool.remove(asset)
+            chosen[i] = asset
+    out = []
+    for i in sorted(chosen):
+        sc, asset = clip_scenes[i], chosen[i]
+        span = clip_scenes[i + 1]["_global_start"] - sc["_global_start"]
+        out.append({"over": sc, "map": asset, "at": sc["_global_start"] - t0,
+                    "seconds": min(span, asset["duration"]),
+                    "start": asset["_global_start"]})
+    return out
+
+
 def make_clips(scenes, script, build_dir="build", limit=None):
     """Renders the clips. Returns [{"path", "label", "scenes", "length",
     "music_attribution"}]. Never raises: the long-form video is the run's
@@ -634,15 +709,18 @@ def make_clips(scenes, script, build_dir="build", limit=None):
     out = []
     for k, (label, clip_scenes) in enumerate(pick_clips(scenes, limit)):
         path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
-        hook = reveal = None
+        hook = reveal = swap = None
         if label == "teaser":
             hook = make_hook(script, scenes, build_dir)
             reveal = make_reveal(script, scenes, build_dir, hook)
             if hook or reveal:
                 clip_scenes = _fit(clip_scenes, TEASER_BODY_MAX)
+            swap = real_swaps(clip_scenes, scenes, taken={
+                (hook or {}).get("start"), (reveal or {}).get("start")})
         try:
             _, length, music_credit = render_clip(merged, clip_scenes, headline,
-                                                  path, build_dir, k, hook, reveal)
+                                                  path, build_dir, k, hook, reveal,
+                                                  swap)
         except Exception as e:
             print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
             continue
