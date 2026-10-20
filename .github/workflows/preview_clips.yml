@@ -123,6 +123,8 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          # DVIDS (media_sources.py): US military photos and footage, free key
+          DVIDS_API_KEY: ${{ secrets.DVIDS_API_KEY }}
           WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
           KOKORO_VOICE: am_onyx
           # the teaser's paradox line is written by the same free chain

@@ -265,6 +265,8 @@ jobs:
           # real b-roll clips between the stills. Absent, the pipeline simply
           # uses no stock video — nothing fails.
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          # DVIDS (media_sources.py): US military photos and footage, free key
+          DVIDS_API_KEY: ${{ secrets.DVIDS_API_KEY }}
           # PUBLIC since 2026-08-18. Every long-form video before this date was
           # published unlisted, which is why seven of them total ~90 views: they
           # were never visible to anyone who did not have the link. Nothing about
