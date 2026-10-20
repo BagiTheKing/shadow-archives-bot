@@ -539,7 +539,7 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
     swap = swap or []
     swap_in = []
     for sw in swap:
-        inputs += ["-ss", f"{sw['start']:.3f}", "-t", f"{sw['seconds']:.3f}",
+        inputs += ["-ss", f"{sw['start']:.3f}", "-t", f"{sw['take']:.3f}",
                    "-i", merged]
         swap_in.append(n)
         n += 1
@@ -563,8 +563,9 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
                 for j, sw in enumerate(swap):
                     a, b = sw["at"], sw["at"] + sw["seconds"]
                     pieces += (f"[bs{i}_{j}]trim={t:.3f}:{a:.3f},setpts=PTS-STARTPTS[bp{i}_{j}];"
-                               f"[{swap_in[j]}:v]trim=0:{sw['seconds']:.3f},"
-                               f"setpts=PTS-STARTPTS[bm{i}_{j}];")
+                               f"[{swap_in[j]}:v]trim=0:{sw['take']:.3f},setpts=PTS-STARTPTS,"
+                               f"tpad=stop_mode=clone:stop_duration="
+                               f"{max(0.0, sw['seconds'] - sw['take']):.3f}[bm{i}_{j}];")
                     lab += [f"[bp{i}_{j}]", f"[bm{i}_{j}]"]
                     t = b
                 pieces += (f"[bs{i}_{len(swap)}]trim={t:.3f},setpts=PTS-STARTPTS"
@@ -599,7 +600,7 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
         span = nxt - sc["_global_start"]
         sw = next((x for x in (swap or []) if x["over"] is sc), None)
         if sw:
-            spans += [(sw["seconds"], sw["map"]), (span - sw["seconds"], sc)]
+            spans.append((span, sw["map"]))
         else:
             spans.append((span, sc))
     if reveal:
@@ -691,13 +692,19 @@ def real_swaps(clip_scenes, scenes, taken=()):
     for i in sorted(chosen):
         sc, asset = clip_scenes[i], chosen[i]
         span = clip_scenes[i + 1]["_global_start"] - sc["_global_start"]
-        seconds = min(span, asset["duration"])
-        # a map's end, where its arrow or strike has landed, not its empty
-        # opening frames (v4, 20 Oct: a grey shape on black)
-        start = asset["_global_start"] + (asset["duration"] - seconds
-                                          if asset.get("map") else 0.0)
+        # The swap covers the scene's whole span, so its own picture never
+        # shows around it, and takes the asset's clean middle, clear of the
+        # crossfades at its edges (v4: the scene before the map flashed in
+        # at both ends, owner 21 Oct: "noise for the eyes"). A map shows its
+        # end, where the strike has landed; one shorter than the scene
+        # holds its last frame.
+        from longform_video import XFADE
+        clean0 = asset["_global_start"] + XFADE
+        clean1 = asset["_global_start"] + asset["duration"]
+        take = max(0.5, min(span, clean1 - clean0))
+        start = clean1 - take if asset.get("map") else clean0
         out.append({"over": sc, "map": asset, "at": sc["_global_start"] - t0,
-                    "seconds": seconds, "start": start})
+                    "seconds": span, "take": take, "start": start})
     return out
 
 
