@@ -1,0 +1,42 @@
+name: Media Probe
+
+# Manual. Searches DVIDS and Openverse for a few subjects and pushes contact
+# sheets of what they return (and the raw replies) to the preview-media
+# branch. Nothing is published.
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: "Subjects, separated by |"
+        required: true
+        default: "Yemen|Houthi|Sanaa|Aden|Red Sea Houthi missile|Saudi airport attack|Yemen civil war 1994|Ali Abdullah Saleh"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests pillow
+      - name: Search both sources
+        env:
+          DVIDS_API_KEY: ${{ secrets.DVIDS_API_KEY }}
+          QUERIES: ${{ inputs.queries }}
+        run: |
+          IFS='|' read -ra Q <<< "$QUERIES"
+          python tools/media_probe.py out "${Q[@]}"
+      - name: Push to preview-media
+        run: |
+          cd out
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Media probe (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
