@@ -21,8 +21,9 @@ timeline between chapters carries title cards and black):
 
 HOW
 The source is lf_merged.mp4, the picture and narration before the long-form
-captions and music are burned in. The 16:9 picture is trimmed to 3:2 and set
-across the middle of a 9:16 frame over a blurred copy of itself; the Shorts'
+captions and music are burned in. Photos and footage fill the 9:16 frame,
+cropped around their faces (maps, chains and cast cards keep the 16:9 picture
+across the middle over a blurred copy of itself); the Shorts'
 own big captions (video_engine.generate_subtitles, with its yellow figures)
 go below it, the video's headline above it, a red "FULL STORY ON THE
 CHANNEL" bar between the two for the whole clip, and "WATCH THE FULL VIDEO"
@@ -189,7 +190,7 @@ def make_hook(script, scenes, build_dir):
     print(f"🪝 Teaser hook ({length:.1f}s): {text!r} over scene "
           f"{pic.get('narration', '')[:60]!r}")
     return {"text": text, "audio": audio, "words": words, "length": length,
-            "start": pic["_global_start"]}
+            "start": pic["_global_start"], "scene": pic}
 
 
 def _script_text(script):
@@ -298,7 +299,8 @@ def make_reveal(script, scenes, build_dir, hook=None):
              for w in words]
     print(f"💡 Paradox ({length:.1f}s): {line!r}")
     return {"text": text, "audio": audio, "words": words, "length": length,
-            "start": pic["_global_start"], "promise": promise_for(script)[1]}
+            "start": pic["_global_start"], "promise": promise_for(script)[1],
+            "scene": pic}
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +377,65 @@ def _headline_events(headline, length, reveal_at=None, promise=None):
     return events
 
 
+# Full screen (owner, 2026-10-20): the 16:9 picture letterboxed in the
+# middle third read as a re-uploaded clip next to the full-screen Shorts
+# around it. Photos and footage now fill the 9:16 frame, cropped around the
+# faces in them (else the centre); maps, chains and cast cards, drawn for
+# 16:9, keep the letterbox, where cropping would cut them in half.
+def _focus_x(scene):
+    """Where across the picture (0-1) the crop centres: the faces in the
+    scene's still or footage poster, else the middle."""
+    path = scene.get("image_path") or (scene.get("image_paths") or [None])[0]
+    if not path or not os.path.exists(path):
+        return 0.5
+    try:
+        import cv2
+        from cast_engine import _faces, faces_available
+        if not faces_available():
+            return 0.5
+        img = cv2.imread(path)
+        faces = _faces(img)[:3]
+        if not faces:
+            return 0.5
+        w = img.shape[1]
+        return float(sum(f[0] + f[2] / 2 for f in faces) / len(faces) / w)
+    except Exception:
+        return 0.5
+
+
+def _windows(parts):
+    """[(start, end, graphic, focus)] on the clip's timeline, from
+    [(seconds, scene or None)] laid end to end."""
+    out, t = [], 0.0
+    for seconds, scene in parts:
+        scene = scene or {}
+        out.append((t, t + seconds, bool(scene.get("_is_map")), _focus_x(scene)))
+        t += seconds
+    return out
+
+
+def _full_frame(windows):
+    """The filter that turns the 16:9 [src] into the 9:16 [frame]: cropped
+    full screen, with the letterboxed layout over it in graphic windows."""
+    x = "0.5"
+    for start, _, _, fx in reversed(windows):
+        x = f"if(gte(t,{start:.3f}),{fx:.3f},{x})"
+    crop_x = f"min(max(({x})*iw-ih*9/32,0),iw-ih*9/16)"
+    graphic = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b, g, _ in windows if g)
+    full = (f"[src]split=3[s0][s1][s2];"
+            f"[s0]crop=w=ih*9/16:h=ih:x='{crop_x}':y=0,"
+            f"scale={W}:{H}:flags=lanczos,setsar=1[full];")
+    if not graphic:
+        return full.replace("split=3[s0][s1][s2]", "null[s0]").replace(
+            "[full];", "[frame];")
+    return (full +
+            f"[s1]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+            f"boxblur=28:2,eq=brightness=-0.22[bg];"
+            f"[s2]crop=ih*3/2:ih,scale={FG_W}:{FG_H}:flags=lanczos[fg];"
+            f"[bg][fg]overlay=0:(H-h)/2,setsar=1[boxed];"
+            f"[full][boxed]overlay=0:0:enable='{graphic}'[frame];")
+
+
 def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None,
                 reveal=None):
     """One vertical clip, opened by `hook` (make_hook) and closed by `reveal`
@@ -437,13 +498,19 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
         labels += f"[v{i}][a{i}]"
     join += f"{labels}concat=n={len(parts)}:v=1:a=1[src][srca];"
     music_in = n
+    # every scene's span on the clip's timeline, for the crop
+    spans = []
+    if hook:
+        spans.append((lead, hook.get("scene")))
+    for i, sc in enumerate(clip_scenes):
+        nxt = (clip_scenes[i + 1]["_global_start"] if i + 1 < len(clip_scenes)
+               else t0 + body)
+        spans.append((nxt - sc["_global_start"], sc))
+    if reveal:
+        spans.append((tail, reveal.get("scene")))
     video = (
-        f"{join}[src]split[a][b];"
-        f"[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-        f"boxblur=28:2,eq=brightness=-0.22[bg];"
-        f"[b]crop=ih*3/2:ih,scale={FG_W}:{FG_H}:flags=lanczos[fg];"
-        f"[bg][fg]overlay=0:(H-h)/2,setsar=1,"
-        f"ass='{safe_ass}':fontsdir='{safe_fonts}',"
+        f"{join}{_full_frame(_windows(spans))}"
+        f"[frame]ass='{safe_ass}':fontsdir='{safe_fonts}',"
         f"fade=t=out:st={max(length - 0.5, 0):.2f}:d=0.5[v]"
     )
     music = _pick_music()
