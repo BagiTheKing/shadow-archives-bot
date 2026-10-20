@@ -317,6 +317,14 @@ def download_archival_image(candidate: dict, output_path: str,
     except Exception as e:
         print(f"⚠️ Archival download failed ({candidate.get('title', '?')}): {e}")
         return False
+    # a film leader, a catalogue card or a blank page is not a picture: a
+    # "REEL 22" slate stood in for Aden in 1992 (20 Oct)
+    grey = img.convert("L").resize((64, 64))
+    hist = grey.histogram()
+    if sum(hist[201:]) / sum(hist) > 0.6:
+        print(f"   ↩️  {candidate.get('title', '?')!r}: mostly blank (a slate or a "
+              "page), skipped.")
+        return False
     (fit or _fit_frame)(img, width, height).save(output_path, "JPEG", quality=92)
     return True
 

@@ -177,6 +177,10 @@ def _news_queries(title):
     return list(dict.fromkeys(q for q in out if q))
 
 
+_ACTION = re.compile(r"\b(strike|strikes|airstrike|attack|launch|missile|fire|"
+                     r"intercept|bomb|combat|operations against)", re.I)
+
+
 def news_footage(script, seconds, build_dir):
     """(path, credit) of real footage of today's news for the hook, from
     DVIDS, or None. Only for a story the news led to, only footage from the
@@ -193,13 +197,19 @@ def news_footage(script, seconds, build_dir):
     import datetime as dt
     this_year = dt.date.today().year
     path = os.path.join(build_dir, "lf_clip_news.mp4")
+    found, seen = [], set()
     for q in _news_queries(script.get("title") or ""):
-        for cand in search_dvids(q, "video", 4):
-            if (cand.get("year") or 0) < this_year - 2:
-                continue
-            if fetch_commons_video(cand, path, seconds=seconds + 0.5):
-                print(f"📰 Hook footage: {cand['title']!r} (DVIDS, {q!r})")
-                return path, format_credit(cand)
+        for c in search_dvids(q, "video", 6):
+            if c["url"] not in seen and (c.get("year") or 0) >= this_year - 2:
+                seen.add(c["url"])
+                found.append(c)
+    # the action itself first (strikes, launches) over a seized-cargo
+    # inventory: the hook has three seconds to look like the news
+    found.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
+    for cand in found:
+        if fetch_commons_video(cand, path, seconds=seconds + 0.5):
+            print(f"📰 Hook footage: {cand['title']!r} (DVIDS)")
+            return path, format_credit(cand)
     return None
 
 

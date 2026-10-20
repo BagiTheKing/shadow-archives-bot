@@ -70,9 +70,11 @@ MAX_SHOTS_PER_SCENE = 3
 
 # B-roll is connective tissue, not the main dish: too many stock clips and the
 # video stops looking like it is about anything in particular.
-# Stock footage is real but not OF the story (a Houthi teaser drew "old
-# letter by candlelight", fog and dunes, 20 Oct): it stays rare and spaced.
-MAX_BROLL_CLIPS = 6
+# Stock footage is real but not OF the story: a Houthi teaser drew a woman
+# in pearls for "two nations bound their fates together", fog and dunes
+# (20 Oct). A viewer reads an unrelated real clip as a mistake, worse than a
+# matched painting, so it is off unless MAX_BROLL_CLIPS says otherwise.
+MAX_BROLL_CLIPS = int(os.getenv("MAX_BROLL_CLIPS", "0"))
 MIN_BROLL_SCENE_SECONDS = 6.0
 
 # Minimum scenes between two b-roll clips. The first live run granted b-roll
