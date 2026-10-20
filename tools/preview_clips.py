@@ -67,6 +67,10 @@ def main(script_path, out, mode="compare"):
                     f"FIRST COMMENT\n{comment}\n\nPARADOX\n"
                     f"{(script.get('paradox') or {}).get('answer', '')}\n")
         print(f"   teaser: {c['length']:.1f}s -> {dest}")
+        # the paradox it found goes back into the script, so a re-render
+        # (new images, everything else kept) says the same words
+        with open(script_path, "w", encoding="utf-8") as f:
+            json.dump(script, f, ensure_ascii=False, indent=1)
         return
 
     for name, mod in (("old", old), ("new", new)):
