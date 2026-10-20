@@ -139,6 +139,15 @@ def _widen_query(query: str):
     names = _PROPER_NOUN_RUN_RE.findall(query)
     if not names:
         return None
+    # A person's name is never shortened: "Ali Salem al-Beidh" widened to
+    # "Ali Salem" and drew a US Air Force officer's portrait for Yemen's
+    # southern leader (20 Oct). A query that is nothing but a name (and a
+    # year) either finds that person or nobody.
+    words = [w for w in re.sub(r"\b\d{4}\b", "", query).split() if w]
+    if words and all(w[:1].isupper() or re.match(r"(al|el|bin|ibn|bint|abu|de|"
+                                                  r"van|von|da|di|le)\b", w, re.I)
+                     for w in words):
+        return None
     core = max(names, key=len)
     year = _YEAR_RE.search(query)
     widened = f"{core} {year.group(0)}" if year else core

@@ -691,9 +691,13 @@ def real_swaps(clip_scenes, scenes, taken=()):
     for i in sorted(chosen):
         sc, asset = clip_scenes[i], chosen[i]
         span = clip_scenes[i + 1]["_global_start"] - sc["_global_start"]
+        seconds = min(span, asset["duration"])
+        # a map's end, where its arrow or strike has landed, not its empty
+        # opening frames (v4, 20 Oct: a grey shape on black)
+        start = asset["_global_start"] + (asset["duration"] - seconds
+                                          if asset.get("map") else 0.0)
         out.append({"over": sc, "map": asset, "at": sc["_global_start"] - t0,
-                    "seconds": min(span, asset["duration"]),
-                    "start": asset["_global_start"]})
+                    "seconds": seconds, "start": start})
     return out
 
 
