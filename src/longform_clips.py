@@ -45,8 +45,11 @@ import subprocess
 import story_mode as sm
 
 LONGFORM_CLIPS = int(os.getenv("LONGFORM_CLIPS", "0"))
-CLIP_MIN = 25.0
-CLIP_MAX = 58.0
+# 20-35 s (owner, 2026-10-20): the Tunis clip kept 72% past the swipe but
+# its 54 s ran its average watch down to 56.7%, and YouTube stopped its test
+# at ~660 viewers. Short enough to finish, ending on its strongest line.
+CLIP_MIN = 20.0
+CLIP_MAX = 35.0
 CLIP_TAIL = 0.35                  # after the last word, before the cut
 CTA_SECONDS = 4.0
 CLIP_CTA = "FULL STORY ON THE CHANNEL"
@@ -83,6 +86,55 @@ def _span(chapter_scenes, start):
     return picked if length >= CLIP_MIN else None
 
 
+_STRONG = re.compile(r"\d|\b(never|only|first|last|every|no one|nobody|dead|killed|"
+                     r"died|executed|destroyed|lost|million|thousand|hundred|war|"
+                     r"combat|troops|invaded|erupted|collapsed|attack|bomb|"
+                     r"massacre|revolt|warned|fell|surrender)", re.I)
+
+
+def _line_strength(scene) -> int:
+    """How hard a scene's last sentence lands: the chapter's marked punch
+    phrase, a figure, a death or an absolute."""
+    text = (scene.get("narration") or "").strip()
+    last = re.split(r"(?<=[.!?])\s+", text)[-1] if text else ""
+    # what happened (troops, deaths, figures) outranks a marked phrase
+    score = 2 if scene.get("punch_phrase") else 0
+    score += min(3, len(_STRONG.findall(last)))
+    return score
+
+
+def _cold_open_unclear(scene) -> bool:
+    """A clip cannot open on "He", "This" or "Meanwhile": a stranger in the
+    feed has nothing for it to point back to."""
+    first = (scene.get("narration") or "").strip().split(" ")[0].lower().strip(",")
+    return _opens_with_bridge(scene) or first in {
+        "he", "she", "they", "it", "this", "that", "these", "those", "his",
+        "her", "their", "its", "but", "and", "so", "then", "there"}
+
+
+def _best_span(chapter_scenes, start, fixed_start=False):
+    """The CLIP_MIN-CLIP_MAX run of whole scenes, from `start` on, that ends
+    on the strongest line (ties: the earlier, then the shorter). fixed_start
+    keeps the run at `start` (the teaser opens the video's hook)."""
+    best, best_key = None, None
+    starts = [start] if fixed_start else range(start, len(chapter_scenes))
+    for a in starts:
+        if not fixed_start and a > start and _cold_open_unclear(chapter_scenes[a]):
+            continue
+        t0 = chapter_scenes[a]["_global_start"]
+        for b in range(a, len(chapter_scenes)):
+            end = chapter_scenes[b]
+            length = end["_global_start"] + end["duration"] - t0
+            if length > CLIP_MAX:
+                break
+            if length < CLIP_MIN:
+                continue
+            key = (_line_strength(end), -a, -length)
+            if best_key is None or key > best_key:
+                best, best_key = chapter_scenes[a:b + 1], key
+    return best
+
+
 def pick_clips(scenes, limit):
     """[(label, [scene, ...])] — at most `limit` clips, in the order above."""
     timed = [s for s in scenes if s.get("_global_start") is not None
@@ -117,7 +169,7 @@ def pick_clips(scenes, limit):
         if skip_bridge:
             while start < len(group) - 1 and _opens_with_bridge(group[start]):
                 start += 1
-        span = _span(group, start)
+        span = _best_span(group, start, fixed_start=(label == "teaser"))
         if span:
             clips.append((label, span))
             used.add(c_idx)
