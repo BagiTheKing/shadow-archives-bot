@@ -323,15 +323,14 @@ def _wrap(text, width=18):
 # backs him up until the ending, and the ending keeps the promise: the
 # channel's sound, the story's paradox, and the signature line. Never a
 # length ("the last ten seconds"): a viewer who thinks about the length
-# feels the Short is long. The owner's picks, one pair per story.
+# feels the Short is long. The owner's picks, one pair per story ("Trust
+# me..." dropped: in a synthetic voice it is what sounds like a trick).
 PROMISES = [
     ("Most people get this story wrong.", "THE ENDING CHANGES EVERYTHING"),
     ("Everyone knows how this started. Almost nobody knows how it ended.",
      "NOBODY TALKS ABOUT HOW IT ENDED"),
     ("The last line of this story is the one nobody tells.",
      "THE PART THEY LEFT OUT"),
-    ("Trust me, the ending is the part you'll repeat.",
-     "YOU'LL REPEAT THIS ENDING"),
 ]
 GOLD = "&H3AB2E8&"                # (232, 178, 58), as BGR
 REVEAL_HEAD = "THAT'S THE PARADOX"
