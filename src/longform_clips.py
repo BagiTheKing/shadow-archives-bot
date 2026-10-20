@@ -54,6 +54,7 @@ MUSIC_LEVEL = 0.08
 
 W, H, FPS = 1080, 1920, 30
 FG_W, FG_H = 1080, 720            # the 16:9 picture, trimmed to 3:2
+SRC_W, SRC_H = 1920, 1080         # lf_merged.mp4
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +167,42 @@ def _hook_picture(scenes, seconds):
     return max(fits, key=key)
 
 
+def _news_queries(title):
+    """DVIDS searches for the news a title opens on: its first clause, then
+    its names ("Houthis launch attacks on Saudi airports, echoing 1990..."
+    -> that clause, then "Houthis Saudi", then "Houthis")."""
+    head = re.split(r"[,:;.]| echoing | as | after ", title, maxsplit=1)[0].strip()
+    names = [w for w in re.findall(r"\b[A-Z][a-z]{3,}\b", head)]
+    out = [head] + ([" ".join(names[:2])] if len(names) > 1 else []) + names[:1]
+    return list(dict.fromkeys(q for q in out if q))
+
+
+def news_footage(script, seconds, build_dir):
+    """(path, credit) of real footage of today's news for the hook, from
+    DVIDS, or None. Only for a story the news led to, only footage from the
+    last three years."""
+    if script.get("lane") != "timely":
+        return None
+    try:
+        from archive_engine import fetch_commons_video, format_credit
+        from media_sources import dvids_available, search_dvids
+    except Exception:
+        return None
+    if not dvids_available():
+        return None
+    import datetime as dt
+    this_year = dt.date.today().year
+    path = os.path.join(build_dir, "lf_clip_news.mp4")
+    for q in _news_queries(script.get("title") or ""):
+        for cand in search_dvids(q, "video", 4):
+            if (cand.get("year") or 0) < this_year - 2:
+                continue
+            if fetch_commons_video(cand, path, seconds=seconds + 0.5):
+                print(f"📰 Hook footage: {cand['title']!r} (DVIDS, {q!r})")
+                return path, format_credit(cand)
+    return None
+
+
 def make_hook(script, scenes, build_dir):
     """{"text", "audio", "words", "length", "start"} or None: the title,
     voiced, and where its picture sits in lf_merged.mp4."""
@@ -184,13 +221,18 @@ def make_hook(script, scenes, build_dir):
         print(f"⚠️ Teaser hook not voiced ({type(e).__name__}: {e}) — the "
               "teaser opens on chapter 1 as before.")
         return None
+    news = news_footage(script, length, build_dir)
     pic = _hook_picture(scenes, length)
-    if not pic:
+    if not pic and not news:
         return None
-    print(f"🪝 Teaser hook ({length:.1f}s): {text!r} over scene "
-          f"{pic.get('narration', '')[:60]!r}")
-    return {"text": text, "audio": audio, "words": words, "length": length,
-            "start": pic["_global_start"], "scene": pic}
+    print(f"🪝 Teaser hook ({length:.1f}s): {text!r} over "
+          + ("today's footage" if news else f"scene {pic.get('narration', '')[:60]!r}"))
+    hook = {"text": text, "audio": audio, "words": words, "length": length,
+            "start": pic["_global_start"] if pic else 0.0, "scene": pic}
+    if news:
+        # the news itself on screen, in place of a picture from the past
+        hook.update(video=news[0], credit=news[1], scene={"_news": True})
+    return hook
 
 
 def _script_text(script):
@@ -481,18 +523,28 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
     for seg in (hook, "body", reveal):
         if seg == "body":
             parts.append("body")
+        elif seg and seg.get("video"):
+            inputs += ["-stream_loop", "-1", "-t", f"{seg['length']:.3f}",
+                       "-i", seg["video"], "-i", seg["audio"]]
+            parts.append((n, n + 1, seg["length"], True))
+            n += 2
         elif seg:
             inputs += ["-ss", f"{seg['start']:.3f}", "-t", f"{seg['length']:.3f}",
                        "-i", merged, "-i", seg["audio"]]
-            parts.append((n, n + 1, seg["length"]))
+            parts.append((n, n + 1, seg["length"], False))
             n += 2
     join, labels = "", ""
     for i, part in enumerate(parts):
         if part == "body":
             join += f"[0:v]setpts=PTS-STARTPTS[v{i}];[0:a]asetpts=PTS-STARTPTS[a{i}];"
         else:
-            vi, ai, seconds = part
-            join += (f"[{vi}:v]setpts=PTS-STARTPTS[v{i}];"
+            vi, ai, seconds, own = part
+            # outside footage is brought to the long-form picture's size and
+            # rate, which concat needs
+            fit = (f"scale={SRC_W}:{SRC_H}:force_original_aspect_ratio=increase,"
+                   f"crop={SRC_W}:{SRC_H},fps={FPS},setsar=1,trim=0:{seconds:.3f},"
+                   if own else "")
+            join += (f"[{vi}:v]{fit}setpts=PTS-STARTPTS[v{i}];"
                      f"[{ai}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
                      f"apad,atrim=0:{seconds:.3f},asetpts=PTS-STARTPTS[a{i}];")
         labels += f"[v{i}][a{i}]"
@@ -573,7 +625,8 @@ def make_clips(scenes, script, build_dir="build", limit=None):
             continue
         print(f"✂️  Clip {k + 1}: {label}, {length:.1f}s — {path}")
         out.append({"path": path, "label": label, "scenes": clip_scenes,
-                    "length": length, "music_attribution": music_credit})
+                    "length": length, "music_attribution": music_credit,
+                    "credits": [hook["credit"]] if hook and hook.get("credit") else []})
     return out
 
 
@@ -607,6 +660,8 @@ def clip_metadata(clip, script, video_id, credit_block=""):
     if source.get("url"):
         parts.append(f"Source: \"{source.get('title', '')}\", Wikipedia — "
                      f"{source['url']}")
+    if clip.get("credits"):
+        parts.append("Opening footage: " + "; ".join(clip["credits"]))
     if credit_block:
         parts.append(credit_block)
     if clip.get("music_attribution"):

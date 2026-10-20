@@ -41,6 +41,27 @@ def _get(url, params, timeout=25):
     return r.json()
 
 
+# DVIDS search is full text over captions: "Aden" also finds "Hickam", and
+# "Houthi" finds a medal ceremony whose caption mentions the deployment.
+# What it returns must name the subject in its title or caption, and never
+# be a ceremony, a visit or a promotional reel (probe, 20 Oct).
+_JUNK = re.compile(r"\b(ceremony|change of command|decoration|award|visit|wwe|"
+                   r"dental|clinic|retire|promotion|birthday|hype|music|band|"
+                   r"graduat|recruit|reenlist|5k|memorial run|feature|"
+                   r"interview|podcast|hometown)", re.I)
+_STOP = {"the", "and", "with", "from", "into", "over", "against", "attack",
+         "attacks", "launch", "launches", "war", "civil", "missile", "strike",
+         "strikes", "forces"}
+
+
+def relevant(cand, query) -> bool:
+    text = f"{cand.get('title', '')} {cand.get('text', '')}".lower()
+    if _JUNK.search(cand.get("title", "")):
+        return False
+    words = [w for w in re.findall(r"[a-z]{4,}", query.lower()) if w not in _STOP]
+    return not words or any(re.search(rf"\b{re.escape(w[:5])}", text) for w in words)
+
+
 def search_dvids(query: str, kind: str = "image", limit: int = 12, raw=None) -> list:
     """DVIDS photos (kind="image") or videos (kind="video") for a query.
     A video candidate's url is its largest mp4 and carries "duration"."""
@@ -72,7 +93,8 @@ def search_dvids(query: str, kind: str = "image", limit: int = 12, raw=None) -> 
         date = a.get("date") or a.get("date_published") or hit.get("date_published")
         credit = a.get("credit") if isinstance(a.get("credit"), list) else []
         artist = ", ".join(c.get("name", "") for c in credit if isinstance(c, dict))
-        cand = {"title": title, "year": _year(date), "artist": artist or "DVIDS",
+        cand = {"title": title, "text": (a.get("description") or "")[:600],
+                "year": _year(date), "artist": artist or "DVIDS",
                 "license": "Public domain (DVIDS)", "source": "DVIDS",
                 "page": a.get("url") or hit.get("url")}
         if kind == "video":
@@ -92,19 +114,31 @@ def search_dvids(query: str, kind: str = "image", limit: int = 12, raw=None) -> 
                 img = a["thumbnail"].get("url")
             dims = a.get("dimensions") or {}
             cand.update(url=img, width=dims.get("width"), height=dims.get("height"))
-        if cand.get("url"):
+        if cand.get("url") and relevant(cand, query):
             out.append(cand)
     return out
 
 
+# Openverse timed out on every search from GitHub's runners (probe, 20 Oct):
+# the first failure retires it for the run instead of costing every scene a
+# minute.
+_openverse_down = False
+
+
 def search_openverse(query: str, limit: int = 12, raw=None) -> list:
     """Openverse photos for a query, commercial use and modification allowed."""
+    global _openverse_down
+    if _openverse_down:
+        return []
     try:
         found = _get(OPENVERSE_API, {"q": query, "page_size": limit,
                                      "license_type": "commercial,modification",
-                                     "category": "photograph", "mature": "false"})
+                                     "category": "photograph", "mature": "false"},
+                     timeout=60)
     except Exception as e:
-        print(f"⚠️ Openverse search failed ({type(e).__name__}: {e}).")
+        print(f"⚠️ Openverse search failed ({type(e).__name__}: {e}) — not "
+              "asked again this run.")
+        _openverse_down = True
         return []
     if raw is not None:
         raw.append({"openverse": (found.get("results") or [])[:2]})
@@ -115,9 +149,13 @@ def search_openverse(query: str, limit: int = 12, raw=None) -> list:
         lic = f"CC {str(r.get('license', '')).upper()} {r.get('license_version', '')}".strip()
         if str(r.get("license", "")).lower() in ("cc0", "pdm"):
             lic = "Public domain" if r.get("license") == "pdm" else "CC0"
-        out.append({"url": r["url"], "title": (r.get("title") or "").strip(),
-                    "year": _year(r.get("title")), "width": r.get("width"),
-                    "height": r.get("height"), "artist": (r.get("creator") or "")[:60],
-                    "license": lic, "source": f"Openverse / {r.get('source', '')}",
-                    "page": r.get("foreign_landing_url")})
+        cand = {"url": r["url"], "title": (r.get("title") or "").strip(),
+                "year": _year(r.get("title")), "width": r.get("width"),
+                "height": r.get("height"), "artist": (r.get("creator") or "")[:60],
+                "license": lic, "source": f"Openverse / {r.get('source', '')}",
+                "page": r.get("foreign_landing_url"),
+                "text": " ".join(t.get("name", "") for t in r.get("tags") or []
+                                 if isinstance(t, dict))}
+        if relevant(cand, query):
+            out.append(cand)
     return out

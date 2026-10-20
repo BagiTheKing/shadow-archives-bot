@@ -368,6 +368,13 @@ def search_archives(query: str, limit: int = 10) -> list:
     results = search_commons(query, limit=limit)
     if len(results) < 3:
         results += search_loc(query)
+    if len(results) < 3:
+        # DVIDS and Openverse (media_sources.py), already filtered to name
+        # the subject
+        from media_sources import search_dvids, search_openverse
+        results += search_dvids(query, "image", 6)
+        if len(results) < 3:
+            results += search_openverse(query, 8)
     return results
 
 

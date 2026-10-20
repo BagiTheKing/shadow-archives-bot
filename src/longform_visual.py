@@ -272,6 +272,19 @@ def _archival_footage(query, era, idx, output_dir, used_urls):
                 used_urls.add(cand["url"])
                 return video_path, poster, format_credit(cand), cand["title"]
             os.remove(video_path)
+    # DVIDS (media_sources.py): US military footage, only of the story's own
+    # years (its 2025 Red Sea strikes are no picture of 1994)
+    from media_sources import search_dvids
+    for cand in search_dvids(query, "video", 4):
+        if cand["url"] in used_urls or (era and cand.get("year")
+                                        and abs(cand["year"] - era) > 2):
+            continue
+        if not fetch_commons_video(cand, video_path):
+            continue
+        if extract_poster_frame(video_path, poster, KB_W, KB_H):
+            used_urls.add(cand["url"])
+            return video_path, poster, format_credit(cand), cand["title"]
+        os.remove(video_path)
     for cand in search_archival_video(query):
         if cand["identifier"] in used_urls:
             continue
