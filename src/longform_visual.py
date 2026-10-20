@@ -70,13 +70,15 @@ MAX_SHOTS_PER_SCENE = 3
 
 # B-roll is connective tissue, not the main dish: too many stock clips and the
 # video stops looking like it is about anything in particular.
-MAX_BROLL_CLIPS = 6
-MIN_BROLL_SCENE_SECONDS = 6.0
+# (Owner, 2026-10-20: stock footage now comes before any generated image, so
+# the cap and spacing are looser.)
+MAX_BROLL_CLIPS = int(os.getenv("MAX_BROLL_CLIPS", "14"))
+MIN_BROLL_SCENE_SECONDS = 4.0
 
 # Minimum scenes between two b-roll clips. The first live run granted b-roll
 # first-come-first-served, so every clip landed in the opening minutes and the
 # back half was wall-to-wall stills. Spacing them out is what "mixed" means.
-BROLL_MIN_GAP = 4
+BROLL_MIN_GAP = int(os.getenv("BROLL_MIN_GAP", "1"))
 
 # Real archival footage (see archive_engine.py's TRUSTED_VIDEO_COLLECTIONS) is
 # a garnish on top of archival stills, not a replacement for them — the owner
@@ -89,8 +91,14 @@ BROLL_MIN_GAP = 4
 # only ever looked for when no photo existed, which is almost never, so not
 # one clip reached a video. Real moving pictures of the actual events (the
 # war, a leader speaking) now get first refusal on a spaced set of scenes.
-MAX_ARCHIVAL_VIDEO_CLIPS = 12
-ARCHIVAL_VIDEO_MIN_GAP = 2
+#
+# Owner, 2026-10-20: real footage first on EVERY scene, then real photos, then
+# stock footage, and a generated image only when reality has nothing that
+# matches (many viewers dislike AI pictures). No cap and no spacing on real
+# footage any more, and a scene needs only ARCHIVAL_VIDEO_MIN_SCENE seconds.
+MAX_ARCHIVAL_VIDEO_CLIPS = int(os.getenv("MAX_ARCHIVAL_VIDEO_CLIPS", "999"))
+ARCHIVAL_VIDEO_MIN_GAP = int(os.getenv("ARCHIVAL_VIDEO_MIN_GAP", "0"))
+ARCHIVAL_VIDEO_MIN_SCENE = float(os.getenv("ARCHIVAL_VIDEO_MIN_SCENE", "2.5"))
 
 # Photography exists from roughly here; before it, a Commons "photo" of the
 # subject is by definition a modern anachronism.
@@ -436,7 +444,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
                             or scene.get("dossier"))
                 and archival_video_used < MAX_ARCHIVAL_VIDEO_CLIPS
                 and idx - last_archival_video_idx > ARCHIVAL_VIDEO_MIN_GAP
-                and scene.get("duration", 0) >= MIN_BROLL_SCENE_SECONDS):
+                and scene.get("duration", 0) >= ARCHIVAL_VIDEO_MIN_SCENE):
             got = _archival_footage(vquery, era, idx, output_dir, used_urls)
             if not got and _is_war_scene(scene) and era == era0:
                 try:

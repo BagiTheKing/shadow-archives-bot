@@ -5,6 +5,12 @@ way (longform_clips_old.py, main's copy) and the proposed way
 .github/workflows/preview_clips.yml; nothing is uploaded.
 
     python tools/preview_clips.py script.json out_dir
+    python tools/preview_clips.py script.json out_dir teaser
+
+"teaser" renders only the teaser, the proposed way, ready to post
+(out_dir/teaser.mp4, with its title, description and first comment in
+out_dir/teaser.txt): chapter 1 plus the main-event chapter its opening and
+closing pictures come from.
 """
 
 import json
@@ -17,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 BUILD = "build"
 
 
-def main(script_path, out):
+def main(script_path, out, mode="compare"):
     from audio_engine import generate_audio_pipeline
     from longform_llm import flatten_scenes
     from longform_video import generate_longform_video
@@ -37,6 +43,8 @@ def main(script_path, out):
         per[c] = per.get(c, 0) + 1
         if s.get("chapter_role") == "close":
             continue
+        if mode == "teaser" and c != 0 and not s.get("is_pivot"):
+            continue
         if s.get("chapter_role") == "drive" and per[c] > 12:
             continue
         keep.append(s)
@@ -45,6 +53,21 @@ def main(script_path, out):
     keep, _, _ = generate_longform_visuals(keep, BUILD, topic=script.get("topic"),
                                            places=script.get("places"))
     generate_longform_video(keep, BUILD)
+
+    if mode == "teaser":
+        clips = new.make_clips(keep, script, BUILD, limit=1)
+        if not clips:
+            sys.exit("No teaser could be cut.")
+        c = clips[0]
+        dest = os.path.join(out, "teaser.mp4")
+        shutil.move(c["path"], dest)
+        title, description, comment = new.clip_metadata(c, script, None)
+        with open(os.path.join(out, "teaser.txt"), "w", encoding="utf-8") as f:
+            f.write(f"TITLE\n{title}\n\nDESCRIPTION\n{description}\n\n"
+                    f"FIRST COMMENT\n{comment}\n\nPARADOX\n"
+                    f"{(script.get('paradox') or {}).get('answer', '')}\n")
+        print(f"   teaser: {c['length']:.1f}s -> {dest}")
+        return
 
     for name, mod in (("old", old), ("new", new)):
         clips = mod.make_clips(keep, script, BUILD, limit=4)
@@ -55,4 +78,4 @@ def main(script_path, out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:4])

@@ -5,9 +5,23 @@ name: Preview Clips
 # side look. Nothing is uploaded; the clips go to the preview-media branch.
 on:
   workflow_dispatch:
+    inputs:
+      script_run:
+        description: "Run id whose script to use (blank: the script on preview-media)"
+        required: false
+        default: ""
+      script_artifact:
+        description: "That run's script artifact, e.g. timely-script-69"
+        required: false
+        default: ""
+      mode:
+        description: "compare (old and new clips) or teaser (the new teaser only, ready to post)"
+        required: false
+        default: "compare"
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   preview:
@@ -85,10 +99,23 @@ jobs:
       # Progress of a run that died (run_cache.py): the next run of this
       # lane carries on from it instead of paying for the same research and
       # chapters twice. Kept on the run-cache branch, one folder per lane.
+      - name: Download a past run's script
+        if: inputs.script_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.script_artifact }}
+          path: past_script
+          run-id: ${{ inputs.script_run }}
+          github-token: ${{ github.token }}
+
       - name: Fetch the script and the current clip code
         run: |
           git fetch -q origin preview-media main
-          git show origin/preview-media:longform_script.json > preview_script.json
+          if [ -f past_script/longform_script.json ]; then
+            cp past_script/longform_script.json preview_script.json
+          else
+            git show origin/preview-media:longform_script.json > preview_script.json
+          fi
           git show origin/main:src/longform_clips.py > src/longform_clips_old.py
 
       - name: Render both versions
@@ -106,7 +133,7 @@ jobs:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LONGFORM_CLIPS: '4'
-        run: python tools/preview_clips.py preview_script.json out
+        run: python tools/preview_clips.py preview_script.json out "${{ inputs.mode || 'compare' }}"
 
       - name: Push to preview-media
         run: |
