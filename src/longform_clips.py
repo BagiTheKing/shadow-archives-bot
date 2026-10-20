@@ -314,9 +314,13 @@ def _wrap(text, width=18):
 # channel's sound and its signature line. The tag that promises it sits where
 # the red bar was, in the channel's gold, until the reveal.
 GOLD = "&H3AB2E8&"                # (232, 178, 58), as BGR
-PROMISE = "THE PARADOX IS AT THE END"
+# "Paradox" is not an everyday word for a viewer in the feed (owner, 20
+# Oct): the promise and the reveal say "twist", which everyone reads in a
+# glance; the spoken sign-off keeps the channel's name, where the twist just
+# heard explains it.
+PROMISE = "THE TWIST IS AT THE END"
 PROMISE_Y = 520
-REVEAL_HEAD = "THE PARADOX"
+REVEAL_HEAD = "THE TWIST"
 SIGNATURE = "That's the paradox."
 
 
