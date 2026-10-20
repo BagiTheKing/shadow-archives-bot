@@ -701,7 +701,7 @@ def main():
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
-        scenes, BUILD_DIR, topic=script.get("topic"))
+        scenes, BUILD_DIR, topic=script.get("topic"), places=script.get("places"))
 
     try:
         import animate_engine

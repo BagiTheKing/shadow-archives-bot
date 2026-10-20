@@ -42,7 +42,8 @@ def main(script_path, out):
         keep.append(s)
     print(f"🎬 Preview: {len(keep)} of {len(scenes)} scenes.")
     keep = generate_audio_pipeline({"scenes": keep}, BUILD)["scenes"]
-    keep, _, _ = generate_longform_visuals(keep, BUILD, topic=script.get("topic"))
+    keep, _, _ = generate_longform_visuals(keep, BUILD, topic=script.get("topic"),
+                                           places=script.get("places"))
     generate_longform_video(keep, BUILD)
 
     for name, mod in (("old", old), ("new", new)):

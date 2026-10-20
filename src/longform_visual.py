@@ -369,7 +369,22 @@ def _is_war_scene(scene):
     return bool(words & WAR_WORDS)
 
 
-def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: str = None):
+def _missing_place(scene, places):
+    """The story place the scene's narration names but its archive_query
+    does not, or None. "Leaders gathered in Bucharest" searched as "Palace
+    of the Parliament 2008" drew London's Palace of Westminster (20 Oct): a
+    landmark's generic name matches the famous one, not the story's."""
+    text = (scene.get("narration") or "").lower()
+    query = (scene.get("archive_query") or "").lower()
+    for place in places or ():
+        p = (place or "").strip()
+        if p and re.search(rf"\b{re.escape(p.lower())}\b", text) and p.lower() not in query:
+            return p
+    return None
+
+
+def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: str = None,
+                              places=None):
     """Fills each scene with image_paths (1-3 frames), possibly a video_path
     (muted b-roll), and a credit string when a real archival photo was used.
 
@@ -415,6 +430,8 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
         # public-domain newsreel collection. Any failure falls through to
         # the stills below.
         vquery = (scene.get("archive_query") or "").strip()
+        if vquery and _missing_place(scene, places):
+            vquery = f"{vquery} {_missing_place(scene, places)}"
         if (vquery and not (scene.get("map") or scene.get("chain")
                             or scene.get("dossier"))
                 and archival_video_used < MAX_ARCHIVAL_VIDEO_CLIPS
@@ -451,10 +468,19 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
                   f"keep the recurring subject from looping, trying other "
                   f"sources instead.")
             query = ""
+        place = _missing_place(scene, places) if query else None
         if query:
             def _search(q):
-                return [c for c in search_archives(q)
-                        if _era_appropriate(c, era) and c.get("url") not in used_urls]
+                found = [c for c in search_archives(q)
+                         if _era_appropriate(c, era) and c.get("url") not in used_urls]
+                if not place:
+                    return found
+                # the place named in the search, else in the photo's title:
+                # never a same-named landmark somewhere else
+                there = [c for c in search_archives(f"{q} {place}")
+                         if _era_appropriate(c, era) and c.get("url") not in used_urls]
+                return there or [c for c in found
+                                 if place.lower() in (c.get("title") or "").lower()]
             candidates = []
             # A repeat appearance of the same subject is steered toward a
             # different real moment first (a meeting, a ceremony) rather than
