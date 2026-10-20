@@ -312,6 +312,7 @@ def find_paradox(script):
 STING = ("(sin(2*PI*48*t)*0.9+sin(2*PI*96*t)*0.35"
          "+(random(0)*2-1)*exp(-22*t)*0.8)*exp(-2.2*t)")
 STING_LEAD = 0.6                  # the hit, then the voice
+DIP = 0.35                        # the story fades to black, the reveal fades in
 
 
 def make_reveal(script, scenes, build_dir, hook=None):
@@ -344,13 +345,23 @@ def make_reveal(script, scenes, build_dir, hook=None):
         return None
     length = STING_LEAD + seconds + 1.0
     taken = hook["start"] if hook else None
-    pic = _hook_picture([s for s in scenes if s.get("_global_start") != taken], length)
+    # the story's map, when it has one long enough (owner, 20 Oct: "the map
+    # is a good part"), else its strongest real picture
+    maps = [s for s in scenes if s.get("map") and s.get("_global_start") is not None
+            and s.get("_global_start") != taken and s.get("duration", 0) >= length]
+    pic = maps[0] if maps else _hook_picture(
+        [s for s in scenes if s.get("_global_start") != taken], length)
     if not pic:
         return None
+    # Captions carry the paradox only: the signature line is heard, never
+    # written (owner, 20 Oct): it is the last second's reward, and on screen
+    # from the reveal's first frame it would give it away.
+    shown = len(line.split())
     words = [dict(w, start=w["start"] + STING_LEAD, end=w["end"] + STING_LEAD)
-             for w in words]
-    print(f"💡 Paradox ({length:.1f}s): {line!r}")
-    return {"text": text, "audio": audio, "words": words, "length": length,
+             for w in words[:shown]]
+    print(f"💡 Paradox ({length:.1f}s): {line!r} over "
+          + ("the map" if maps else "the strongest picture"))
+    return {"text": line, "audio": audio, "words": words, "length": length,
             "start": pic["_global_start"], "promise": promise_for(script)[1],
             "scene": pic}
 
@@ -390,7 +401,6 @@ PROMISES = [
      "THE PART THEY LEFT OUT"),
 ]
 GOLD = "&H3AB2E8&"                # (232, 178, 58), as BGR
-REVEAL_HEAD = "THAT'S THE PARADOX"
 SIGNATURE = "That's the paradox."
 
 
@@ -420,12 +430,6 @@ def _headline_events(headline, length, reveal_at=None, promise=None):
                f"{{\\an8\\pos(540,250)\\fs92\\bord6\\shad3\\fad(250,200)"
                f"\\c&H00FFFFFF&}}{head}")
     events = [top]
-    if reveal_at is not None:
-        events.append(
-            f"Dialogue: 4,{_ass_time(reveal_at)},{_ass_time(length)},Cta,,0,0,0,,"
-            f"{{\\an8\\pos(540,200)\\fs112\\bord6\\shad3\\1c{GOLD}"
-            f"\\fscx130\\fscy130\\t(0,180,\\fscx100\\fscy100)}}"
-            f"{_wrap(REVEAL_HEAD, 14)}")
     return events
 
 
@@ -544,9 +548,17 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
             parts.append((n, n + 1, seg["length"], False))
             n += 2
     join, labels = "", ""
+
+    def seg_is_reveal(i):
+        return bool(reveal) and i == len(parts) - 1
     for i, part in enumerate(parts):
         if part == "body":
-            join += f"[0:v]setpts=PTS-STARTPTS[v{i}];[0:a]asetpts=PTS-STARTPTS[a{i}];"
+            # a short dip to black before the reveal, so the sting lands on
+            # a cut that means something (owner, 20 Oct: "a poor cut")
+            dip = (f",fade=t=out:st={body - DIP:.3f}:d={DIP}" if reveal else "")
+            adip = (f",afade=t=out:st={body - DIP:.3f}:d={DIP}" if reveal else "")
+            join += (f"[0:v]setpts=PTS-STARTPTS{dip}[v{i}];"
+                     f"[0:a]asetpts=PTS-STARTPTS{adip}[a{i}];")
         else:
             vi, ai, seconds, own = part
             # outside footage is brought to the long-form picture's size and
@@ -554,7 +566,8 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
             fit = (f"scale={SRC_W}:{SRC_H}:force_original_aspect_ratio=increase,"
                    f"crop={SRC_W}:{SRC_H},fps={FPS},setsar=1,trim=0:{seconds:.3f},"
                    if own else "")
-            join += (f"[{vi}:v]{fit}setpts=PTS-STARTPTS[v{i}];"
+            fade_in = f",fade=t=in:d={DIP}" if seg_is_reveal(i) else ""
+            join += (f"[{vi}:v]{fit}setpts=PTS-STARTPTS{fade_in}[v{i}];"
                      f"[{ai}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
                      f"apad,atrim=0:{seconds:.3f},asetpts=PTS-STARTPTS[a{i}];")
         labels += f"[v{i}][a{i}]"
