@@ -98,6 +98,13 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
           KOKORO_VOICE: am_onyx
+          # the teaser's paradox line is written by the same free chain
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LONGFORM_CLIPS: '4'
         run: python tools/preview_clips.py preview_script.json out
 

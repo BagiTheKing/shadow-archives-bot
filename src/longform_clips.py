@@ -48,8 +48,6 @@ LONGFORM_CLIPS = int(os.getenv("LONGFORM_CLIPS", "0"))
 CLIP_MIN = 25.0
 CLIP_MAX = 58.0
 CLIP_TAIL = 0.35                  # after the last word, before the cut
-CTA_SECONDS = 4.0
-CLIP_CTA = "FULL STORY ON THE CHANNEL"
 CLIP_MARKER = "From the full documentary:"
 MUSIC_LEVEL = 0.08
 
@@ -190,6 +188,108 @@ def make_hook(script, scenes, build_dir):
             "start": pic["_global_start"]}
 
 
+def _script_text(script):
+    return " ".join(s.get("narration") or "" for c in script.get("chapters") or []
+                    for s in c.get("scenes") or [])
+
+
+def paradox_ok(line, script):
+    """A paradox line may only use the script's own facts: every figure and
+    every capitalised name in it must appear in the narration or the title."""
+    if not line or not (6 <= len(line.split()) <= 26):
+        return False
+    source = (_script_text(script) + " " + (script.get("title") or "")).lower()
+    for num in re.findall(r"\d[\d,.]*", line):
+        if num.strip(".,") not in source:
+            return False
+    words = line.split()
+    for w in words[1:]:
+        name = re.sub(r"[^\w'-]", "", w)
+        if name[:1].isupper() and name.lower() not in source:
+            return False
+    return True
+
+
+def find_paradox(script):
+    """THE PARADOX: one true, ironic turn of the story, from the script's own
+    facts, or None. Kept on the script so every clip of it says the same."""
+    if script.get("paradox"):
+        return script["paradox"]
+    try:
+        from llm_provider import get_pool
+        from longform_llm import _call
+        text = _script_text(script)[:14000]
+        data = _call(
+            get_pool(),
+            "You write one line for a history channel. Output only JSON.",
+            "Below is a documentary script. Write THE PARADOX of this story: "
+            "one true, surprising, ironic contrast inside it, the kind of "
+            "thing a viewer repeats to a friend (for example: \"The summit "
+            "meant to calm Russia became the reason Russia gave for war.\"). "
+            "One sentence, at most 22 words, plain words, no question. Use "
+            "only facts stated in the script, no new names, numbers or dates. "
+            "If the script holds no real paradox, return null.\n\n"
+            f"SCRIPT:\n{text}\n\n"
+            'Reply as {"paradox": "<sentence or null>"}',
+            max_tokens=300)
+    except Exception as e:
+        print(f"⚠️ No paradox ({type(e).__name__}: {e}).")
+        return None
+    line = re.sub(r"\s+", " ", str((data or {}).get("paradox") or "")).strip()
+    if line.lower() in {"null", "none", ""} or not paradox_ok(line, script):
+        print(f"⚠️ Paradox refused: {line!r}")
+        return None
+    script["paradox"] = line
+    return line
+
+
+# The channel's sound: one deep hit as the paradox lands (the long-form
+# videos' own "hit", longform_video._sfx_sources), always the same, so the
+# ear learns it.
+STING = ("(sin(2*PI*48*t)*0.9+sin(2*PI*96*t)*0.35"
+         "+(random(0)*2-1)*exp(-22*t)*0.8)*exp(-2.2*t)")
+STING_LEAD = 0.6                  # the hit, then the voice
+
+
+def make_reveal(script, scenes, build_dir, hook=None):
+    """{"text", "audio", "words", "length", "start"} or None: the sting, the
+    paradox and the signature line, over the story's strongest picture not
+    already used by the hook."""
+    from audio_engine import _synthesize, get_audio_duration
+    line = find_paradox(script)
+    if not line:
+        return None
+    text = f"{line.rstrip('.')}. {SIGNATURE}"
+    voice = os.path.join(build_dir, "lf_clip_reveal_voice.mp3")
+    audio = os.path.join(build_dir, "lf_clip_reveal.m4a")
+    try:
+        words = _synthesize(text, voice)
+        seconds = get_audio_duration(voice)
+        lead_ms = int(STING_LEAD * 1000)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", voice, "-filter_complex",
+             f"aevalsrc='{STING}':s=44100:d=2.2,volume=0.5,"
+             f"aformat=channel_layouts=stereo[hit];"
+             f"[0:a]aformat=channel_layouts=stereo:sample_rates=44100,"
+             f"adelay={lead_ms}|{lead_ms}[v];"
+             f"[hit][v]amix=inputs=2:duration=longest:normalize=0[a]",
+             "-map", "[a]", "-c:a", "aac", "-b:a", "192k", audio],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    except Exception as e:
+        print(f"⚠️ Paradox not voiced ({type(e).__name__}: {e}).")
+        return None
+    length = STING_LEAD + seconds + 1.0
+    taken = hook["start"] if hook else None
+    pic = _hook_picture([s for s in scenes if s.get("_global_start") != taken], length)
+    if not pic:
+        return None
+    words = [dict(w, start=w["start"] + STING_LEAD, end=w["end"] + STING_LEAD)
+             for w in words]
+    print(f"💡 Paradox ({length:.1f}s): {line!r}")
+    return {"text": text, "audio": audio, "words": words, "length": length,
+            "start": pic["_global_start"]}
+
+
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
@@ -207,52 +307,42 @@ def _wrap(text, width=18):
     return r"\N".join(lines[:3])
 
 
-# The way to the full video stays on screen the whole clip: with only the
-# last 4 seconds, four clips drew ~2,000 views and the video they cut from 7
-# (10 Oct). A red bar just above the picture, in the thumbnails' red.
-BAR_Y = 520                       # bar centre; the picture starts at 600
-BAR_SIZE = 76
-BAR_RED = "&H2028D6&"             # thumb_variants.RED (214, 40, 32), as BGR
-CLIP_END = "WATCH THE FULL VIDEO"
+# No ask on screen (owner, 2026-10-20): "FULL STORY ON THE CHANNEL" read as
+# an ad and viewers swiped within seconds, and links in Shorts comments are
+# not clickable. In its place, a promise the clip keeps: the teaser ends on
+# THE PARADOX, one true and ironic turn of the story, revealed with the
+# channel's sound and its signature line. The tag that promises it sits where
+# the red bar was, in the channel's gold, until the reveal.
+GOLD = "&H3AB2E8&"                # (232, 178, 58), as BGR
+PROMISE = "THE PARADOX IS AT THE END"
+PROMISE_Y = 520
+REVEAL_HEAD = "THE PARADOX"
+SIGNATURE = "That's the paradox."
 
 
-def _cta_bar(length):
-    from video_engine import FONTS_DIR, _ass_time
-    try:
-        from PIL import ImageFont
-        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), BAR_SIZE)
-        # libass draws Anton at about two thirds of PIL's size for the
-        # same number (measured on a rendered frame)
-        text_w = font.getlength(CLIP_CTA) * 0.68
-    except Exception:
-        text_w = len(CLIP_CTA) * BAR_SIZE * 0.33
-    bw, bh = int(text_w + 64), int(BAR_SIZE * 1.15)
-    x0, y0 = 540 - bw // 2, BAR_Y - bh // 2
-    span = f"{_ass_time(0)},{_ass_time(length)}"
-    return [
-        f"Dialogue: 3,{span},Cta,,0,0,0,,{{\\an7\\pos({x0},{y0})\\bord0\\shad0"
-        f"\\1c{BAR_RED}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
-        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{BAR_Y})\\fs{BAR_SIZE}"
-        f"\\bord0\\shad0\\1c&H00FFFFFF&\\fad(250,0)}}{CLIP_CTA}",
-    ]
-
-
-def _headline_events(headline, length):
+def _headline_events(headline, length, reveal_at=None):
     from video_engine import _ass_time
     head = _wrap(headline.upper().replace("{", "").replace("}", ""))
-    cta_at = max(0.0, length - CTA_SECONDS)
     style = r"{\an8\pos(540,250)\fs92\bord6\shad3\fad(250,200)"
-    return [
-        f"Dialogue: 3,{_ass_time(0)},{_ass_time(cta_at)},Cta,,0,0,0,,"
-        f"{style}\\c&H00FFFFFF&}}{head}",
-        f"Dialogue: 3,{_ass_time(cta_at)},{_ass_time(length)},Cta,,0,0,0,,"
-        f"{style}}}{_wrap(CLIP_END, 22)}",
-    ] + _cta_bar(length)
+    until = reveal_at if reveal_at is not None else length
+    events = [f"Dialogue: 3,{_ass_time(0)},{_ass_time(until)},Cta,,0,0,0,,"
+              f"{style}\\c&H00FFFFFF&}}{head}"]
+    if reveal_at is not None:
+        events += [
+            f"Dialogue: 4,{_ass_time(0)},{_ass_time(reveal_at)},Cta,,0,0,0,,"
+            f"{{\\an5\\pos(540,{PROMISE_Y})\\fs84\\bord4\\shad0"
+            f"\\1c{GOLD}\\3c&H000000&\\fad(250,250)}}{PROMISE}",
+            f"Dialogue: 4,{_ass_time(reveal_at)},{_ass_time(length)},Cta,,0,0,0,,"
+            f"{{\\an8\\pos(540,250)\\fs120\\bord6\\shad3\\1c{GOLD}"
+            f"\\fscx130\\fscy130\\t(0,180,\\fscx100\\fscy100)}}{REVEAL_HEAD}",
+        ]
+    return events
 
 
-def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None):
-    """One vertical clip, opened by `hook` (make_hook) when given. Returns
-    (path, length, music_attribution)."""
+def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None,
+                reveal=None):
+    """One vertical clip, opened by `hook` (make_hook) and closed by `reveal`
+    (make_reveal) when given. Returns (path, length, music_attribution)."""
     from music_attribution import attribution_for
     from video_engine import FONTS_DIR, _pick_music, generate_subtitles
 
@@ -260,7 +350,9 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
     body = (clip_scenes[-1]["_global_start"] + clip_scenes[-1]["duration"]
             - t0 + CLIP_TAIL)
     lead = hook["length"] if hook else 0.0
-    length = lead + body
+    tail = reveal["length"] if reveal else 0.0
+    length = lead + body + tail
+    reveal_at = lead + body if reveal else None
 
     # The clip's own captions: the scenes' word timings, moved onto the
     # clip's timeline. Copies, so nothing leaks back into the long-form data.
@@ -271,27 +363,43 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
         scenes.insert(0, {"narration": hook["text"], "words": hook["words"],
                           "duration": hook["length"]})
         offsets.insert(0, 0.0)
+    if reveal:
+        scenes.append({"narration": reveal["text"], "words": reveal["words"],
+                       "duration": reveal["length"]})
+        offsets.append(reveal_at)
     ass_path = os.path.join(build_dir, f"lf_clip_{k}.ass")
     generate_subtitles({"scenes": scenes}, ass_path, timeline_offsets=offsets,
                        total_duration=length, cta_text="")
     with open(ass_path, "a", encoding="utf-8") as f:
-        f.write("\n" + "\n".join(_headline_events(headline, length)))
+        f.write("\n" + "\n".join(_headline_events(headline, length, reveal_at)))
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
-    # the hook, then the teaser, joined into one 16:9 source ([src]/[srca])
+    # the hook, the teaser and the reveal, joined into one 16:9 source
+    # ([src]/[srca]); each added part is a stretch of lf_merged.mp4's picture
+    # under its own voice
     inputs = ["-ss", f"{t0:.3f}", "-t", f"{body:.3f}", "-i", merged]
-    if hook:
-        inputs += ["-ss", f"{hook['start']:.3f}", "-t", f"{lead:.3f}", "-i", merged,
-                   "-i", hook["audio"]]
-        join = (f"[1:v]setpts=PTS-STARTPTS[hv];"
-                f"[2:a]apad,atrim=0:{lead:.3f},asetpts=PTS-STARTPTS[ha];"
-                f"[0:v]setpts=PTS-STARTPTS[tv];[0:a]asetpts=PTS-STARTPTS[ta];"
-                f"[hv][ha][tv][ta]concat=n=2:v=1:a=1[src][srca];")
-        music_in = 3
-    else:
-        join = "[0:v]null[src];[0:a]anull[srca];"
-        music_in = 1
+    parts, n = [], 1
+    for seg in (hook, "body", reveal):
+        if seg == "body":
+            parts.append("body")
+        elif seg:
+            inputs += ["-ss", f"{seg['start']:.3f}", "-t", f"{seg['length']:.3f}",
+                       "-i", merged, "-i", seg["audio"]]
+            parts.append((n, n + 1, seg["length"]))
+            n += 2
+    join, labels = "", ""
+    for i, part in enumerate(parts):
+        if part == "body":
+            join += f"[0:v]setpts=PTS-STARTPTS[v{i}];[0:a]asetpts=PTS-STARTPTS[a{i}];"
+        else:
+            vi, ai, seconds = part
+            join += (f"[{vi}:v]setpts=PTS-STARTPTS[v{i}];"
+                     f"[{ai}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
+                     f"apad,atrim=0:{seconds:.3f},asetpts=PTS-STARTPTS[a{i}];")
+        labels += f"[v{i}][a{i}]"
+    join += f"{labels}concat=n={len(parts)}:v=1:a=1[src][srca];"
+    music_in = n
     video = (
         f"{join}[src]split[a][b];"
         f"[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
@@ -334,10 +442,13 @@ def make_clips(scenes, script, build_dir="build", limit=None):
     out = []
     for k, (label, clip_scenes) in enumerate(pick_clips(scenes, limit)):
         path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
-        hook = make_hook(script, scenes, build_dir) if label == "teaser" else None
+        hook = reveal = None
+        if label == "teaser":
+            hook = make_hook(script, scenes, build_dir)
+            reveal = make_reveal(script, scenes, build_dir, hook)
         try:
             _, length, music_credit = render_clip(merged, clip_scenes, headline,
-                                                  path, build_dir, k, hook)
+                                                  path, build_dir, k, hook, reveal)
         except Exception as e:
             print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
             continue
@@ -383,5 +494,7 @@ def clip_metadata(clip, script, video_id, credit_block=""):
         parts.append(clip["music_attribution"])
     parts.append("#shorts #history #documentary")
     description = "\n\n".join(p for p in parts if p)[:4900]
-    comment = (f"The full story, start to finish: {link}" if video_id else "")
+    # Links in Shorts comments are not clickable (owner, 2026-10-20): the
+    # first comment opens the debate instead.
+    comment = (script.get("comment_question") or "").strip()
     return title, description, comment
