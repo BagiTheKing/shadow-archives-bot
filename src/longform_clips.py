@@ -171,10 +171,9 @@ def make_hook(script, scenes, build_dir):
     text = re.sub(r"\s+", " ", (script.get("title") or "").strip())
     if not text:
         return None
-    paradox = find_paradox(script)
-    if paradox:
-        # the open question the clip answers at its end, asked out loud
-        text = f"{text.rstrip('.')}. {paradox['riddle']}"
+    if find_paradox(script):
+        # the narrator's own promise, only when the clip has an ending to keep it
+        text = f"{text.rstrip('.')}. {promise_for(script)[0]}"
     audio = os.path.join(build_dir, "lf_clip_hook.mp3")
     try:
         words = _synthesize(text, audio)
@@ -197,10 +196,10 @@ def _script_text(script):
                     for s in c.get("scenes") or [])
 
 
-def paradox_ok(line, script, min_words=6):
+def paradox_ok(line, script):
     """A paradox line may only use the script's own facts: every figure and
     every capitalised name in it must appear in the narration or the title."""
-    if not line or not (min_words <= len(line.split()) <= 26):
+    if not line or not (6 <= len(line.split()) <= 26):
         return False
     source = (_script_text(script) + " " + (script.get("title") or "")).lower()
     for num in re.findall(r"\d[\d,.]*", line):
@@ -215,10 +214,9 @@ def paradox_ok(line, script, min_words=6):
 
 
 def find_paradox(script):
-    """{"riddle", "answer"} or None: the story's paradox posed as a plain
-    question (the clip opens on it and keeps it on screen) and answered in
-    one sentence (the clip ends on it), both from the script's own facts.
-    Kept on the script so every clip of it says the same."""
+    """{"answer"} or None: the story's paradox, one true and surprising
+    sentence the clip ends on, from the script's own facts. Kept on the
+    script so every clip of it says the same."""
     if script.get("paradox"):
         return script["paradox"]
     try:
@@ -227,33 +225,28 @@ def find_paradox(script):
         text = _script_text(script)[:14000]
         data = _call(
             get_pool(),
-            "You write two lines for a history channel. Output only JSON.",
-            "Below is a documentary script. Find the PARADOX of this story: "
+            "You write one line for a history channel. Output only JSON.",
+            "Below is a documentary script. Write the PARADOX of this story: "
             "one true, surprising contradiction inside it, the kind of thing "
-            "a viewer repeats to a friend.\n"
-            "riddle: the contradiction as a short question a 12-year-old "
-            "understands, at most 10 words, that the viewer cannot answer "
-            "yet (for example: \"How did a deal meant to calm Russia start "
-            "a war?\").\n"
-            "answer: the answer in one sentence, at most 22 words, plain "
-            "words, the surprising part last.\n"
-            "Use only facts stated in the script, no new names, numbers or "
-            "dates. If the script holds no real paradox, return nulls.\n\n"
+            "a viewer repeats to a friend (for example: \"The summit meant to "
+            "calm Russia became the reason Russia gave for war.\"). One "
+            "sentence, at most 22 words, plain words a 12-year-old "
+            "understands, the surprising part last, no question. Use only "
+            "facts stated in the script, no new names, numbers or dates. If "
+            "the script holds no real paradox, return null.\n\n"
             f"SCRIPT:\n{text}\n\n"
-            'Reply as {"riddle": "<question or null>", "answer": "<sentence or null>"}',
-            max_tokens=400)
+            'Reply as {"paradox": "<sentence or null>"}',
+            max_tokens=300)
     except Exception as e:
         print(f"⚠️ No paradox ({type(e).__name__}: {e}).")
         return None
     data = data if isinstance(data, dict) else {}
-    riddle, answer = (re.sub(r"\s+", " ", str(data.get(k) or "")).strip()
-                      for k in ("riddle", "answer"))
-    if (not riddle.endswith("?") or len(riddle.split()) > 12
-            or not paradox_ok(riddle, script, min_words=4)
-            or answer.endswith("?") or not paradox_ok(answer, script)):
-        print(f"⚠️ Paradox refused: {riddle!r} / {answer!r}")
+    answer = re.sub(r"\s+", " ", str(data.get("paradox") or "")).strip()
+    if (answer.lower() in {"", "null", "none"} or answer.endswith("?")
+            or not paradox_ok(answer, script)):
+        print(f"⚠️ Paradox refused: {answer!r}")
         return None
-    script["paradox"] = {"riddle": riddle, "answer": answer}
+    script["paradox"] = {"answer": answer}
     return script["paradox"]
 
 
@@ -302,7 +295,7 @@ def make_reveal(script, scenes, build_dir, hook=None):
              for w in words]
     print(f"💡 Paradox ({length:.1f}s): {line!r}")
     return {"text": text, "audio": audio, "words": words, "length": length,
-            "start": pic["_global_start"], "riddle": paradox["riddle"]}
+            "start": pic["_global_start"], "promise": promise_for(script)[1]}
 
 
 # ---------------------------------------------------------------------------
@@ -324,33 +317,57 @@ def _wrap(text, width=18):
 
 # No ask on screen (owner, 2026-10-20): "FULL STORY ON THE CHANNEL" read as
 # an ad and viewers swiped within seconds, links in Shorts comments are not
-# clickable, and "the twist is at the end" is a trick viewers know. The clip
-# holds them with the story itself: it opens on the story's paradox as a
-# question (spoken, and kept on screen in gold where the red bar was) and
-# ends on the answer, with the channel's sound and its signature line.
+# clickable, and "the twist is at the end" is a trick viewers know. Instead
+# the narrator vouches for the ending in his own words right after the hook
+# (where a third of the Houthi teaser's viewers left), a large line on screen
+# backs him up until the ending, and the ending keeps the promise: the
+# channel's sound, the story's paradox, and the signature line. Never a
+# length ("the last ten seconds"): a viewer who thinks about the length
+# feels the Short is long. The owner's picks, one pair per story.
+PROMISES = [
+    ("Most people get this story wrong.", "THE ENDING CHANGES EVERYTHING"),
+    ("Everyone knows how this started. Almost nobody knows how it ended.",
+     "NOBODY TALKS ABOUT HOW IT ENDED"),
+    ("The last line of this story is the one nobody tells.",
+     "THE PART THEY LEFT OUT"),
+    ("Trust me, the ending is the part you'll repeat.",
+     "YOU'LL REPEAT THIS ENDING"),
+]
 GOLD = "&H3AB2E8&"                # (232, 178, 58), as BGR
-RIDDLE_Y = 470
 REVEAL_HEAD = "THAT'S THE PARADOX"
 SIGNATURE = "That's the paradox."
 
 
-def _headline_events(headline, length, reveal_at=None, riddle=None):
+def promise_for(script):
+    """(spoken, on screen): the same pair for every clip of one story."""
+    key = sum(map(ord, script.get("title") or script.get("topic") or ""))
+    return PROMISES[key % len(PROMISES)]
+
+
+def _headline_events(headline, length, reveal_at=None, promise=None):
     from video_engine import _ass_time
-    head = _wrap(headline.upper().replace("{", "").replace("}", ""))
-    style = r"{\an8\pos(540,250)\fs92\bord6\shad3\fad(250,200)"
     until = reveal_at if reveal_at is not None else length
-    events = [f"Dialogue: 3,{_ass_time(0)},{_ass_time(until)},Cta,,0,0,0,,"
-              f"{style}\\c&H00FFFFFF&}}{head}"]
-    if riddle:
-        q = _wrap(riddle.upper().replace("{", "").replace("}", ""), 26)
-        events.append(
-            f"Dialogue: 4,{_ass_time(0)},{_ass_time(until)},Cta,,0,0,0,,"
-            f"{{\\an5\\pos(540,{RIDDLE_Y})\\fs80\\bord4\\shad0"
-            f"\\1c{GOLD}\\3c&H000000&\\fad(250,250)}}{q}")
+    if promise:
+        # the promise takes the headline's place, larger, its last words gold
+        words = promise.split()
+        cut = max(1, len(words) - 2)
+        text = _wrap(promise, 16).replace("{", "").replace("}", "")
+        tail = " ".join(words[cut:])
+        if text.endswith(tail):
+            text = text[:-len(tail)] + f"{{\\1c{GOLD}}}" + tail
+        top = (f"Dialogue: 3,{_ass_time(0)},{_ass_time(until)},Cta,,0,0,0,,"
+               f"{{\\an8\\pos(540,170)\\fs112\\bord7\\shad3"
+               f"\\c&H00FFFFFF&\\fad(250,200)}}{text}")
+    else:
+        head = _wrap(headline.upper().replace("{", "").replace("}", ""))
+        top = (f"Dialogue: 3,{_ass_time(0)},{_ass_time(until)},Cta,,0,0,0,,"
+               f"{{\\an8\\pos(540,250)\\fs92\\bord6\\shad3\\fad(250,200)"
+               f"\\c&H00FFFFFF&}}{head}")
+    events = [top]
     if reveal_at is not None:
         events.append(
             f"Dialogue: 4,{_ass_time(reveal_at)},{_ass_time(length)},Cta,,0,0,0,,"
-            f"{{\\an8\\pos(540,250)\\fs104\\bord6\\shad3\\1c{GOLD}"
+            f"{{\\an8\\pos(540,200)\\fs112\\bord6\\shad3\\1c{GOLD}"
             f"\\fscx130\\fscy130\\t(0,180,\\fscx100\\fscy100)}}"
             f"{_wrap(REVEAL_HEAD, 14)}")
     return events
@@ -389,7 +406,7 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
                        total_duration=length, cta_text="")
     with open(ass_path, "a", encoding="utf-8") as f:
         f.write("\n" + "\n".join(_headline_events(
-            headline, length, reveal_at, reveal.get("riddle") if reveal else None)))
+            headline, length, reveal_at, reveal.get("promise") if reveal else None)))
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
