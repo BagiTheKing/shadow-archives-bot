@@ -13,7 +13,8 @@ WHAT IS CUT
 Up to LONGFORM_CLIPS clips of CLIP_MIN-CLIP_MAX seconds, each made of whole
 scenes (so each starts and ends on a sentence) inside ONE chapter (the
 timeline between chapters carries title cards and black):
-  1. the teaser, chapter 1: the big picture, ending on the video's question;
+  1. the teaser, chapter 1: the big picture, ending on the video's question,
+     opened by the news hook (below);
   2. the main event, the pivot chapter, from its first line that is not a
      bridge back in time ("Meanwhile...", "Let's go back...");
   3. then the chapter after the pivot, the same way.
@@ -24,9 +25,8 @@ captions and music are burned in. The 16:9 picture is trimmed to 3:2 and set
 across the middle of a 9:16 frame over a blurred copy of itself; the Shorts'
 own big captions (video_engine.generate_subtitles, with its yellow figures)
 go below it, the video's headline above it, a red "FULL STORY ON THE
-CHANNEL" bar between the two for the whole clip. The clips are a numbered
-series in story order: a "PART n/N" badge at the top, and for the last
-seconds "PART n+1 IS NEXT / SUBSCRIBE" takes the headline's place.
+CHANNEL" bar between the two for the whole clip, and "WATCH THE FULL VIDEO"
+takes the headline's place for the last seconds.
 
 WHERE THEY GO
 Uploaded with the long-form lane's own privacy (private on both lanes, so
@@ -45,14 +45,8 @@ import subprocess
 import story_mode as sm
 
 LONGFORM_CLIPS = int(os.getenv("LONGFORM_CLIPS", "0"))
-# 20-35 s (owner, 2026-10-20): the Tunis clip kept 72% past the swipe but
-# its 54 s ran its average watch down to 56.7%, and YouTube stopped its test
-# at ~660 viewers. Short enough to finish, ending on its strongest line.
-CLIP_MIN = 20.0
-CLIP_MAX = 35.0
-# The teaser keeps the old length and always ends on the video's question
-# (owner, 2026-10-20: the question is what makes people comment).
-TEASER_MAX = 58.0
+CLIP_MIN = 25.0
+CLIP_MAX = 58.0
 CLIP_TAIL = 0.35                  # after the last word, before the cut
 CTA_SECONDS = 4.0
 CLIP_CTA = "FULL STORY ON THE CHANNEL"
@@ -73,69 +67,20 @@ def _opens_with_bridge(scene) -> bool:
     return any(w in low for w in sm.BRIDGE_WORDS)
 
 
-def _span(chapter_scenes, start, max_len=CLIP_MAX):
-    """Whole scenes from `start`, as many as fit in max_len, or None when
+def _span(chapter_scenes, start):
+    """Whole scenes from `start`, as many as fit in CLIP_MAX, or None when
     the result is shorter than CLIP_MIN."""
     first = chapter_scenes[start]
     t0 = first["_global_start"]
     picked = []
     for s in chapter_scenes[start:]:
-        if s["_global_start"] + s["duration"] - t0 > max_len:
+        if s["_global_start"] + s["duration"] - t0 > CLIP_MAX:
             break
         picked.append(s)
     if not picked:
         return None
     length = picked[-1]["_global_start"] + picked[-1]["duration"] - t0
     return picked if length >= CLIP_MIN else None
-
-
-_STRONG = re.compile(r"\d|\b(never|only|first|last|every|no one|nobody|dead|killed|"
-                     r"died|executed|destroyed|lost|million|thousand|hundred|war|"
-                     r"combat|troops|invaded|erupted|collapsed|attack|bomb|"
-                     r"massacre|revolt|warned|fell|surrender)", re.I)
-
-
-def _line_strength(scene) -> int:
-    """How hard a scene's last sentence lands: the chapter's marked punch
-    phrase, a figure, a death or an absolute."""
-    text = (scene.get("narration") or "").strip()
-    last = re.split(r"(?<=[.!?])\s+", text)[-1] if text else ""
-    # what happened (troops, deaths, figures) outranks a marked phrase
-    score = 2 if scene.get("punch_phrase") else 0
-    score += min(3, len(_STRONG.findall(last)))
-    return score
-
-
-def _cold_open_unclear(scene) -> bool:
-    """A clip cannot open on "He", "This" or "Meanwhile": a stranger in the
-    feed has nothing for it to point back to."""
-    first = (scene.get("narration") or "").strip().split(" ")[0].lower().strip(",")
-    return _opens_with_bridge(scene) or first in {
-        "he", "she", "they", "it", "this", "that", "these", "those", "his",
-        "her", "their", "its", "but", "and", "so", "then", "there"}
-
-
-def _best_span(chapter_scenes, start, fixed_start=False):
-    """The CLIP_MIN-CLIP_MAX run of whole scenes, from `start` on, that ends
-    on the strongest line (ties: the earlier, then the shorter). fixed_start
-    keeps the run at `start` (the teaser opens the video's hook)."""
-    best, best_key = None, None
-    starts = [start] if fixed_start else range(start, len(chapter_scenes))
-    for a in starts:
-        if not fixed_start and a > start and _cold_open_unclear(chapter_scenes[a]):
-            continue
-        t0 = chapter_scenes[a]["_global_start"]
-        for b in range(a, len(chapter_scenes)):
-            end = chapter_scenes[b]
-            length = end["_global_start"] + end["duration"] - t0
-            if length > CLIP_MAX:
-                break
-            if length < CLIP_MIN:
-                continue
-            key = (_line_strength(end), -a, -length)
-            if best_key is None or key > best_key:
-                best, best_key = chapter_scenes[a:b + 1], key
-    return best
 
 
 def pick_clips(scenes, limit):
@@ -172,10 +117,7 @@ def pick_clips(scenes, limit):
         if skip_bridge:
             while start < len(group) - 1 and _opens_with_bridge(group[start]):
                 start += 1
-        if label == "teaser":
-            span = _span(group, start, TEASER_MAX)
-        else:
-            span = _best_span(group, start)
+        span = _span(group, start)
         if span:
             clips.append((label, span))
             used.add(c_idx)
@@ -183,6 +125,69 @@ def pick_clips(scenes, limit):
             print(f"   ✂️  No {label} clip: chapter {c_idx + 1} has no "
                   f"{CLIP_MIN:.0f}-{CLIP_MAX:.0f}s run of whole scenes.")
     return clips
+
+
+# ---------------------------------------------------------------------------
+# The teaser's news hook
+# ---------------------------------------------------------------------------
+
+# A third of the Houthi teaser's viewers left between 0:03 and 0:06 (owner's
+# Studio, 20 Oct): chapter 1 opens on background ("Twelve founding members
+# created NATO in 1949..."), not on the news the viewer swiped in for. The
+# teaser now opens on the video's own title, spoken, over the story's
+# strongest picture, and only then goes back in time. The title is the
+# packaging already checked against the headlines, so nothing new is claimed.
+HOOK_PAD = 0.35                   # after the hook's last word
+
+_STRONG = re.compile(r"\d|\b(never|first|last|dead|killed|died|executed|"
+                     r"destroyed|million|thousand|war|combat|troops|invaded|"
+                     r"erupted|collapsed|attack|bomb|massacre|revolt|fell|"
+                     r"surrender|missile|strike|fire)", re.I)
+
+
+def _hook_picture(scenes, seconds):
+    """The scene whose picture opens the teaser: one on screen at least
+    `seconds` (so the hook never runs into a chapter card), real photos and
+    footage first, then the line that lands hardest, from the main event or
+    the teaser chapter (never the closing verdict)."""
+    pool = [s for s in scenes if s.get("_global_start") is not None
+            and s.get("chapter_role") != "close"
+            and not s.get("dossier") and not s.get("_is_map")]
+    first = min((s.get("chapter_index", 0) for s in pool), default=0)
+    pool = [s for s in pool if s.get("is_pivot")
+            or s.get("chapter_index", 0) == first]
+    fits = [s for s in pool if s.get("duration", 0) >= seconds]
+    if not fits:
+        return max(pool, key=lambda s: s.get("duration", 0), default=None)
+
+    def key(s):
+        real = bool(s.get("is_real") or s.get("video_path"))
+        return (real, len(_STRONG.findall(s.get("narration") or "")))
+    return max(fits, key=key)
+
+
+def make_hook(script, scenes, build_dir):
+    """{"text", "audio", "words", "length", "start"} or None: the title,
+    voiced, and where its picture sits in lf_merged.mp4."""
+    from audio_engine import _synthesize, get_audio_duration
+    text = re.sub(r"\s+", " ", (script.get("title") or "").strip())
+    if not text:
+        return None
+    audio = os.path.join(build_dir, "lf_clip_hook.mp3")
+    try:
+        words = _synthesize(text, audio)
+        length = get_audio_duration(audio) + HOOK_PAD
+    except Exception as e:
+        print(f"⚠️ Teaser hook not voiced ({type(e).__name__}: {e}) — the "
+              "teaser opens on chapter 1 as before.")
+        return None
+    pic = _hook_picture(scenes, length)
+    if not pic:
+        return None
+    print(f"🪝 Teaser hook ({length:.1f}s): {text!r} over scene "
+          f"{pic.get('narration', '')[:60]!r}")
+    return {"text": text, "audio": audio, "words": words, "length": length,
+            "start": pic["_global_start"]}
 
 
 # ---------------------------------------------------------------------------
@@ -211,88 +216,84 @@ BAR_RED = "&H2028D6&"             # thumb_variants.RED (214, 40, 32), as BGR
 CLIP_END = "WATCH THE FULL VIDEO"
 
 
-def _boxed(text, size, y, box, ink, start, end):
-    """A text on a solid box, centred at (540, y): two ASS events."""
+def _cta_bar(length):
     from video_engine import FONTS_DIR, _ass_time
     try:
         from PIL import ImageFont
-        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), size)
+        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), BAR_SIZE)
         # libass draws Anton at about two thirds of PIL's size for the
         # same number (measured on a rendered frame)
-        text_w = font.getlength(text) * 0.68
+        text_w = font.getlength(CLIP_CTA) * 0.68
     except Exception:
-        text_w = len(text) * size * 0.33
-    bw, bh = int(text_w + 64), int(size * 1.15)
-    x0, y0 = 540 - bw // 2, y - bh // 2
-    span = f"{_ass_time(start)},{_ass_time(end)}"
+        text_w = len(CLIP_CTA) * BAR_SIZE * 0.33
+    bw, bh = int(text_w + 64), int(BAR_SIZE * 1.15)
+    x0, y0 = 540 - bw // 2, BAR_Y - bh // 2
+    span = f"{_ass_time(0)},{_ass_time(length)}"
     return [
         f"Dialogue: 3,{span},Cta,,0,0,0,,{{\\an7\\pos({x0},{y0})\\bord0\\shad0"
-        f"\\1c{box}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
-        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{y})\\fs{size}"
-        f"\\bord0\\shad0\\1c{ink}\\fad(250,0)}}{text}",
+        f"\\1c{BAR_RED}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
+        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{BAR_Y})\\fs{BAR_SIZE}"
+        f"\\bord0\\shad0\\1c&H00FFFFFF&\\fad(250,0)}}{CLIP_CTA}",
     ]
 
 
-def _cta_bar(length):
-    return _boxed(CLIP_CTA, BAR_SIZE, BAR_Y, BAR_RED, "&H00FFFFFF&", 0, length)
-
-
-# The clips of one video are a numbered series, in story order (owner,
-# 2026-10-20): 46 subscribers from ~15,000 Shorts views, and the clips —
-# most of those views — asked for nothing but the long video, which they
-# sent 15 views. A part number says more of this story is coming; the end
-# card says when and asks for the subscription.
-PART_Y = 110
-PART_SIZE = 56
-PART_YELLOW = "&H00D8FF&"         # thumb_variants.YELLOW (255, 216, 0), as BGR
-
-
-def _headline_events(headline, length, part=None):
-    """part: (n, total) for a clip of a numbered series, else None."""
+def _headline_events(headline, length):
     from video_engine import _ass_time
     head = _wrap(headline.upper().replace("{", "").replace("}", ""))
     cta_at = max(0.0, length - CTA_SECONDS)
     style = r"{\an8\pos(540,250)\fs92\bord6\shad3\fad(250,200)"
-    if part and part[1] > 1:
-        n, total = part
-        end = (f"PART {n + 1} IS NEXT\\N{{\\c{PART_YELLOW}}}SUBSCRIBE" if n < total
-               else f"THAT WAS PART {n}\\N{{\\c{PART_YELLOW}}}SUBSCRIBE FOR THE NEXT STORY")
-        badge = _boxed(f"PART {n}/{total}", PART_SIZE, PART_Y, PART_YELLOW,
-                       "&H00000000&", 0, length)
-    else:
-        end, badge = _wrap(CLIP_END, 22), []
     return [
         f"Dialogue: 3,{_ass_time(0)},{_ass_time(cta_at)},Cta,,0,0,0,,"
         f"{style}\\c&H00FFFFFF&}}{head}",
         f"Dialogue: 3,{_ass_time(cta_at)},{_ass_time(length)},Cta,,0,0,0,,"
-        f"{style}\\c&H00FFFFFF&}}{end}",
-    ] + _cta_bar(length) + badge
+        f"{style}}}{_wrap(CLIP_END, 22)}",
+    ] + _cta_bar(length)
 
 
-def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, part=None):
-    """One vertical clip. Returns (path, length, music_attribution)."""
+def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None):
+    """One vertical clip, opened by `hook` (make_hook) when given. Returns
+    (path, length, music_attribution)."""
     from music_attribution import attribution_for
     from video_engine import FONTS_DIR, _pick_music, generate_subtitles
 
     t0 = clip_scenes[0]["_global_start"]
-    length = (clip_scenes[-1]["_global_start"] + clip_scenes[-1]["duration"]
-              - t0 + CLIP_TAIL)
+    body = (clip_scenes[-1]["_global_start"] + clip_scenes[-1]["duration"]
+            - t0 + CLIP_TAIL)
+    lead = hook["length"] if hook else 0.0
+    length = lead + body
 
     # The clip's own captions: the scenes' word timings, moved onto the
     # clip's timeline. Copies, so nothing leaks back into the long-form data.
     scenes = [copy.deepcopy({k2: v for k2, v in s.items() if not k2.startswith("_")})
               for s in clip_scenes]
-    offsets = [s["_global_start"] - t0 for s in clip_scenes]
+    offsets = [lead + s["_global_start"] - t0 for s in clip_scenes]
+    if hook:
+        scenes.insert(0, {"narration": hook["text"], "words": hook["words"],
+                          "duration": hook["length"]})
+        offsets.insert(0, 0.0)
     ass_path = os.path.join(build_dir, f"lf_clip_{k}.ass")
     generate_subtitles({"scenes": scenes}, ass_path, timeline_offsets=offsets,
                        total_duration=length, cta_text="")
     with open(ass_path, "a", encoding="utf-8") as f:
-        f.write("\n" + "\n".join(_headline_events(headline, length, part)))
+        f.write("\n" + "\n".join(_headline_events(headline, length)))
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
+    # the hook, then the teaser, joined into one 16:9 source ([src]/[srca])
+    inputs = ["-ss", f"{t0:.3f}", "-t", f"{body:.3f}", "-i", merged]
+    if hook:
+        inputs += ["-ss", f"{hook['start']:.3f}", "-t", f"{lead:.3f}", "-i", merged,
+                   "-i", hook["audio"]]
+        join = (f"[1:v]setpts=PTS-STARTPTS[hv];"
+                f"[2:a]apad,atrim=0:{lead:.3f},asetpts=PTS-STARTPTS[ha];"
+                f"[0:v]setpts=PTS-STARTPTS[tv];[0:a]asetpts=PTS-STARTPTS[ta];"
+                f"[hv][ha][tv][ta]concat=n=2:v=1:a=1[src][srca];")
+        music_in = 3
+    else:
+        join = "[0:v]null[src];[0:a]anull[srca];"
+        music_in = 1
     video = (
-        f"[0:v]split[a][b];"
+        f"{join}[src]split[a][b];"
         f"[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
         f"boxblur=28:2,eq=brightness=-0.22[bg];"
         f"[b]crop=ih*3/2:ih,scale={FG_W}:{FG_H}:flags=lanczos[fg];"
@@ -301,16 +302,15 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, part=None
         f"fade=t=out:st={max(length - 0.5, 0):.2f}:d=0.5[v]"
     )
     music = _pick_music()
-    inputs = ["-ss", f"{t0:.3f}", "-t", f"{length:.3f}", "-i", merged]
     if music:
         inputs += ["-i", music]
-        audio = (f"[1:a]aloop=loop=-1:size=2e9,atrim=0:{length:.3f},"
+        audio = (f"[{music_in}:a]aloop=loop=-1:size=2e9,atrim=0:{length:.3f},"
                  f"volume={MUSIC_LEVEL},afade=t=in:d=0.6,"
                  f"afade=t=out:st={max(length - 1.2, 0):.2f}:d=1.2[bg_a];"
-                 f"[0:a][bg_a]amix=inputs=2:duration=first:normalize=0,"
+                 f"[srca][bg_a]amix=inputs=2:duration=first:normalize=0,"
                  f"afade=t=out:st={max(length - 0.5, 0):.2f}:d=0.5[aout]")
     else:
-        audio = f"[0:a]afade=t=out:st={max(length - 0.5, 0):.2f}:d=0.5[aout]"
+        audio = f"[srca]afade=t=out:st={max(length - 0.5, 0):.2f}:d=0.5[aout]"
     cmd = ["ffmpeg", "-y", *inputs,
            "-filter_complex", f"{video};{audio}",
            "-map", "[v]", "-map", "[aout]", "-r", str(FPS),
@@ -331,33 +331,19 @@ def make_clips(scenes, script, build_dir="build", limit=None):
     if limit <= 0 or not os.path.exists(merged):
         return []
     headline = (script.get("thumbnail_text") or script.get("title") or "").strip()
-    # story order, so the parts read as a series: opening, characters, main
-    # event, aftermath — not the order they were picked in
-    picks = sorted(pick_clips(scenes, limit), key=lambda p: p[1][0]["_global_start"])
-    for _ in range(2):
-        out, failed = [], False
-        for k, (label, clip_scenes) in enumerate(picks):
-            path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
-            part = (k + 1, len(picks))
-            try:
-                _, length, music_credit = render_clip(merged, clip_scenes, headline,
-                                                      path, build_dir, k, part)
-            except Exception as e:
-                print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
-                failed = True
-                continue
-            print(f"✂️  Part {k + 1}/{len(picks)}: {label}, {length:.1f}s — {path}")
-            out.append({"path": path, "label": label, "scenes": clip_scenes,
-                        "length": length, "music_attribution": music_credit,
-                        "part": part, "_pick": (label, clip_scenes)})
-        if not failed:
-            break
-        # a missing part would break the numbering ("PART 3 IS NEXT" with
-        # no part 3): the parts that rendered are numbered again, once
-        picks = [c["_pick"] for c in out]
-        print(f"   ↩️  Renumbering the {len(picks)} clip(s) that rendered.")
-    for c in out:
-        c.pop("_pick", None)
+    out = []
+    for k, (label, clip_scenes) in enumerate(pick_clips(scenes, limit)):
+        path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
+        hook = make_hook(script, scenes, build_dir) if label == "teaser" else None
+        try:
+            _, length, music_credit = render_clip(merged, clip_scenes, headline,
+                                                  path, build_dir, k, hook)
+        except Exception as e:
+            print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
+            continue
+        print(f"✂️  Clip {k + 1}: {label}, {length:.1f}s — {path}")
+        out.append({"path": path, "label": label, "scenes": clip_scenes,
+                    "length": length, "music_attribution": music_credit})
     return out
 
 
@@ -377,8 +363,7 @@ def clip_metadata(clip, script, video_id, credit_block=""):
         story = base
     else:
         story = f"{heading} — {subject}"
-    n, total = clip.get("part") or (1, 1)
-    suffix = (f" (Part {n}/{total})" if total > 1 else "") + " #shorts"
+    suffix = " #shorts"
     story = re.sub(r"[<>]", "", story)
     if len(story) > 100 - len(suffix):
         story = story[:100 - len(suffix)].rsplit(" ", 1)[0].rstrip(".,;:")
