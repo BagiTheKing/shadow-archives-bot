@@ -70,15 +70,15 @@ MAX_SHOTS_PER_SCENE = 3
 
 # B-roll is connective tissue, not the main dish: too many stock clips and the
 # video stops looking like it is about anything in particular.
-# (Owner, 2026-10-20: stock footage now comes before any generated image, so
-# the cap and spacing are looser.)
-MAX_BROLL_CLIPS = int(os.getenv("MAX_BROLL_CLIPS", "14"))
-MIN_BROLL_SCENE_SECONDS = 4.0
+# Stock footage is real but not OF the story (a Houthi teaser drew "old
+# letter by candlelight", fog and dunes, 20 Oct): it stays rare and spaced.
+MAX_BROLL_CLIPS = 6
+MIN_BROLL_SCENE_SECONDS = 6.0
 
 # Minimum scenes between two b-roll clips. The first live run granted b-roll
 # first-come-first-served, so every clip landed in the opening minutes and the
 # back half was wall-to-wall stills. Spacing them out is what "mixed" means.
-BROLL_MIN_GAP = int(os.getenv("BROLL_MIN_GAP", "1"))
+BROLL_MIN_GAP = 4
 
 # Real archival footage (see archive_engine.py's TRUSTED_VIDEO_COLLECTIONS) is
 # a garnish on top of archival stills, not a replacement for them — the owner
@@ -92,9 +92,9 @@ BROLL_MIN_GAP = int(os.getenv("BROLL_MIN_GAP", "1"))
 # one clip reached a video. Real moving pictures of the actual events (the
 # war, a leader speaking) now get first refusal on a spaced set of scenes.
 #
-# Owner, 2026-10-20: real footage first on EVERY scene, then real photos, then
-# stock footage, and a generated image only when reality has nothing that
-# matches (many viewers dislike AI pictures). No cap and no spacing on real
+# Owner, 2026-10-20: real footage first on EVERY scene, then real photos,
+# and a generated image only when reality has nothing that matches (many
+# viewers dislike AI pictures). No cap and no spacing on real
 # footage any more, and a scene needs only ARCHIVAL_VIDEO_MIN_SCENE seconds.
 MAX_ARCHIVAL_VIDEO_CLIPS = int(os.getenv("MAX_ARCHIVAL_VIDEO_CLIPS", "999"))
 ARCHIVAL_VIDEO_MIN_GAP = int(os.getenv("ARCHIVAL_VIDEO_MIN_GAP", "0"))

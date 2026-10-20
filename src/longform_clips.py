@@ -159,7 +159,8 @@ def _hook_picture(scenes, seconds):
         return max(pool, key=lambda s: s.get("duration", 0), default=None)
 
     def key(s):
-        real = bool(s.get("is_real") or s.get("video_path"))
+        # a photo or footage OF the story; stock b-roll is not
+        real = bool(s.get("is_real"))
         return (real, len(_STRONG.findall(s.get("narration") or "")))
     return max(fits, key=key)
 
@@ -232,7 +233,9 @@ def find_paradox(script):
             "calm Russia became the reason Russia gave for war.\"). One "
             "sentence, at most 22 words, plain words a 12-year-old "
             "understands, the surprising part last, no question. Use only "
-            "facts stated in the script, no new names, numbers or dates. If "
+            "facts stated in the script, no new names, numbers or dates, and "
+            "never stronger than the script says them (clashes stay clashes, "
+            "not a war). If "
             "the script holds no real paradox, return null.\n\n"
             f"SCRIPT:\n{text}\n\n"
             'Reply as {"paradox": "<sentence or null>"}',
@@ -464,6 +467,19 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
     return out_path, length, attribution_for(music) if music else ""
 
 
+# With the hook and the paradox around it, the teaser's own story is cut to
+# whole scenes within this, so the Short stays near 45 s (the Houthi preview
+# ran 60 s with chapter 1 whole, 20 Oct).
+TEASER_BODY_MAX = 30.0
+
+
+def _fit(clip_scenes, seconds):
+    t0 = clip_scenes[0]["_global_start"]
+    kept = [s for s in clip_scenes
+            if s["_global_start"] + s["duration"] - t0 <= seconds]
+    return kept or clip_scenes[:1]
+
+
 def make_clips(scenes, script, build_dir="build", limit=None):
     """Renders the clips. Returns [{"path", "label", "scenes", "length",
     "music_attribution"}]. Never raises: the long-form video is the run's
@@ -480,6 +496,8 @@ def make_clips(scenes, script, build_dir="build", limit=None):
         if label == "teaser":
             hook = make_hook(script, scenes, build_dir)
             reveal = make_reveal(script, scenes, build_dir, hook)
+            if hook or reveal:
+                clip_scenes = _fit(clip_scenes, TEASER_BODY_MAX)
         try:
             _, length, music_credit = render_clip(merged, clip_scenes, headline,
                                                   path, build_dir, k, hook, reveal)
