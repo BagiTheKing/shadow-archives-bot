@@ -24,8 +24,9 @@ captions and music are burned in. The 16:9 picture is trimmed to 3:2 and set
 across the middle of a 9:16 frame over a blurred copy of itself; the Shorts'
 own big captions (video_engine.generate_subtitles, with its yellow figures)
 go below it, the video's headline above it, a red "FULL STORY ON THE
-CHANNEL" bar between the two for the whole clip, and "WATCH THE FULL VIDEO"
-takes the headline's place for the last seconds.
+CHANNEL" bar between the two for the whole clip. The clips are a numbered
+series in story order: a "PART n/N" badge at the top, and for the last
+seconds "PART n+1 IS NEXT / SUBSCRIBE" takes the headline's place.
 
 WHERE THEY GO
 Uploaded with the long-form lane's own privacy (private on both lanes, so
@@ -152,41 +153,65 @@ BAR_RED = "&H2028D6&"             # thumb_variants.RED (214, 40, 32), as BGR
 CLIP_END = "WATCH THE FULL VIDEO"
 
 
-def _cta_bar(length):
+def _boxed(text, size, y, box, ink, start, end):
+    """A text on a solid box, centred at (540, y): two ASS events."""
     from video_engine import FONTS_DIR, _ass_time
     try:
         from PIL import ImageFont
-        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), BAR_SIZE)
+        font = ImageFont.truetype(os.path.join(FONTS_DIR, "Anton-Regular.ttf"), size)
         # libass draws Anton at about two thirds of PIL's size for the
         # same number (measured on a rendered frame)
-        text_w = font.getlength(CLIP_CTA) * 0.68
+        text_w = font.getlength(text) * 0.68
     except Exception:
-        text_w = len(CLIP_CTA) * BAR_SIZE * 0.33
-    bw, bh = int(text_w + 64), int(BAR_SIZE * 1.15)
-    x0, y0 = 540 - bw // 2, BAR_Y - bh // 2
-    span = f"{_ass_time(0)},{_ass_time(length)}"
+        text_w = len(text) * size * 0.33
+    bw, bh = int(text_w + 64), int(size * 1.15)
+    x0, y0 = 540 - bw // 2, y - bh // 2
+    span = f"{_ass_time(start)},{_ass_time(end)}"
     return [
         f"Dialogue: 3,{span},Cta,,0,0,0,,{{\\an7\\pos({x0},{y0})\\bord0\\shad0"
-        f"\\1c{BAR_RED}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
-        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{BAR_Y})\\fs{BAR_SIZE}"
-        f"\\bord0\\shad0\\1c&H00FFFFFF&\\fad(250,0)}}{CLIP_CTA}",
+        f"\\1c{box}\\fad(250,0)\\p1}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}",
+        f"Dialogue: 4,{span},Cta,,0,0,0,,{{\\an5\\pos(540,{y})\\fs{size}"
+        f"\\bord0\\shad0\\1c{ink}\\fad(250,0)}}{text}",
     ]
 
 
-def _headline_events(headline, length):
+def _cta_bar(length):
+    return _boxed(CLIP_CTA, BAR_SIZE, BAR_Y, BAR_RED, "&H00FFFFFF&", 0, length)
+
+
+# The clips of one video are a numbered series, in story order (owner,
+# 2026-10-20): 46 subscribers from ~15,000 Shorts views, and the clips —
+# most of those views — asked for nothing but the long video, which they
+# sent 15 views. A part number says more of this story is coming; the end
+# card says when and asks for the subscription.
+PART_Y = 110
+PART_SIZE = 56
+PART_YELLOW = "&H00D8FF&"         # thumb_variants.YELLOW (255, 216, 0), as BGR
+
+
+def _headline_events(headline, length, part=None):
+    """part: (n, total) for a clip of a numbered series, else None."""
     from video_engine import _ass_time
     head = _wrap(headline.upper().replace("{", "").replace("}", ""))
     cta_at = max(0.0, length - CTA_SECONDS)
     style = r"{\an8\pos(540,250)\fs92\bord6\shad3\fad(250,200)"
+    if part and part[1] > 1:
+        n, total = part
+        end = (f"PART {n + 1} IS NEXT\\N{{\\c{PART_YELLOW}}}SUBSCRIBE" if n < total
+               else f"THAT WAS PART {n}\\N{{\\c{PART_YELLOW}}}SUBSCRIBE FOR THE NEXT STORY")
+        badge = _boxed(f"PART {n}/{total}", PART_SIZE, PART_Y, PART_YELLOW,
+                       "&H00000000&", 0, length)
+    else:
+        end, badge = _wrap(CLIP_END, 22), []
     return [
         f"Dialogue: 3,{_ass_time(0)},{_ass_time(cta_at)},Cta,,0,0,0,,"
         f"{style}\\c&H00FFFFFF&}}{head}",
         f"Dialogue: 3,{_ass_time(cta_at)},{_ass_time(length)},Cta,,0,0,0,,"
-        f"{style}}}{_wrap(CLIP_END, 22)}",
-    ] + _cta_bar(length)
+        f"{style}\\c&H00FFFFFF&}}{end}",
+    ] + _cta_bar(length) + badge
 
 
-def render_clip(merged, clip_scenes, headline, out_path, build_dir, k):
+def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, part=None):
     """One vertical clip. Returns (path, length, music_attribution)."""
     from music_attribution import attribution_for
     from video_engine import FONTS_DIR, _pick_music, generate_subtitles
@@ -204,7 +229,7 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k):
     generate_subtitles({"scenes": scenes}, ass_path, timeline_offsets=offsets,
                        total_duration=length, cta_text="")
     with open(ass_path, "a", encoding="utf-8") as f:
-        f.write("\n" + "\n".join(_headline_events(headline, length)))
+        f.write("\n" + "\n".join(_headline_events(headline, length, part)))
 
     safe_ass = os.path.abspath(ass_path).replace("\\", "/").replace(":", "\\:")
     safe_fonts = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
@@ -248,18 +273,33 @@ def make_clips(scenes, script, build_dir="build", limit=None):
     if limit <= 0 or not os.path.exists(merged):
         return []
     headline = (script.get("thumbnail_text") or script.get("title") or "").strip()
-    out = []
-    for k, (label, clip_scenes) in enumerate(pick_clips(scenes, limit)):
-        path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
-        try:
-            _, length, music_credit = render_clip(merged, clip_scenes, headline,
-                                                  path, build_dir, k)
-        except Exception as e:
-            print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
-            continue
-        print(f"✂️  Clip {k + 1}: {label}, {length:.1f}s — {path}")
-        out.append({"path": path, "label": label, "scenes": clip_scenes,
-                    "length": length, "music_attribution": music_credit})
+    # story order, so the parts read as a series: opening, characters, main
+    # event, aftermath — not the order they were picked in
+    picks = sorted(pick_clips(scenes, limit), key=lambda p: p[1][0]["_global_start"])
+    for _ in range(2):
+        out, failed = [], False
+        for k, (label, clip_scenes) in enumerate(picks):
+            path = os.path.join(build_dir, f"lf_clip_{k}.mp4")
+            part = (k + 1, len(picks))
+            try:
+                _, length, music_credit = render_clip(merged, clip_scenes, headline,
+                                                      path, build_dir, k, part)
+            except Exception as e:
+                print(f"⚠️ Clip {k + 1} ({label}) failed ({type(e).__name__}: {e}).")
+                failed = True
+                continue
+            print(f"✂️  Part {k + 1}/{len(picks)}: {label}, {length:.1f}s — {path}")
+            out.append({"path": path, "label": label, "scenes": clip_scenes,
+                        "length": length, "music_attribution": music_credit,
+                        "part": part, "_pick": (label, clip_scenes)})
+        if not failed:
+            break
+        # a missing part would break the numbering ("PART 3 IS NEXT" with
+        # no part 3): the parts that rendered are numbered again, once
+        picks = [c["_pick"] for c in out]
+        print(f"   ↩️  Renumbering the {len(picks)} clip(s) that rendered.")
+    for c in out:
+        c.pop("_pick", None)
     return out
 
 
@@ -279,7 +319,8 @@ def clip_metadata(clip, script, video_id, credit_block=""):
         story = base
     else:
         story = f"{heading} — {subject}"
-    suffix = " #shorts"
+    n, total = clip.get("part") or (1, 1)
+    suffix = (f" (Part {n}/{total})" if total > 1 else "") + " #shorts"
     story = re.sub(r"[<>]", "", story)
     if len(story) > 100 - len(suffix):
         story = story[:100 - len(suffix)].rsplit(" ", 1)[0].rstrip(".,;:")
