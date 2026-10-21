@@ -427,8 +427,12 @@ def _make(script, build_dir):
         if b.get("video") or b.get("still"):
             continue
         if b.get("paradox"):
-            # the paradox over the story's strongest real picture, else a
-            # painting of its last beat
+            # the paradox lands back on TODAY: the opening's footage again,
+            # so the twist about 1994 plays over 2026 (THEN / NOW closed);
+            # else the story's strongest real picture
+            if beats[0].get("used") == "news":
+                b.update(video=beats[0]["video"], used="news")
+                continue
             prev = [x for x in beats[1:-1] if x.get("used") in ("photo", "person", "footage")]
             if prev:
                 b.update(still=prev[-1].get("still"), video=prev[-1].get("video"))
@@ -447,8 +451,11 @@ def _make(script, build_dir):
             if got:
                 b.update(video=got[0], used="map")
             else:
-                prev = next((x for x in reversed(beats[:k]) if x.get("still") or x.get("video")),
-                            None)
+                # the last picture that is not a map: a held map is the same
+                # grey shape twice (the second native Short)
+                prev = (next((x for x in reversed(beats[:k]) if x.get("still")), None)
+                        or next((x for x in reversed(beats[:k])
+                                 if x.get("still") or x.get("video")), None))
                 if not prev:
                     print(f"⚠️ Native Short: no picture for {b['line'][:50]!r} — not made.")
                     return None
