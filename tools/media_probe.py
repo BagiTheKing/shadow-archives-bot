@@ -57,13 +57,17 @@ def main(out, *queries):
     report, raw = {}, []
     for q in queries:
         slug = "".join(ch if ch.isalnum() else "_" for ch in q.lower())[:40]
+        from archive_engine import search_commons, search_loc
         found = {
+            "commons": search_commons(q, limit=8),
+            "loc": search_loc(q),
             "dvids_photo": ms.search_dvids(q, "image", 8, raw=raw),
             "dvids_video": ms.search_dvids(q, "video", 4, raw=raw),
             "openverse": ms.search_openverse(q, 8, raw=raw),
         }
         report[q] = {k: [{x: c.get(x) for x in ("title", "year", "width", "height",
-                                                  "duration", "url", "page", "license")}
+                                                  "duration", "url", "page", "license",
+                                                  "source")}
                          for c in v] for k, v in found.items()}
         for k, v in found.items():
             print(f"{q!r} {k}: {len(v)}")
