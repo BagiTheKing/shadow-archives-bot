@@ -54,12 +54,25 @@ _STOP = {"the", "and", "with", "from", "into", "over", "against", "attack",
          "strikes", "forces"}
 
 
+def _is_name(query) -> bool:
+    words = [w for w in re.sub(r"\b\d{4}\b", "", query).split() if w]
+    return len(words) >= 2 and all(w[:1].isupper() or w.lower().startswith(("al-", "el-"))
+                                   for w in words)
+
+
 def relevant(cand, query) -> bool:
-    text = f"{cand.get('title', '')} {cand.get('text', '')}".lower()
-    if _JUNK.search(cand.get("title", "")):
+    """The TITLE must name the subject; a caption mentioning it is not
+    enough (an untitled 2001 Defense Department portrait came back for "Ali
+    Abdullah Saleh" and stood in for him, 21 Oct). For a person, every part
+    of the name must be in the title."""
+    title = (cand.get("title") or "").lower()
+    if _JUNK.search(title):
         return False
     words = [w for w in re.findall(r"[a-z]{4,}", query.lower()) if w not in _STOP]
-    return not words or any(re.search(rf"\b{re.escape(w[:5])}", text) for w in words)
+    if not words:
+        return True
+    hits = [bool(re.search(rf"\b{re.escape(w[:5])}", title)) for w in words]
+    return all(hits) if _is_name(query) else any(hits)
 
 
 def search_dvids(query: str, kind: str = "image", limit: int = 12, raw=None) -> list:
