@@ -302,8 +302,8 @@
         "videos/9ohX8imSwzI/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 1,
-      "since": "2026-10-18T15:49:05.012626+00:00",
+      "current": 2,
+      "since": "2026-10-21T17:07:41.696217+00:00",
       "views_at_start": 8,
       "results": [
         {
@@ -311,6 +311,12 @@
           "views": 8,
           "days": 3.95,
           "per_day": 2.03
+        },
+        {
+          "file": "videos/9ohX8imSwzI/2_person.jpg",
+          "views": 0,
+          "days": 3.05,
+          "per_day": 0.0
         }
       ],
       "registered": "2026-10-14T11:06:42.349305+00:00"
@@ -362,10 +368,17 @@
         "videos/Xr_M1XPyA6c/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 0,
-      "since": "2026-10-18T15:49:05.012626+00:00",
-      "views_at_start": 0,
-      "results": [],
+      "current": 1,
+      "since": "2026-10-21T17:07:41.696217+00:00",
+      "views_at_start": 1,
+      "results": [
+        {
+          "file": "videos/Xr_M1XPyA6c/1_map.jpg",
+          "views": 1,
+          "days": 3.05,
+          "per_day": 0.33
+        }
+      ],
       "registered": "2026-10-18T08:57:25.987422+00:00"
     },
     "yLX-UhLKFdg": {
@@ -387,17 +400,15 @@
         "videos/Z-gKpv3eBIs/2_person.jpg",
         "videos/Z-gKpv3eBIs/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-21T17:07:41.696217+00:00",
+      "views_at_start": 1,
       "results": [],
       "registered": "2026-10-21T11:09:01.211699+00:00"
     }
   },
   "comments": {
-    "hl9Gv71pef8": "The full story, start to finish: https://youtu.be/yLX-UhLKFdg",
-    "_cvKRnfWBiM": "The full story, start to finish: https://youtu.be/yLX-UhLKFdg",
     "7g5bolmjYbw": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs",
     "9EOBIpeW-Ec": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs",
     "kKPPVNkZ6Ho": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs"
