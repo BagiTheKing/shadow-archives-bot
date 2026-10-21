@@ -280,6 +280,21 @@ def _beat_clip(beat, k, seconds, out):
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
 
+# One track under every native Short, so the ear learns the channel the way
+# the eye learns the THEN / NOW opening: the owner picked the one under the
+# first Houthi Short (21 Oct). YouTube Audio Library, no credit required.
+NATIVE_MUSIC = os.getenv("NATIVE_MUSIC", "Beyond the Lows")
+
+
+def _native_music():
+    from video_engine import MUSIC_DIR
+    try:
+        return next((os.path.join(MUSIC_DIR, f) for f in sorted(os.listdir(MUSIC_DIR))
+                     if f.startswith(NATIVE_MUSIC) and f.lower().endswith(".mp3")), None)
+    except OSError:
+        return None
+
+
 def render(beats, promise, out_path, build_dir, script=None):
     """Concatenates the beats with hard cuts, dips to black before the last
     one, and lays narration, captions, the promise line and music."""
@@ -361,7 +376,7 @@ def render(beats, promise, out_path, build_dir, script=None):
     n = len(beats)
     graph.append(f"{labels}concat=n={n}:v=1:a=0,ass='{safe_ass}':fontsdir='{safe_fonts}',"
                  f"fade=t=out:st={max(length - 0.4, 0):.2f}:d=0.4[v]")
-    music = _pick_music()
+    music = _native_music() or _pick_music()
     inputs = sum((["-i", c] for c in clips), []) + ["-i", voice]
     if music:
         inputs += ["-i", music]
