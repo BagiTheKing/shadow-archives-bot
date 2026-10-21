@@ -413,8 +413,22 @@ def _make(script, build_dir):
                 b.update(still=prev[-1].get("still"), video=prev[-1].get("video"))
                 continue
         if not picture_for(b, script, k, build_dir, b["duration"] + 1.5):
-            print(f"⚠️ Native Short: no picture for {b['line'][:50]!r} — not made.")
-            return None
+            # Nothing found or generated (the image quota spent, 21 Oct):
+            # the story's main place on a map, else the last real picture
+            # held a little longer. Never a missing Short for one line.
+            place = (script.get("places") or [""])[0]
+            got = _map(place, script, b, os.path.join(build_dir, f"ns_{k:02d}_fb.mp4"),
+                       b["duration"] + 1.5) if place else None
+            if got:
+                b.update(video=got[0], used="map")
+            else:
+                prev = next((x for x in reversed(beats[:k]) if x.get("still") or x.get("video")),
+                            None)
+                if not prev:
+                    print(f"⚠️ Native Short: no picture for {b['line'][:50]!r} — not made.")
+                    return None
+                b.update(still=prev.get("still"), video=prev.get("video"), used="held")
+            print(f"   ↩️  Beat {k}: no picture of its own — {b['used']}.")
         if b.get("credit"):
             credits.append(b["credit"])
 
