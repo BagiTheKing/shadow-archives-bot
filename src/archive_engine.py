@@ -373,13 +373,16 @@ def search_archives(query: str, limit: int = 10) -> list:
     Commons leads because its metadata is richer and its licensing explicit;
     the Library of Congress follows and covers the gaps — including whenever
     Wikimedia is rate-limiting us."""
+    from media_sources import relevant, search_dvids, search_openverse
     results = search_commons(query, limit=limit)
     if len(results) < 3:
-        results += search_loc(query)
+        # The Library of Congress matches words anywhere in a record: "Sanaa
+        # Yemen 1991" returned a US Air Force officer's portrait (21 Oct). Its
+        # titles must name the subject, as DVIDS's and Openverse's do.
+        results += [c for c in search_loc(query) if relevant(c, query)]
     if len(results) < 3:
         # DVIDS and Openverse (media_sources.py), already filtered to name
         # the subject
-        from media_sources import search_dvids, search_openverse
         results += search_dvids(query, "image", 6)
         if len(results) < 3:
             results += search_openverse(query, 8)
