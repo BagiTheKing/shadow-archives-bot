@@ -286,7 +286,9 @@ def _archival_footage(query, era, idx, output_dir, used_urls):
     # DVIDS (media_sources.py): US military footage, only of the story's own
     # years (its 2025 Red Sea strikes are no picture of 1994)
     from media_sources import search_dvids
-    for cand in search_dvids(query, "video", 4):
+    # DVIDS holds footage from the 2000s on: older stories skip it rather
+    # than pay five calls a scene for nothing
+    for cand in (search_dvids(query, "video", 4) if not era or era >= 2000 else []):
         if cand["url"] in used_urls or (era and cand.get("year")
                                         and abs(cand["year"] - era) > 2):
             continue
