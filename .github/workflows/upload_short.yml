@@ -1,32 +1,17 @@
 name: Upload Short
 
-# Manual. Uploads a Short a dry run already rendered (its video and script
-# artifacts), as it is (tools/upload_short.py).
+# Manual. Publishes the native Short on the preview-media branch (native.mp4)
+# that the owner approved, in the next free Shorts slot at or after
+# not_before, with its first comment held until it is public.
 on:
   workflow_dispatch:
     inputs:
-      run_id:
-        description: "Run id of the dry run"
+      meta_file:
+        description: "Title, description, comment and not_before (JSON in the repo)"
         required: true
-      number:
-        description: "That run's number (artifacts video-N and script-N)"
-        required: true
-      episode:
-        description: "Episode number shown in the title (e.g. 32)"
-        required: true
-      music:
-        description: "Music file the run used (from its log)"
-        default: ""
-      archives:
-        description: "How many archive pictures the video holds (from its log)"
-        default: "99"
-      privacy:
-        description: "public / private"
-        default: "public"
 
 permissions:
-  contents: read
-  actions: read
+  contents: write
 
 jobs:
   upload:
@@ -39,27 +24,28 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - run: pip install -r requirements.txt
-      - uses: actions/download-artifact@v4
-        with:
-          name: video-${{ inputs.number }}
-          path: out
-          run-id: ${{ inputs.run_id }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: script-${{ inputs.number }}
-          path: out
-          run-id: ${{ inputs.run_id }}
-          github-token: ${{ github.token }}
-      - env:
-          VIDEO: out/final_short.mp4
-          SCRIPT: out/script.json
-          EPISODE: ${{ inputs.episode }}
-          MUSIC: ${{ inputs.music }}
-          ARCHIVES: ${{ inputs.archives }}
-          PRIVACY_STATUS: ${{ inputs.privacy }}
+      - name: Fetch the approved Short
+        run: |
+          git fetch -q origin preview-media
+          git show origin/preview-media:native.mp4 > short.mp4
+          ls -la short.mp4
+      - name: Upload
+        env:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
-          SERIES_NAME: Catastrophe Files
-        run: python tools/upload_short.py
+          PRIVACY_STATUS: public
+        run: python tools/upload_short.py short.mp4 "${{ inputs.meta_file }}"
+      - name: Hold the first comment until it is public
+        continue-on-error: true
+        run: |
+          [ -f build/pending_comments.json ] || exit 0
+          git fetch -q origin thumb-rotation
+          git worktree add -q rot origin/thumb-rotation
+          ROT_DIR=rot python tools/thumb_rotation.py comments build/pending_comments.json
+          cd rot
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -qm "Held first comment of an uploaded Short"
+          git push -q origin HEAD:thumb-rotation
