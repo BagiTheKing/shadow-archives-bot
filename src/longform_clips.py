@@ -600,7 +600,10 @@ def render_clip(merged, clip_scenes, headline, out_path, build_dir, k, hook=None
         span = nxt - sc["_global_start"]
         sw = next((x for x in (swap or []) if x["over"] is sc), None)
         if sw:
-            spans.append((span, sw["map"]))
+            # the map fills the screen like everything around it: a boxed
+            # map between two full-screen pictures read as two extra
+            # transitions (owner, 21 Oct)
+            spans.append((span, dict(sw["map"], _is_map=False)))
         else:
             spans.append((span, sc))
     if reveal:
@@ -659,7 +662,7 @@ def _names(asset):
             if n]
 
 
-def real_swaps(clip_scenes, scenes, taken=()):
+def real_swaps(clip_scenes, scenes, taken=(), maps_only=False, limit=None):
     """[{"over", "map", "at", "seconds", "start"}]: for each teaser scene
     still showing a generated image, a real picture from elsewhere in the
     video instead (owner, 20 Oct: maps and people from something real, not
@@ -670,8 +673,11 @@ def real_swaps(clip_scenes, scenes, taken=()):
     pool = [s for s in scenes if s.get("_global_start") is not None
             and s.get("duration") and id(s) not in inside
             and s.get("_global_start") not in taken
-            and (s.get("map") or s.get("dossier") or s.get("is_real")
-                 or (s.get("video_path") and not s.get("_is_map")))]
+            and (s.get("map") or (not maps_only and (
+                s.get("dossier") or s.get("is_real")
+                or (s.get("video_path") and not s.get("_is_map")))))]
+    if limit is not None:
+        pool = pool[:limit]
     pool.sort(key=lambda s: (0 if s.get("map") else 1 if s.get("dossier") else 2))
     t0 = clip_scenes[0]["_global_start"]
     want = [(i, sc) for i, sc in enumerate(clip_scenes[:-1]) if _generated_frame(sc)]
@@ -726,8 +732,12 @@ def make_clips(scenes, script, build_dir="build", limit=None):
             reveal = make_reveal(script, scenes, build_dir, hook)
             if hook or reveal:
                 clip_scenes = _fit(clip_scenes, TEASER_BODY_MAX)
+            # Owner, 21 Oct: back to v3, the best so far, plus the map in the
+            # middle. Every other swap (cast cards, photos from elsewhere)
+            # made one more change of picture and shape: noise for the eyes.
             swap = real_swaps(clip_scenes, scenes, taken={
-                (hook or {}).get("start"), (reveal or {}).get("start")})
+                (hook or {}).get("start"), (reveal or {}).get("start")},
+                maps_only=True, limit=1)
         try:
             _, length, music_credit = render_clip(merged, clip_scenes, headline,
                                                   path, build_dir, k, hook, reveal,
