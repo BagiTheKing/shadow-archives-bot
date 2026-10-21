@@ -80,6 +80,13 @@ TONE_BY_ROLE = {"open": "cold", "build": "warm", "drive": "cold"}
 _DATA = {}
 
 
+def _lat_span():
+    """How much latitude the land crop keeps around the camera, per unit of
+    its width: 0.7 for the 16:9 frame, about 2.2 for a 9:16 one
+    (native_short.py renders maps vertical by setting W and H)."""
+    return 0.7 * (16 / 9) / (W / H)
+
+
 def _load(name):
     if name in _DATA:
         return _DATA[name]
@@ -280,7 +287,7 @@ def _region_spec(plan, target_ll, words, duration, modern):
                "anchor": "c" if rings else "l"}]
     margin = wide[2]
     return {
-        "bbox": (cx - margin, cy - margin * 0.7, cx + margin, cy + margin * 0.7),
+        "bbox": (cx - margin, cy - margin * _lat_span(), cx + margin, cy + margin * _lat_span()),
         "camera": camera, "highlights": highlights, "arrows": [],
         "targets": targets or [{"ll": (cx, cy), "at": 1e9}],
         "labels": labels, "borders": modern,
@@ -730,7 +737,7 @@ def build_spec(plan, words, duration, era_year=None):
 
     view = [c for _, c in camera]
     margin = max(c[2] for c in view)
-    bbox = (cx - margin, cy - margin * 0.7, cx + margin, cy + margin * 0.7)
+    bbox = (cx - margin, cy - margin * _lat_span(), cx + margin, cy + margin * _lat_span())
     return {
         "bbox": bbox, "camera": camera, "highlights": highlights,
         "arrows": arrows, "targets": [{"ll": target_ll, "at": t_target + 0.45}],

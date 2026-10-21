@@ -19,7 +19,7 @@ on:
         required: false
         default: ""
       mode:
-        description: "compare (old and new clips) or teaser (the new teaser only, ready to post)"
+        description: "compare (old and new clips), teaser (the new teaser only) or native (the Shorts-native version)"
         required: false
         default: "compare"
 

@@ -6,6 +6,7 @@ way (longform_clips_old.py, main's copy) and the proposed way
 
     python tools/preview_clips.py script.json out_dir
     python tools/preview_clips.py script.json out_dir teaser
+    python tools/preview_clips.py script.json out_dir native
 
 "teaser" renders only the teaser, the proposed way, ready to post
 (out_dir/teaser.mp4, with its title, description and first comment in
@@ -34,6 +35,20 @@ def main(script_path, out, mode="compare"):
     os.makedirs(BUILD, exist_ok=True)
     os.makedirs(out, exist_ok=True)
     script = json.load(open(script_path, encoding="utf-8"))
+    if mode == "native":
+        # the Shorts-native version (native_short.py): no long-form render
+        from native_short import make_native_short
+        got = make_native_short(script, BUILD)
+        if not got:
+            sys.exit("No native Short could be made.")
+        shutil.move(got["path"], os.path.join(out, "native.mp4"))
+        with open(os.path.join(out, "native.txt"), "w", encoding="utf-8") as f:
+            f.write(f"TITLE\n{got['title']}\n\nDESCRIPTION\n{got['description']}"
+                    f"\n\nFIRST COMMENT\n{got['comment']}\n")
+        beats = os.path.join(BUILD, "native", "native_short.json")
+        if os.path.exists(beats):
+            shutil.copy(beats, os.path.join(out, "native_beats.json"))
+        return
     scenes = flatten_scenes(script)
     # the chapters the clips come from (opening, characters, decision, the
     # start of the aftermath), not the whole video: half the render time
