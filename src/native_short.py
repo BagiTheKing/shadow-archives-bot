@@ -265,7 +265,7 @@ def _beat_clip(beat, k, seconds, out):
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
 
-def render(beats, promise, out_path, build_dir):
+def render(beats, promise, out_path, build_dir, script=None):
     """Concatenates the beats with hard cuts, dips to black before the last
     one, and lays narration, captions, the promise line and music."""
     from longform_clips import _headline_events
@@ -283,10 +283,18 @@ def render(beats, promise, out_path, build_dir):
         t += b["seconds"]
     length = t
 
-    clips = []
+    clips, sfx = [], []
     for i, b in enumerate(beats):
         clip = os.path.join(build_dir, f"ns_clip_{i:02d}.mp4")
-        _beat_clip(b, i, b["seconds"], clip)
+        if b.get("intro_still") and b.get("video"):
+            try:
+                sfx.append(intro_clip(b["video"], b["intro_still"], b["seconds"],
+                                      script, build_dir, clip))
+            except Exception as e:
+                print(f"   ↩️  THEN / NOW failed ({type(e).__name__}: {e}) — plain opening.")
+                _beat_clip(b, i, b["seconds"], clip)
+        else:
+            _beat_clip(b, i, b["seconds"], clip)
         clips.append(clip)
 
     # narration: each beat's audio at its offset
@@ -297,9 +305,15 @@ def render(beats, promise, out_path, build_dir):
         amix.append(f"[{i}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
                     f"adelay={ms}|{ms}[n{i}]")
     voice = os.path.join(build_dir, "ns_voice.m4a")
+    for j, track in enumerate(sfx):
+        # the counter's ticks, from the opening's own start
+        ins += ["-i", track]
+        amix.append(f"[{len(beats) + j}:a]aformat=channel_layouts=stereo:"
+                    f"sample_rates=44100[n{len(beats) + j}]")
+    total = len(beats) + len(sfx)
     subprocess.run(["ffmpeg", "-y", *ins, "-filter_complex",
-                    ";".join(amix) + ";" + "".join(f"[n{i}]" for i in range(len(beats)))
-                    + f"amix=inputs={len(beats)}:normalize=0,apad,atrim=0:{length:.3f}[a]",
+                    ";".join(amix) + ";" + "".join(f"[n{i}]" for i in range(total))
+                    + f"amix=inputs={total}:normalize=0,apad,atrim=0:{length:.3f}[a]",
                     "-map", "[a]", "-c:a", "aac", "-b:a", "192k", voice],
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
 
@@ -432,8 +446,14 @@ def _make(script, build_dir):
         if b.get("credit"):
             credits.append(b["credit"])
 
+    # THEN / NOW: the past half is the first real (or painted) still of the
+    # story, so the slide up lands on the picture the story starts with
+    if beats[0].get("video"):
+        first = next((x for x in beats[1:-1] if x.get("still")), None)
+        if first:
+            beats[0]["intro_still"] = first["still"]
     out = os.path.join(build_dir, "native_short.mp4")
-    length, music_credit = render(beats, on_screen, out, build_dir)
+    length, music_credit = render(beats, on_screen, out, build_dir, script)
     print(f"📱 Native Short: {length:.1f}s, {len(beats)} beats "
           f"({', '.join(b.get('used') or b['kind'] for b in beats)}) — {out}")
 
@@ -447,3 +467,190 @@ def _make(script, build_dir):
     return {"path": out, "length": length, "title": f"{title[:91]} #shorts",
             "description": description,
             "comment": (script.get("comment_question") or "").strip()}
+
+
+# ---------------------------------------------------------------------------
+# THEN / NOW: the opening (owner, 21 Oct: "go with Black Ops and the
+# Steins;Gate counter")
+# ---------------------------------------------------------------------------
+# Today's footage full screen under a bracketed NOW tag (a Black Ops mission
+# briefing); at TEAR a line tears across the middle and the past slides into
+# the bottom half, desaturated, with VHS lines and a camcorder date, while a
+# nixie-tube counter on the seam rolls the year back from now to then
+# (Steins;Gate's divergence meter), ticking; the halves hold under the
+# narrator's promise; in the last SLIDE seconds the past slides up to fill
+# the screen and the story begins on it.
+
+TEAR, ROLL, SLIDE = 0.8, 0.8, 0.45
+ORANGE = (255, 150, 40)
+MONO = "FreeMonoBold.ttf"
+_ORD = {w: i + 1 for i, w in enumerate(
+    "first second third fourth fifth sixth seventh eighth ninth tenth eleventh "
+    "twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth "
+    "nineteenth twentieth".split())}
+_ORD.update({f"twenty-{w}": 20 + n for w, n in list(_ORD.items())[:9]})
+_ORD.update({"thirtieth": 30, "thirty-first": 31})
+_MONTHS = ("january february march april may june july august september "
+           "october november december").split()
+
+
+def story_date(script):
+    """("FEB 21 1994", 1994) from the first date the narration says, else
+    (None, era year)."""
+    pat = re.compile(r"\b([a-z-]+|\d{1,2})(?:st|nd|rd|th)? of (" + "|".join(_MONTHS)
+                     + r"),? (\d{4})", re.I)
+    for c in script.get("chapters") or []:
+        for s in c.get("scenes") or []:
+            m = pat.search(s.get("narration") or "")
+            if m:
+                d = m.group(1).lower()
+                day = int(d) if d.isdigit() else _ORD.get(d)
+                if day:
+                    return (f"{m.group(2)[:3].upper()} {day:02d} {m.group(3)}",
+                            int(m.group(3)))
+    return None, script.get("era_year")
+
+
+def _font(size, name=MONO):
+    from PIL import ImageFont
+    from video_engine import FONTS_DIR
+    return ImageFont.truetype(os.path.join(FONTS_DIR, name), size)
+
+
+def _tag(text, size=44):
+    """A bracketed briefing tag, ⌜ TEXT ⌟, on a transparent canvas."""
+    from PIL import Image, ImageDraw
+    f = _font(size)
+    tw = int(f.getlength(text))
+    w, h, pad = tw + 60, size + 34, 14
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, w, h), fill=(0, 0, 0, 120))
+    c, L, t = (235, 235, 235, 255), 18, 4
+    d.line((2, 2, 2 + L, 2), fill=c, width=t)
+    d.line((2, 2, 2, 2 + L), fill=c, width=t)
+    d.line((w - 3 - L, h - 3, w - 3, h - 3), fill=c, width=t)
+    d.line((w - 3, h - 3 - L, w - 3, h - 3), fill=c, width=t)
+    d.text((30, pad), text, font=f, fill=c)
+    return img
+
+
+def _past_frame(src, label, date, out):
+    """The past as the bottom half shows it: desaturated, scan lines, the
+    THEN tag and a camcorder date in the half that is on screen (its top)."""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+    img = Image.open(src).convert("RGB")
+    img = _vertical_fit(img, W, H) if img.size != (W, H) else img
+    img = ImageEnhance.Color(img).enhance(0.35)
+    img = ImageEnhance.Contrast(img).enhance(1.12)
+    lines = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lines)
+    for y in range(0, H, 4):
+        d.line((0, y, W, y), fill=(0, 0, 0, 55))
+    img = Image.alpha_composite(img.convert("RGBA"), lines)
+    # below the counter, which sits on the seam
+    img.alpha_composite(_tag(label), (40, 150))
+    if date:
+        f = _font(52)
+        glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        g = ImageDraw.Draw(glow)
+        x, y = W - 60 - int(f.getlength(date)), H // 2 - 110
+        g.text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(3)))
+        ImageDraw.Draw(img).text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        ImageDraw.Draw(img).text((60, H // 2 - 110), "▶ PLAY", font=f,
+                                 fill=(255, 255, 255, 255))
+    img.convert("RGB").save(out, quality=94)
+    return out
+
+
+def _nixie(year, size=150):
+    """Four glowing tubes reading `year`."""
+    from PIL import Image, ImageDraw, ImageFilter
+    f = _font(size)
+    tube_w, tube_h, gap = int(size * 0.78), int(size * 1.25), 14
+    w, h = 4 * tube_w + 3 * gap + 40, tube_h + 40
+    base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(base)
+    digits = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    dd = ImageDraw.Draw(digits)
+    for i, ch in enumerate(f"{year:04d}"):
+        x0 = 20 + i * (tube_w + gap)
+        d.rounded_rectangle((x0, 20, x0 + tube_w, 20 + tube_h), radius=26,
+                            fill=(18, 12, 8, 230), outline=(90, 70, 50, 255), width=3)
+        tx = x0 + (tube_w - f.getlength(ch)) / 2
+        dd.text((tx, 20 + (tube_h - size) / 2 - size * 0.12), ch, font=f,
+                fill=ORANGE + (255,))
+    glow = digits.filter(ImageFilter.GaussianBlur(10))
+    return Image.alpha_composite(Image.alpha_composite(base, glow), digits)
+
+
+def _counter_frames(now, then, work):
+    """PNG frames of the counter rolling from `now` to `then` over ROLL
+    seconds, then holding; returns (pattern, frame count, change times)."""
+    n = max(2, round(ROLL * FPS))
+    os.makedirs(work, exist_ok=True)
+    changes, last = [], None
+    for i in range(n + 1):
+        frac = min(1.0, i / n)
+        # eases out: fast at first, the last years click over slowly
+        year = round(now - (now - then) * (1 - (1 - frac) ** 2.2))
+        if year != last:
+            changes.append(i / FPS)
+            last = year
+        _nixie(year).save(os.path.join(work, f"c{i:03d}.png"))
+    return os.path.join(work, "c%03d.png"), n + 1, changes
+
+
+def _ticks(changes, out):
+    """A soft mechanical tick at every change of the counter."""
+    parts = "+".join(f"(random(0)*2-1)*exp(-900*max(0,t-{c:.3f}))*gte(t,{c:.3f})"
+                     for c in changes[:40])
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+                    f"aevalsrc='({parts})*0.18':s=44100:d={ROLL + 0.3:.2f}",
+                    "-af", "highpass=f=1800,lowpass=f=7000", out],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    return out
+
+
+def intro_clip(news_video, past_still, seconds, script, build_dir, out):
+    """Beat 0 as THEN / NOW. Returns the tick track to mix at 0, or None."""
+    import datetime as dt
+    now = dt.date.today().year
+    date, then = story_date(script)
+    then = then or script.get("era_year") or now
+    past = _past_frame(past_still, f"THEN · {then}", date,
+                       os.path.join(build_dir, "ns_past.jpg"))
+    nowtag = os.path.join(build_dir, "ns_now.png")
+    _tag(f"NOW · {now}").save(nowtag)
+    pattern, n_frames, changes = _counter_frames(now, then, os.path.join(build_dir, "nixie"))
+    ticks = _ticks([TEAR + c for c in changes], os.path.join(build_dir, "ns_ticks.wav"))
+    slide_at = max(TEAR + ROLL + 0.6, seconds - SLIDE)
+    frames = max(1, round(seconds * FPS))
+    cw = _nixie(then).size
+    half = H // 2
+    graph = (
+        f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+        f"fps={FPS},setsar=1[now];"
+        f"[1:v]scale={W}:{H},setsar=1[past];"
+        f"[now][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a];"
+        # the past slides in across the bottom half at TEAR, then up at the end
+        f"[a][past]overlay=eval=frame:"
+        f"x='if(lt(t,{TEAR}),-{W},if(lt(t,{TEAR + 0.25}),-{W}+{W}*(t-{TEAR})/0.25,0))':"
+        f"y='if(lt(t,{slide_at:.3f}),{half},max(0,{half}-{half}*(t-{slide_at:.3f})/{SLIDE}))'[b];"
+        # the tear on the seam, while the halves hold
+        f"[b]drawbox=x=0:y={half - 4}:w={W}:h=8:color=0xFF9628@0.95:t=fill:"
+        f"enable='between(t,{TEAR},{slide_at:.3f})'[c];"
+        f"[3:v]setpts=PTS-STARTPTS+{TEAR}/TB[cnt];"
+        f"[c][cnt]overlay=x={(W - cw[0]) // 2}:y={half - cw[1] // 2}:eof_action=repeat:"
+        f"enable='between(t,{TEAR},{slide_at:.3f})',"
+        f"trim=end_frame={frames},format=yuv420p[v]")
+    subprocess.run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", news_video,
+                    "-loop", "1", "-framerate", str(FPS), "-i", past,
+                    "-loop", "1", "-i", nowtag,
+                    "-framerate", str(FPS), "-i", pattern,
+                    "-filter_complex", graph, "-map", "[v]", "-an",
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+                    "-r", str(FPS), "-frames:v", str(frames), out],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    return ticks
