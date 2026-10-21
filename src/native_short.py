@@ -206,9 +206,16 @@ def _map(subject, script, beat, path, seconds):
 
 
 def _art(prompt, era, path):
+    from PIL import Image
     from visual_engine import download_image
     try:
         if download_image(prompt, path, width=W, height=H, era_year=era):
+            # the free generator stamps its name along the bottom edge:
+            # cut that strip off and fill the frame again
+            img = Image.open(path).convert("RGB")
+            cut = int(img.height * 0.06)
+            img.crop((0, 0, img.width, img.height - cut)).resize((W, H), Image.LANCZOS) \
+                .save(path, quality=94)
             return path, ""
     except Exception as e:
         print(f"   ↩️  Painting failed ({type(e).__name__}: {e}).")
@@ -430,9 +437,13 @@ def _make(script, build_dir):
             # Nothing found or generated (the image quota spent, 21 Oct):
             # the story's main place on a map, else the last real picture
             # held a little longer. Never a missing Short for one line.
+            # one map fallback per Short, never right after another map (the
+            # first native Short showed the same Yemen map four times)
             place = (script.get("places") or [""])[0]
-            got = _map(place, script, b, os.path.join(build_dir, f"ns_{k:02d}_fb.mp4"),
-                       b["duration"] + 1.5) if place else None
+            maps_used = sum(1 for x in beats[:k] if x.get("used") == "map")
+            got = (_map(place, script, b, os.path.join(build_dir, f"ns_{k:02d}_fb.mp4"),
+                        b["duration"] + 1.5)
+                   if place and maps_used < 2 and beats[k - 1].get("used") != "map" else None)
             if got:
                 b.update(video=got[0], used="map")
             else:
