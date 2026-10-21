@@ -698,6 +698,15 @@ def main():
             f"{(scenes[-1].get('narration') or '').rstrip()} {first_comment}".strip())
         print(f"🗣️  Question added to the closing narration: {first_comment}")
 
+    # Phase 1b: the Short, first (owner, 2026-10-21). One Short made for the
+    # phone on this story (native_short.py) replaces the clips cut out of
+    # the long video, and is made before the long video so its few
+    # paintings get the day's image quota: the long render spent all of it.
+    native = None
+    if os.getenv("NATIVE_SHORT", "1") == "1":
+        from native_short import make_native_short
+        native = make_native_short(script, BUILD_DIR)
+
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
@@ -815,9 +824,37 @@ def main():
     # Phase 6: Shorts cut from this video, each linking back to it. After the
     # upload, because the link is the point; rendered on dry runs too, so
     # they can be watched in the artifact first.
-    publish_clips(scenes, script, video_id)
+    if native:
+        publish_native(native)
+    else:
+        publish_clips(scenes, script, video_id)
 
     print("🎉 Long-form pipeline complete.")
+
+
+def publish_native(native):
+    """Uploads the native Short in the next free slot (short_slots.py: at
+    most 3 Shorts a UTC day, 6 hours apart). Nothing here may fail the run."""
+    publish_at = None
+    if os.getenv("PRIVACY_STATUS", "public") == "public" and os.getenv("SKIP_UPLOAD") != "1":
+        try:
+            import short_slots
+            from youtube_publisher import get_authenticated_service
+            slot = short_slots.plan(get_authenticated_service(), 1)[0]
+            publish_at = short_slots.iso(slot) if slot else None
+        except Exception as e:
+            print(f"⚠️ Short schedule failed ({type(e).__name__}: {e}) — it goes out now.")
+    print(f"📋 Short: {native['title']}" + (f" (scheduled {publish_at})" if publish_at else ""))
+    if os.getenv("SKIP_UPLOAD") == "1":
+        print("--- Short description ---")
+        print(native["description"])
+        return
+    try:
+        upload_video_to_youtube(native["path"], native["title"], native["description"],
+                                ["history", "shorts", "documentary"],
+                                first_comment=native["comment"], publish_at=publish_at)
+    except Exception as e:
+        print(f"⚠️ Short upload failed ({type(e).__name__}: {e}).")
 
 
 def upload_restored(saved):

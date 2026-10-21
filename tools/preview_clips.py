@@ -45,6 +45,10 @@ def main(script_path, out, mode="compare"):
         with open(os.path.join(out, "native.txt"), "w", encoding="utf-8") as f:
             f.write(f"TITLE\n{got['title']}\n\nDESCRIPTION\n{got['description']}"
                     f"\n\nFIRST COMMENT\n{got['comment']}\n")
+        # the beats it wrote go back into the script, so a re-render (or the
+        # owner's own pictures for them) keeps the same words
+        with open(script_path, "w", encoding="utf-8") as f:
+            json.dump(script, f, ensure_ascii=False, indent=1)
         beats = os.path.join(BUILD, "native", "native_short.json")
         if os.path.exists(beats):
             shutil.copy(beats, os.path.join(out, "native_beats.json"))

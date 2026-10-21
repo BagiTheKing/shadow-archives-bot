@@ -227,6 +227,14 @@ def picture_for(beat, script, k, build_dir, seconds):
     first, then a real photo of its subject, then a painting."""
     era = script.get("era_year")
     base = os.path.join(build_dir, f"ns_{k:02d}")
+    # a picture the owner made for this beat, from the prompt it was given
+    given = beat.get("image")
+    if given and os.path.exists(given):
+        from PIL import Image
+        _vertical_fit(Image.open(given).convert("RGB"), W, H).save(base + "_given.jpg", quality=94)
+        beat.update(still=base + "_given.jpg", credit="", used="given")
+        print(f"🖼️  Beat {k} (given): {beat['line'][:60]!r}")
+        return True
     tries = {
         "map": lambda: _map(beat["subject"], script, beat, base + "_map.mp4", seconds),
         "person": lambda: _photo(beat["subject"], era, base + ".jpg", person=True),
@@ -394,9 +402,13 @@ def _make(script, build_dir):
     if not paradox:
         print("⚠️ Native Short: the story has no paradox to end on — not made.")
         return None
-    body = write_beats(script)
+    # beats already written for this story (a re-render, or pictures the
+    # owner made for them) are kept word for word
+    body = [dict(b) for b in script.get("native_beats") or []] or write_beats(script)
     if not body:
         return None
+    script["native_beats"] = [{k: b.get(k) for k in ("line", "kind", "subject", "prompt", "image")}
+                              for b in body]
     spoken, on_screen = promise_for(script)
     title = re.sub(r"\s+", " ", script.get("title") or "").strip()
     beats = ([{"line": f"{title.rstrip('.')}. {spoken}", "kind": "news",

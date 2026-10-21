@@ -619,5 +619,40 @@
  "has_short": false,
  "paradox": {
   "answer": "The peace accord meant to save the union failed within hours, as tank clashes broke out in the south."
- }
+ },
+ "native_beats": [
+  {
+   "line": "Two separate nations bound their fates together under one brand-new flag.",
+   "kind": "art",
+   "subject": "",
+   "prompt": "crowds in Sana'a 1990 celebrating unification",
+   "image": "preview_scripts/houthi_images/b1.jpg"
+  },
+  {
+   "line": "Northern and southern factions formed a shared government inside the ancient walls of Sana'a.",
+   "kind": "map",
+   "subject": "Sana'a",
+   "prompt": ""
+  },
+  {
+   "line": "Yet Ali Salem al-Beidh watched power consolidate away from southern ports as both separate armies refused to disband.",
+   "kind": "art",
+   "subject": "",
+   "prompt": "Aden harbour at dusk, early 1990s",
+   "image": "preview_scripts/houthi_images/b3.jpg"
+  },
+  {
+   "line": "Sporadic clashes erupted along the desert border as the new country rapidly divided back into two armed camps.",
+   "kind": "art",
+   "subject": "",
+   "prompt": "two armed camps facing each other in the desert",
+   "image": "preview_scripts/houthi_images/b4.jpg"
+  },
+  {
+   "line": "In a final bid to avert disaster, leaders traveled to Amman to sign a desperate peace accord.",
+   "kind": "map",
+   "subject": "Amman",
+   "prompt": ""
+  }
+ ]
 }
