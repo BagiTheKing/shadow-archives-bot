@@ -1,0 +1,623 @@
+{
+ "topic": "The 1990–1991 uprising of the Zaydi Shia group in northern Yemen against the Yemeni government, which founded the Houthi movement.",
+ "title": "Houthis launch attacks on Saudi airports, echoing 1990 Yemen uprising",
+ "description": "Yemen's Houthis vow more attacks on Saudi airports, echoing the 1990 uprising that sparked the Houthi movement. In 1990 Yemen unified, but tensions between the north and south erupted into conflict. The southern troops refused to disband, leading to a brief civil war in 1994 that ended with a fragile peace that quickly collapsed.",
+ "tags": [
+  "Yemen",
+  "Houthis",
+  "Saudi Arabia",
+  "Saudi airports",
+  "Yemeni uprising",
+  "1990 Yemen",
+  "1994 civil war",
+  "Ali Abdullah Saleh",
+  "Ali Salem al-Beidh",
+  "Zaydi Shia",
+  "Houthi movement",
+  "Yemen conflict",
+  "Red Sea attacks"
+ ],
+ "thumbnail_text": "Houthis Strike Again",
+ "thumbnail_badge": "1990",
+ "thumbnail_variants": {
+  "faceoff": {
+   "big": "HOUSIANS REBEL",
+   "box": "BATTLE FOR YEMEN"
+  },
+  "person": {
+   "setup": "SOUTHERN LEADERS CONFRONT",
+   "twist": "DIVISION STIRRED WAR"
+  },
+  "map": {
+   "question": "WHERE DID IT ALL BEGIN?",
+   "tag": "YEMEN'S UNIFICATION"
+  }
+ },
+ "comment_question": "Which moment marked the point of no return in Yemen's division—was it the 1994 peace signing or the 1990 unification?",
+ "places": [
+  "Sana'a",
+  "Aden",
+  "Amran",
+  "Ataq",
+  "Amman"
+ ],
+ "chapters": [
+  {
+   "heading": "The Split",
+   "scenes": [
+    {
+     "narration": "Two separate nations bound their fates together under one brand-new flag. A single republic rose across the desert frontier.",
+     "image_prompt": "Wide shot of a desolate desert frontier post in Yemen circa 1991, showing a lonely stone boundary building and an empty flagpole under a harsh sun, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Northern and southern factions formed a shared government inside the ancient walls of Sana'a. Yet old political divides never truly healed.",
+     "image_prompt": "Medium shot of an ornate traditional Yemeni council chamber in Sana'a circa 1991, featuring stained glass windows and empty wooden chairs arranged around a table, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Sanaa Yemen 1991"
+    },
+    {
+     "narration": "Leaders in Aden watched power consolidate away from their coastal ports. Demonstrators filled southern streets, shouting against their growing marginalization.",
+     "image_prompt": "Wide shot of a coastal street in Aden circa 1991, showing crowds of civilian protesters gathered along sunbaked colonial stone buildings, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Aden protests 1992"
+    },
+    {
+     "narration": "Separate armies still held their ground, keeping their weapons and deep mutual suspicions. Neither side dared to disband its loyal troops.",
+     "image_prompt": "Medium shot of a camouflaged Soviet-built battle tank parked near a mountain pass outpost in Yemen circa 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Now watch what happens next. A newly unified country was rapidly dividing back into two armed camps, careening toward total internal collapse.",
+     "image_prompt": "Wide shot of an empty Yemeni mountain highway winding toward the arid horizon circa 1991, with an abandoned army checkpoint checkpoint shack beside the road, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "How did a unified nation tear itself apart in just one year? Who would break first?",
+     "image_prompt": "Close-up shot of an antique brass compass resting upon a worn wooden table beside a rolled blank map circa 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "disband its loyal troops",
+   "punch_idx": 3,
+   "arc_index": 0,
+   "pacing": {
+    "role": "open",
+    "words_per_image": 22,
+    "tts_rate": "+10%"
+   }
+  },
+  {
+   "heading": "The Players",
+   "scenes": [
+    {
+     "narration": "On the twenty-second of May, 1990, five men took their places across a fragile frontier. Each held a rival vision for the unified state.",
+     "image_prompt": "Wide shot of the ancient mud-brick skyline of Sana'a in 1990 under an overcast sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Sana'a 1990"
+    },
+    {
+     "narration": "Ali Abdullah Saleh, President of unified Yemen, commanded the military from Sana'a. He intended to keep total control in the north.",
+     "image_prompt": "Medium close-up of Ali Abdullah Saleh in 1990 military uniform seated at a dark wooden desk, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh 1990",
+     "dossier": {
+      "name": "Ali Abdullah Saleh",
+      "shown": "Ali Abdullah Saleh",
+      "role": "President of unified Yemen",
+      "decision": true,
+      "file_no": 1,
+      "side": "left"
+     }
+    },
+    {
+     "narration": "Ali Salem al-Beidh, Vice President and Southern leader, guarded the port of Aden, fearing Saleh was stripping the south of authority.",
+     "image_prompt": "Medium shot of Ali Salem al-Beidh standing before a window overlooking the port of Aden in 1990, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Salem al-Beidh 1990",
+     "dossier": {
+      "name": "Ali Salem al-Beidh",
+      "shown": "Ali Salem al-Beidh",
+      "role": "Vice President and Southern le",
+      "decision": false,
+      "file_no": 2,
+      "side": "right"
+     }
+    },
+    {
+     "narration": "Prime Minister Haidar Abu Bakr al-Attas worked to hold the government together, caught directly between Saleh and al-Beidh.",
+     "image_prompt": "Medium shot of Haidar Abu Bakr al-Attas sitting in a government council chamber in 1990, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Haidar Abu Bakr al-Attas",
+     "dossier": {
+      "name": "Haidar Abu Bakr al-Attas",
+      "shown": "Haidar Abu Bakr al-Attas",
+      "role": "Prime Minister",
+      "decision": false,
+      "file_no": 3,
+      "side": "left"
+     }
+    },
+    {
+     "narration": "Head of Parliament Abdullah ibn Husayn al-Ahmar led the Islah party, rallying religious factions against both secular rivals.",
+     "image_prompt": "Medium shot of Abdullah ibn Husayn al-Ahmar wearing traditional Yemeni tribal dress inside a parliament hall in 1990, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Abdullah ibn Husayn al-Ahmar",
+     "dossier": {
+      "name": "Abdullah ibn Husayn al-Ahmar",
+      "shown": "Abdullah ibn Husayn al-Ahmar",
+      "role": "Head of Parliament and Islah P",
+      "decision": false,
+      "file_no": 4,
+      "side": "right"
+     }
+    },
+    {
+     "narration": "Tariq al-Fadhli, a jihadist military commander, stood outside the coalition, waiting for the state to fracture.",
+     "image_prompt": "Medium shot of Tariq al-Fadhli in rugged military fatigue dress standing in a rocky desert landscape in 1990, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Tariq al-Fadhli",
+     "dossier": {
+      "name": "Tariq al-Fadhli",
+      "shown": "Tariq al-Fadhli",
+      "role": "Jihadist military commander",
+      "decision": false,
+      "file_no": 5,
+      "side": "left"
+     }
+    },
+    {
+     "narration": "Saleh held the barracks of Sana'a while al-Beidh watched from the docks of Aden. Between those two cities lay an unbridgeable rift of power and mistrust.",
+     "image_prompt": "Wide landscape shot of the rugged highway passing through arid mountains connecting Sana'a and Aden in 1990, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "rift of power and mistrust",
+   "punch_idx": 6,
+   "arc_index": 1,
+   "pacing": {
+    "role": "build",
+    "words_per_image": 40,
+    "tts_rate": "+6%"
+   }
+  },
+  {
+   "heading": "The Amman Accord",
+   "scenes": [
+    {
+     "narration": "By early 1994, the effort to merge the two armies had collapsed. Southern troops refused to disband their loyal units. Northern forces kept their weapons ready. Sporadic clashes erupted along the border. These fights exposed the deep fractures beneath the new nation's surface.",
+     "image_prompt": "Medium shot, a single soldier in 1990s military uniform holding a rifle, standing before a crumbling desert wall, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Yemeni civil war 1994"
+    },
+    {
+     "narration": "On the twentieth of February, 1994, President Ali Abdullah Saleh and Vice President Ali Salem al-Beidh traveled to Amman. They sat across from each other. They signed an accord intended to restore peace. This agreement was seen as the final chance to save the union.",
+     "image_prompt": "Close-up shot, two men in suits sitting at a table with a pen, 1990s diplomatic setting, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh"
+    },
+    {
+     "narration": "Both leaders hoped to avoid the catastrophic cost of civil war. They believed diplomatic words could still hold the country together. The ink was still wet. The decision had been made in a room. But the cost would be paid on the ground.",
+     "image_prompt": "Wide shot, an empty meeting room with a long table and two chairs, 1990s interior, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Amman Jordan 1994"
+    },
+    {
+     "narration": "The peace was fragile. Underlying grievances over power distribution remained unresolved. Northern and southern factions still held separate visions for the state. The trust required to enforce the accord was non-existent. The military would not wait for political solutions.",
+     "image_prompt": "Medium shot, a map on a table with two distinct colored regions, 1990s military office, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Less than twenty-four hours after the ink dried in Amman, limited tank clashes broke out in a southern province. The agreement had not even reached the front lines. The first shots were fired. The accord failed immediately. The old suspicions outweighed the new promises of unity.",
+     "image_prompt": "Low angle shot, a military tank in a dusty field, 1990s military vehicle, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Yemeni tanks 1994",
+     "map": {
+      "target": "Southern province",
+      "origin": "Northern army units",
+      "action": "strike",
+      "light": [
+       "Yemen"
+      ],
+      "ll": [
+       27.0,
+       -16.5
+      ]
+     }
+    },
+    {
+     "narration": "The decision to sign had been made in a room. But the cost would be paid on the ground. Where the old suspicions outweighed the new promises of unity. The paper agreement could not stop the bleeding. The nation was tearing itself apart.",
+     "image_prompt": "Close-up shot, a cracked piece of paper on a rocky ground, 1990s debris, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "accord failed immediately",
+   "punch_idx": 4,
+   "arc_index": 2,
+   "pacing": {
+    "role": "build",
+    "words_per_image": 40,
+    "tts_rate": "+6%"
+   }
+  },
+  {
+   "heading": "The First Shot",
+   "scenes": [
+    {
+     "narration": "While diplomatic ceremonies took place in Amman, heavy armor was already moving across the southern sand dunes. Let us go back to that moment.",
+     "image_prompt": "Wide shot of a single 1991 Soviet-built battle tank idling in an arid desert landscape under a dark sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "On the twenty-first of February, 1994, tank cannons opened fire across a southern province. This was the moment the civil war started.",
+     "image_prompt": "Medium shot of an armored combat vehicle firing its cannon across rocky sand plains, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Under pre-unification deployments, southern infantry remained stationed deep in northern territory, isolated fifty kilometers north of Sana'a among rugged desert hills.",
+     "image_prompt": "Wide shot of an isolated military encampment with canvas tents situated beneath barren rocky northern hills, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null,
+     "map": {
+      "target": "Sana'a",
+      "origin": "",
+      "action": "strike",
+      "light": [
+       "Yemen"
+      ],
+      "ll": [
+       44.20638889,
+       15.34833333
+      ]
+     }
+    },
+    {
+     "narration": "Northern army units quietly encircled those southern positions, leveling heavy artillery against the distant outpost as negotiations completely fell apart.",
+     "image_prompt": "Medium shot of a camouflaged artillery piece positioned behind dirt earthworks overlooking a valley, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "On the twenty-seventh of February, 1994, northern army units unleashed a heavy surprise assault upon the isolated southern soldiers.",
+     "image_prompt": "Wide shot of smoke billows rising from explosive impacts on an arid rocky hillside outpost, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Northern artillery rounds slammed into stone barracks, and the direct strike killed twelve soldiers while badly wounding three others.",
+     "image_prompt": "Eye-level shot of a smoldering destroyed stone bunker amidst rubble and desert gravel, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Down in Aden, southern leader Ali Salem al-Beidh received reports of the northern assault on his trapped troops.",
+     "image_prompt": "Close-up portrait of Vice President Ali Salem al-Beidh in 1991 sitting beside an oil lamp in a dimly lit office, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Salem al-Beidh"
+    },
+    {
+     "narration": "Fearing a northern invasion of his homeland, al-Beidh ordered southern troops to dig anti-tank ditches across the arid frontiers.",
+     "image_prompt": "Wide shot of soldiers in 1991 combat fatigues excavating a deep defensive trench into dry sand, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "In Sana'a, President of unified Yemen Ali Abdullah Saleh tracked the southern fortifications and summoned his own field commanders.",
+     "image_prompt": "Medium shot of President Ali Abdullah Saleh standing over a wooden table inside an austere stone room, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh"
+    },
+    {
+     "narration": "Saleh mobilized northern infantry columns and ordered tank regiments forward to counter any southern defensive buildup.",
+     "image_prompt": "Wide shot of a northern military convoy of olive trucks moving along a mountainous highway, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "The illusion of national unity dissolved completely into mutual military posturing. The war was no longer avoidable.",
+     "image_prompt": "Wide shot of a deserted military checkpoint with concrete barriers on a dusty desert road under dark clouds, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "killed twelve soldiers",
+   "punch_idx": 5,
+   "arc_index": 3,
+   "pacing": {
+    "role": "pivot",
+    "words_per_image": 24,
+    "tts_rate": "+2%"
+   }
+  },
+  {
+   "heading": "Bombs Over Sana'a",
+   "scenes": [
+    {
+     "narration": "On the fourth of May, 1994, southern fighter jets suddenly appeared low over northern mountain ridges, roaring directly toward Sana'a.",
+     "image_prompt": "Wide shot of a 1991 Soviet-made fighter aircraft flying low over arid desert ridges toward traditional multi-story stone tower buildings, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Sana'a 1994"
+    },
+    {
+     "narration": "Southern bombs fell into Sana'a, shattering government compounds and shaking ancient residential stone towers with concussive, rising smoke plumes.",
+     "image_prompt": "Medium shot of thick black smoke rising behind traditional ornate multistory clay-and-stone residential buildings in a historic Middle Eastern city in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Sana'a air raid 1994"
+    },
+    {
+     "narration": "Simultaneously, southern combat planes dropped heavy explosives onto a major northern port city on the coast, destroying critical docks.",
+     "image_prompt": "Wide shot of a concrete port terminal with cargo cranes beside the Red Sea under burning oily smoke clouds in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Hodeida port 1994"
+    },
+    {
+     "narration": "Another wave of southern strike aircraft bombarded a major southern highland hub, pounding fuel depots and key logistical roads.",
+     "image_prompt": "Wide shot of a mountain highway winding past a fortress hill with exploding fuel tanks throwing fire into the sky in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Taiz 1994"
+    },
+    {
+     "narration": "President of unified Yemen Ali Abdullah Saleh gathered northern military officers in a war bunker to plan immediate retaliation.",
+     "image_prompt": "Medium shot of Ali Abdullah Saleh in an olive-drab military officer uniform standing over a blank wooden strategy table in a dimly lit concrete command bunker, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh 1994"
+    },
+    {
+     "narration": "Saleh determined that only an overwhelming air response against the southern capital could stop further air assaults on the north.",
+     "image_prompt": "Close-up shot of Ali Abdullah Saleh in a pressed 1991 military uniform speaking into a black field telephone handset, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh"
+    },
+    {
+     "narration": "On the fifth of May, northern warplanes took off in morning mist, flying across arid frontiers directly toward Aden.",
+     "image_prompt": "Medium shot of an early 1990s military jet fighter accelerating down a cracked concrete desert runway at dawn, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Yemen air force 1994",
+     "map": {
+      "target": "Aden",
+      "origin": "Sana'a",
+      "action": "move",
+      "light": [
+       "Yemen"
+      ],
+      "ll": [
+       45.03333333,
+       12.8
+      ]
+     }
+    },
+    {
+     "narration": "Northern bombs slammed into Aden, blasting port fortifications and scattering plumes of debris across the southern coastal administrative capital.",
+     "image_prompt": "Wide shot of the coastal city of Aden along volcanic crags with smoke rising from harbor piers and warehouses in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Aden bombing 1994"
+    },
+    {
+     "narration": "A second northern air strike hit a major southern military airport outside the city, cratering takeoff strips and burning hangars.",
+     "image_prompt": "Wide shot of a desert military air base with concrete hangars burning and deep bomb craters scarring the flight runway in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Al-Anad air base 1994"
+    },
+    {
+     "narration": "Northern anti-aircraft batteries tracked the sky above the front lines, shooting down five southern fighter jets during fierce aerial dogfights.",
+     "image_prompt": "Medium shot of a camouflaged twin-barrel anti-aircraft gun emplacement firing tracers upward into a desert sky in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Yemen civil war antiaircraft"
+    },
+    {
+     "narration": "Southern ground gunners fired back into northern flight paths, bringing down four northern combat planes across the coastal desert plains.",
+     "image_prompt": "Wide shot of a downed 1991 military jet wreckage smoking in an arid gravel wash surrounded by steep sandy hills, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "shot down aircraft Yemen 1994"
+    },
+    {
+     "narration": "Now watch what happens next, as political governance officially gives way to total military rule.",
+     "image_prompt": "Medium shot of an antique black radio microphone sitting on a wooden desk beside an oil lamp in an empty broadcast studio, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "On the sixth of May, President Saleh officially declared a thirty-day state of emergency, suspending normal laws across northern territory.",
+     "image_prompt": "Medium shot of Ali Abdullah Saleh seated at a radio desk reading a blank paper declaration in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh 1994"
+    },
+    {
+     "narration": "Foreign nationals swarmed international airport gates, boarding emergency transport flights as embassies evacuated their personnel from the spreading warzone.",
+     "image_prompt": "Medium shot of civilians in 1991 western clothing carrying packed suitcases toward a passenger aircraft door on an airfield tarmac, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Sana'a airport evacuation 1994"
+    },
+    {
+     "narration": "Commercial supply lines collapsed under the bombing campaign, and national inflation soared to 300% across desperate local markets.",
+     "image_prompt": "Close-up shot of stacks of unprinted local paper banknotes overflowing on a wooden merchant table in a dusty outdoor market in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Shopkeepers shuttered market stalls as the currency tumbled, leaving families unable to purchase basic bags of flour and grain.",
+     "image_prompt": "Medium shot of a local shopkeeper rolling down an iron metal security door on an old stone storefront street in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "The intense aerial duel turned historic cities into frontline killing grounds, forcing thousands of civilians to flee into basements.",
+     "image_prompt": "Medium shot of a frightened local civilian family gathered in a dark arched stone cellar lit by a single kerosene lantern in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Both northern and southern commanders continued deploying their strike planes, projecting sheer military terror across the broken national divide.",
+     "image_prompt": "Wide shot of two military jet aircraft silhouetted against a smoky red sunset above jagged arid mountain ridges in 1991, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Yemen 1994 warplanes"
+    }
+   ],
+   "punch_phrase": "inflation soared to 300%",
+   "punch_idx": 14,
+   "arc_index": 4,
+   "pacing": {
+    "role": "drive",
+    "words_per_image": 18,
+    "tts_rate": "+12%"
+   }
+  },
+  {
+   "heading": "The Fall of Aden",
+   "scenes": [
+    {
+     "narration": "President of unified Yemen Ali Abdullah Saleh ordered northern columns forward across the frontier to break southern resistance by force.",
+     "image_prompt": "Medium shot of Ali Abdullah Saleh in 1991 olive drab military uniform standing over a wooden map table inside a concrete field bunker, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh 1994"
+    },
+    {
+     "narration": "Northern soldiers pushed past southern defensive lines, advancing through rugged arid gorges toward the southern interior on the twelfth of May, 1994.",
+     "image_prompt": "Wide shot of a column of 1991 Soviet-made tanks rolling through a rocky desert mountain canyon kicked up with dust, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Northern infantry overran a key mountain town that morning, taking its fortified ridges and opening the gateway south.",
+     "image_prompt": "Low angle shot of northern foot soldiers in early 1990s fatigues ascending a rocky hill toward a stone mountain fortress, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "From the captured highland passes, northern artillery pieces began shelling southern defensive networks guarding the coastal lowlands below.",
+     "image_prompt": "Medium shot of a 1991 field artillery gun firing into the distance from a stony crest under a smoke-filled sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Down on the coast, Vice President and Southern leader Ali Salem al-Beidh watched his frontline formations fall back in disarray.",
+     "image_prompt": "Close-up portrait of Vice President and Southern leader Ali Salem al-Beidh in a 1991 civilian suit looking through a curtained window, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Salem al-Beidh"
+    },
+    {
+     "narration": "On the twenty-first of May, 1994, al-Beidh walked to radio microphones in Aden to deliver a final desperate address.",
+     "image_prompt": "Medium shot of a podium holding vintage 1991 metal broadcast microphones in a shadowed broadcast room, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Encircled by advancing northern troops, al-Beidh declared the Democratic Republic of Yemen, breaking four years of unified rule.",
+     "image_prompt": "Medium shot of Ali Salem al-Beidh speaking resolutely at a wooden table lit by a single desk lamp, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Salem al-Beidh 1994"
+    },
+    {
+     "narration": "Northern tanks ignored the proclamation and swung east across the desert plains toward the inland oil regions.",
+     "image_prompt": "Wide shot of tracked armored vehicles crossing flat desert sand dunes beneath drifting black oil smoke, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "On the twenty-fourth of May, 1994, northern forces attacked the strategic southern city of Ataq from three sides.",
+     "image_prompt": "Wide shot of the perimeter of Ataq with adobe buildings and mud-brick walls under distant mortar smoke, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ataq 1994"
+    },
+    {
+     "narration": "Northern troops seized Ataq before dusk, clearing southern garrisons and opening the road to the southern oil fields.",
+     "image_prompt": "Medium shot of northern infantrymen patrolling a dusty deserted street in Ataq beside a parked armored personnel carrier, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ataq"
+    },
+    {
+     "narration": "Losing Ataq severed the southern army from vital supply routes, trapping their defending regiments around the coast.",
+     "image_prompt": "Close-up of a radio operator in 1991 military uniform speaking urgently into a field radio handset in a stone building, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Now watch what happens next, as religious irregular fighters join the northern assault to crush the southern government.",
+     "image_prompt": "Low angle shot of armed tribal irregulars carrying Kalashnikov rifles riding in the bed of an open pickup truck across sand, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Jihadist military commander Tariq al-Fadhli mobilized his veteran fighters to ally directly with the advancing northern columns.",
+     "image_prompt": "Medium close-up portrait of Jihadist military commander Tariq al-Fadhli in traditional headscarf and rugged field jacket, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Tariq al-Fadhli"
+    },
+    {
+     "narration": "Al-Fadhli led his armed fighters through southern roadblocks, guiding northern soldiers straight toward the outer harbor defenses.",
+     "image_prompt": "Wide shot of armed irregular fighters and uniformed northern soldiers advancing on foot through a fortified sandbag checkpoint, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "On the fourth of July, 1994, al-Fadhli and northern troops pushed through the barricades and entered Aden.",
+     "image_prompt": "Wide shot of armored fighting vehicles and infantry moving into the ruined outskirts of Aden past damaged palm trees, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Aden 1994"
+    },
+    {
+     "narration": "Their combined push breached the inner perimeter, effectively ending organized southern resistance throughout the streets.",
+     "image_prompt": "Medium shot of abandoned southern artillery pieces and scattered equipment on a rubble-strewn seaside street, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Northern soldiers advanced into downtown avenues, securing administrative compounds as defending units fell back toward the docks.",
+     "image_prompt": "Wide shot of colonial-era government buildings in Aden surrounded by patrolling northern troops under hazy afternoon light, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Aden"
+    },
+    {
+     "narration": "By the seventh of July, 1994, northern forces captured Aden entirely, taking full command of the port.",
+     "image_prompt": "Low angle shot of a northern soldier standing guard atop a stone seawall overlooking the harbor of Aden, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Aden harbor 1994"
+    },
+    {
+     "narration": "Southern troops abandoned their remaining vehicles along the piers as maritime craft ferried fighters away under artillery fire.",
+     "image_prompt": "Wide shot of naval piers in Aden with small motorboats carrying soldiers away across dark harbor water, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "With their capital fallen, most southern leaders fled across the sea into exile, leaving northern commanders in total control.",
+     "image_prompt": "Wide shot of a small cargo vessel steaming away from Aden into open water against an orange sunset sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "captured Aden",
+   "punch_idx": 17,
+   "arc_index": 5,
+   "pacing": {
+    "role": "drive",
+    "words_per_image": 18,
+    "tts_rate": "+12%"
+   }
+  },
+  {
+   "heading": "The Aftermath",
+   "scenes": [
+    {
+     "narration": "On the first of October, 1994, Parliament met in Sana'a to choose the nation's leader. Lawmakers cast votes and elected President Ali Abdullah Saleh to a five-year term.",
+     "image_prompt": "Wide shot of politician Ali Abdullah Saleh addressing assembled lawmakers inside a wood-paneled parliamentary chamber in 1994, wearing a dark suit, flanked by formal Yemeni flags, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Abdullah Saleh 1994"
+    },
+    {
+     "narration": "This vote handed President Saleh complete authority over the unified state. Across the capital, central government officials consolidated their power, sweeping away the last pieces of southern political autonomy.",
+     "image_prompt": "Medium shot of military officers and government officials in olive uniforms signing official papers at a large wooden desk inside a government office in 1994, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Far across the sea, Vice President Ali Salem al-Beidh remained trapped in foreign exile. Other defeated southern commanders settled beside the southern leader, stripped of their properties and domestic political power.",
+     "image_prompt": "Eye level shot of southern leader Ali Salem al-Beidh sitting quietly near a window in a foreign residence in 1994, wearing a civilian suit with a sombre expression, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Ali Salem al-Beidh 1994"
+    },
+    {
+     "narration": "From overseas, the exiled southern leader kept broadcasting radio messages back home. His political network urged southern citizens to reject central rule and fight for complete separation from Saleh's central state.",
+     "image_prompt": "Medium shot of an analog reel-to-reel tape recorder spinning beside a broadcast microphone inside a dimly lit sound studio in 1994, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "By 2007, those persistent exile messages bore fruit across the southern provinces. Discontented citizens gathered to launch the Southern Movement, marching down coastal streets to demand independence from northern rule.",
+     "image_prompt": "Wide shot of a large crowd of civilians gathering on a broad coastal avenue in 2007, surrounded by stone buildings under bright sunlight, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Southern Movement Yemen 2007"
+    },
+    {
+     "narration": "The physical cost of forced unification shattered the fragile national economy. Government assessors calculated 10 billion dollars in losses across bombed harbors, burned urban markets, and destroyed highway infrastructure.",
+     "image_prompt": "Wide shot of a damaged harbor pier in 1994, showing scorched concrete, twisted crane metal, and damaged merchant vessels under a hazy sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Beyond physical destruction, the civil war left a deeply divided population. Armed regional tribes and rival political movements mistrusted the central state, creating fertile ground for long armed insurgencies.",
+     "image_prompt": "Medium shot of armed tribal men standing together on a rocky hillside path in 1994, holding rifles and wearing traditional draped waist shawls, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "By 2009, foreign military interference exploited those internal fractures. Covert operators from Iran's Quds Force began smuggling shipments of infantry weapons across maritime routes to northern Houthi rebel fighters.",
+     "image_prompt": "Low angle shot of wooden crates containing small arms being offloaded from a wooden cargo vessel on a dark beach night in 2009, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    },
+    {
+     "narration": "Those covert arms shipments empowered the northern Houthi movement to expand its armed rebellion. The insurgent group eventually launched a direct war against President Saleh's central army.",
+     "image_prompt": "Eye level shot of irregular northern fighters carrying rifles along a dusty mountain road in 2009, surrounded by arid rocky ridges, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": "Houthis Yemen 2009"
+    },
+    {
+     "narration": "This was the moment the civil war ended. President Saleh enforced national unity by direct military force, but could forced cohesion ever truly prevent a nation from tearing itself apart?",
+     "image_prompt": "Wide shot of a lone military officer standing on a high desert ridge in 1994, looking out over an expanse of arid terrain under a dark sky, set in the year 1991, historically accurate 1990s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible",
+     "archive_query": null
+    }
+   ],
+   "punch_phrase": "10 billion dollars in losses",
+   "punch_idx": 5,
+   "arc_index": 6,
+   "pacing": {
+    "role": "close",
+    "words_per_image": 30,
+    "tts_rate": "+7%"
+   }
+  }
+ ],
+ "word_count": 1732,
+ "era_year": 1991,
+ "format": "order",
+ "intro_epigraph": {
+  "sentences": [
+   "Sanaa is an arsenal of weapons, and continuing this situation means that we will remain tied up and fighting among ourselves."
+  ],
+  "keyword": "we will remain tied up",
+  "attribution": "Ali Salem al‑Beidh",
+  "attribution_title": "Vice President of Yemen"
+ },
+ "verdict_epigraph": {
+  "text": "The conquerors raised their banners over empty ruins, unaware that the victory would rot in their hands.",
+  "keyword": "the victory would rot"
+ },
+ "lane": "timely",
+ "has_short": false,
+ "paradox": {
+  "answer": "The peace accord meant to save the union failed within hours, as tank clashes broke out in the south."
+ }
+}

@@ -14,6 +14,10 @@ on:
         description: "That run's script artifact, e.g. timely-script-69"
         required: false
         default: ""
+      script_file:
+        description: "Or a script saved in the repo (e.g. preview_scripts/houthi_1994.json)"
+        required: false
+        default: ""
       mode:
         description: "compare (old and new clips) or teaser (the new teaser only, ready to post)"
         required: false
@@ -111,7 +115,9 @@ jobs:
       - name: Fetch the script and the current clip code
         run: |
           git fetch -q origin preview-media main
-          if [ -f past_script/longform_script.json ]; then
+          if [ -n "${{ inputs.script_file }}" ] && [ -f "${{ inputs.script_file }}" ]; then
+            cp "${{ inputs.script_file }}" preview_script.json
+          elif [ -f past_script/longform_script.json ]; then
             cp past_script/longform_script.json preview_script.json
           else
             git show origin/preview-media:longform_script.json > preview_script.json
