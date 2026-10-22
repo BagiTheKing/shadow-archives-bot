@@ -706,6 +706,11 @@ def main():
     if os.getenv("NATIVE_SHORT", "1") == "1":
         from native_short import make_native_short
         native = make_native_short(script, BUILD_DIR)
+        # Published now, not after the long video: on 22 Oct the long video
+        # was halted by its image-quality floor and took the finished Short
+        # down with it. The Short stands on its own.
+        if native:
+            publish_native(native)
 
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
@@ -824,9 +829,7 @@ def main():
     # Phase 6: Shorts cut from this video, each linking back to it. After the
     # upload, because the link is the point; rendered on dry runs too, so
     # they can be watched in the artifact first.
-    if native:
-        publish_native(native)
-    else:
+    if not native:
         publish_clips(scenes, script, video_id)
 
     print("🎉 Long-form pipeline complete.")
