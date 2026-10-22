@@ -203,9 +203,11 @@ def news_footage(script, seconds, build_dir):
             if c["url"] not in seen and (c.get("year") or 0) >= this_year - 2:
                 seen.add(c["url"])
                 found.append(c)
-    # the action itself first (strikes, launches) over a seized-cargo
-    # inventory: the hook has three seconds to look like the news
-    found.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
+    # The action itself only (strikes, launches): the hook has three seconds
+    # to look like the news. A Civil War story drew a man lecturing about
+    # the draft riots under "NOW 2026" (22 Oct); a story that is not in
+    # today's news has no footage of today, and opens without it.
+    found = [c for c in found if _ACTION.search(c.get("title", ""))]
     for cand in found:
         if fetch_commons_video(cand, path, seconds=seconds + 0.5):
             print(f"📰 Hook footage: {cand['title']!r} (DVIDS)")

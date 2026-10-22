@@ -48,7 +48,9 @@ def _get(url, params, timeout=25):
 _JUNK = re.compile(r"\b(ceremony|change of command|decoration|award|visit|wwe|"
                    r"dental|clinic|retire|promotion|birthday|hype|music|band|"
                    r"graduat|recruit|reenlist|5k|memorial run|feature|"
-                   r"interview|podcast|hometown)", re.I)
+                   r"interview|podcast|hometown|lecture|talk|panel|seminar|"
+                   r"symposium|presentation|discussion|speaker|book|history of|"
+                   r"remembrance|anniversary|commemorat|museum|exhibit)", re.I)
 _STOP = {"the", "and", "with", "from", "into", "over", "against", "attack",
          "attacks", "launch", "launches", "war", "civil", "missile", "strike",
          "strikes", "forces"}

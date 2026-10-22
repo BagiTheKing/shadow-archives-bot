@@ -467,7 +467,8 @@ def render(spec, out_mp4, duration, tone="neutral"):
     seconds long. Frames are drawn up to the last animation, then the final
     frame is held, so a long line does not cost minutes of drawing."""
     pal = PALETTES.get(tone, PALETTES["neutral"])
-    font = ImageFont.truetype(FONT_PATH, 30 * SS)
+    # a vertical frame is seen on a phone: its labels are drawn larger
+    font = ImageFont.truetype(FONT_PATH, (56 if H > W else 30) * SS)
     bbox = spec["bbox"]
     land = []
     for f in _load("ne_10m_admin_0_countries"):
