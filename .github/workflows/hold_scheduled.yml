@@ -1,0 +1,28 @@
+name: Hold Scheduled Uploads
+
+# Manual. Lists the channel's latest uploads; with hold=true, every upload
+# still scheduled to go public is taken off its schedule (kept private) until
+# the owner releases it.
+on:
+  workflow_dispatch:
+    inputs:
+      hold:
+        description: "true to unschedule them, false to only list"
+        required: true
+        default: "false"
+
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - env:
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python tools/hold_scheduled.py ${{ inputs.hold == 'true' && '--hold' || '' }}
