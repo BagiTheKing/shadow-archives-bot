@@ -413,18 +413,13 @@
         "videos/_534Qt2ANi8/2_map.jpg",
         "videos/_534Qt2ANi8/3_frame.jpg"
       ],
-      "status": "waiting",
-      "current": null,
-      "since": null,
-      "views_at_start": null,
+      "status": "testing",
+      "current": 0,
+      "since": "2026-10-22T17:06:48.383490+00:00",
+      "views_at_start": 0,
       "results": [],
       "registered": "2026-10-22T13:40:52.979613+00:00"
     }
   },
-  "comments": {
-    "7g5bolmjYbw": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs",
-    "9EOBIpeW-Ec": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs",
-    "kKPPVNkZ6Ho": "The full story, start to finish: https://youtu.be/Z-gKpv3eBIs",
-    "XdgddRV5hB8": "Which moment marked the point of no return in Yemen's division: the 1994 peace signing or the 1990 unification?"
-  }
+  "comments": {}
 }
