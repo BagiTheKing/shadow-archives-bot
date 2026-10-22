@@ -287,7 +287,10 @@ jobs:
           # Shorts cut from this video after it uploads (src/longform_clips.py):
           # the teaser and the main event, each linking back to the full
           # video. Same privacy as the video itself. 0 turns them off.
-          LONGFORM_CLIPS: '4'
+          LONGFORM_CLIPS: '0'
+          # Shorts paused (owner, 22 Oct): no native Short and no clips until
+          # the Houthi Short's 48-hour numbers are reviewed
+          NATIVE_SHORT: '0'
           TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
           STORY_TOPIC: ${{ inputs.story_topic }}
           STORY_STAGE: ${{ inputs.story_stage || 'full' }}
