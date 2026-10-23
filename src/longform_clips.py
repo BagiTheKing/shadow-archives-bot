@@ -385,8 +385,8 @@ def _wrap(text, width=18):
 # me..." dropped: in a synthetic voice it is what sounds like a trick).
 PROMISES = [
     ("Most people get this story wrong.", "THE ENDING CHANGES EVERYTHING"),
-    ("Everyone knows how this started. Almost nobody knows how it ended.",
-     "NOBODY TALKS ABOUT HOW IT ENDED"),
+    # one short sentence: the opening has ~3 seconds (owner, 23 Oct)
+    ("Almost nobody knows how this ended.", "NOBODY TALKS ABOUT HOW IT ENDED"),
     ("The last line of this story is the one nobody tells.",
      "THE PART THEY LEFT OUT"),
 ]

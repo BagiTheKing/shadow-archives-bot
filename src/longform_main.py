@@ -703,9 +703,20 @@ def main():
     # the long video, and is made before the long video so its few
     # paintings get the day's image quota: the long render spent all of it.
     native = None
-    if os.getenv("NATIVE_SHORT", "1") == "1":
+    native_only = os.getenv("NATIVE_ONLY") == "1"
+    if os.getenv("NATIVE_SHORT", "1") == "1" or native_only:
         from native_short import make_native_short
         native = make_native_short(script, BUILD_DIR)
+        if native_only:
+            # review run: the story and its Short, nothing else (the
+            # workflow pushes them to preview-media)
+            with open(os.path.join(BUILD_DIR, "longform_script.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump(script, f, ensure_ascii=False, indent=1)
+            if not native:
+                raise SystemExit("❌ No native Short could be made.")
+            print(f"📱 Native Short ready for review: {native['path']}")
+            return
         # Published now, not after the long video: on 22 Oct the long video
         # was halted by its image-quality floor and took the finished Short
         # down with it. The Short stands on its own.

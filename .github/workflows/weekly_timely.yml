@@ -47,6 +47,10 @@ on:
         type: choice
         options: [full, script, outline]
         default: full
+      native_only:
+        description: 'Write the story and make only its native Short, for review (nothing uploaded, the story stays queued)'
+        type: boolean
+        default: false
       topic_only:
         description: 'Only choose the topic and print it (no script, render or upload)'
         type: boolean
@@ -282,7 +286,8 @@ jobs:
           # searchable words past where YouTube truncates them.
           SERIES_NAME: Catastrophe Files
           EXPERIMENT_EVERY: '0'
-          SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '0' }}
+          SKIP_UPLOAD: ${{ (inputs.skip_upload || inputs.native_only) && '1' || '0' }}
+          NATIVE_ONLY: ${{ inputs.native_only && '1' || '0' }}
           LONGFORM_LANE: timely
           # Shorts cut from this video after it uploads (src/longform_clips.py):
           # the teaser and the main event, each linking back to the full
@@ -341,7 +346,7 @@ jobs:
       # The story this run took leaves the queue (it lives on in the run's
       # saved progress until the video is up).
       - name: Save researched stories
-        if: always()
+        if: always() && !inputs.native_only
         continue-on-error: true
         run: |
           [ -e queue/.git ] || exit 0
@@ -352,6 +357,21 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -qm "Story taken (${{ github.workflow }} #${{ github.run_number }})"
           for i in 1 2 3; do git pull -q --rebase origin topic-queue && git push -q origin HEAD:topic-queue && exit 0; sleep 5; done
+
+      - name: Native Short to preview-media for review
+        if: success() && inputs.native_only
+        run: |
+          mkdir -p nsout
+          cp build/native/native_short.mp4 nsout/native.mp4
+          cp build/longform_script.json nsout/longform_script.json
+          [ -f build/native/native_short.json ] && cp build/native/native_short.json nsout/native_beats.json || true
+          cd nsout
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Native Short for review (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
 
       # Test & Compare has no API: the thumbnails are tried in turn by
       # rotate_thumbnails.yml once the video is public.

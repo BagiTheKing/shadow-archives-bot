@@ -262,14 +262,39 @@ def picture_for(beat, script, k, build_dir, seconds):
 # Rendering
 # ---------------------------------------------------------------------------
 
+SHOT_MAX = 4.5                    # longest a still holds before a punch-in
+BRIGHT = "eq=brightness=0.05:contrast=1.08:gamma=1.25:saturation=1.1,"
+
+
 def _beat_clip(beat, k, seconds, out):
     """One beat's picture, silent, exactly `seconds` long, 1080x1920."""
     from video_engine import _ken_burns_filter
     frames = max(1, round(seconds * FPS))
     if beat.get("video"):
+        bright = BRIGHT if beat.get("used") == "news" else ""
         vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-              f"fps={FPS},setsar=1,trim=end_frame={frames}")
+              f"{bright}fps={FPS},setsar=1,trim=end_frame={frames}")
         inputs = ["-stream_loop", "-1", "-i", beat["video"]]
+    elif seconds > SHOT_MAX:
+        # Something new on screen every ~3 seconds (owner, 23 Oct): a long
+        # sentence's still is cut in two, the wide picture then a punch-in on
+        # it, so the eye never sits on one frame for six or seven seconds.
+        from video_engine import _punch_filter
+        first = max(1, frames // 2)
+        second = frames - first
+        graph = (f"[0:v]{_ken_burns_filter(first / FPS, k % 2)},setsar=1,"
+                 f"trim=end_frame={first},setpts=PTS-STARTPTS[a];"
+                 f"[1:v]{_punch_filter(second / FPS)},setsar=1,"
+                 f"trim=end_frame={second},setpts=PTS-STARTPTS[b];"
+                 f"[a][b]concat=n=2:v=1:a=0,format=yuv420p[v]")
+        subprocess.run(["ffmpeg", "-y",
+                        "-loop", "1", "-framerate", str(FPS), "-i", beat["still"],
+                        "-loop", "1", "-framerate", str(FPS), "-i", beat["still"],
+                        "-filter_complex", graph, "-map", "[v]", "-an",
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+                        "-r", str(FPS), "-frames:v", str(frames), out],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+        return
     else:
         vf = (f"{_ken_burns_filter(seconds, k % 2)},setsar=1,"
               f"trim=end_frame={frames}")
@@ -426,7 +451,13 @@ def _make(script, build_dir):
                               for b in body]
     spoken, on_screen = promise_for(script)
     title = re.sub(r"\s+", " ", script.get("title") or "").strip()
-    beats = ([{"line": f"{title.rstrip('.')}. {spoken}", "kind": "news",
+    # The opening is ~3 seconds (owner, 23 Oct): the Houthi Short lost most
+    # of its viewers between 0:03 and 0:08 while the narrator read the whole
+    # title and the promise. Now the news in one clause, then the promise,
+    # and the story starts.
+    from longform_clips import _news_queries
+    news_line = (_news_queries(title) or [title])[0]
+    beats = ([{"line": f"{news_line.rstrip('.')}. {spoken}", "kind": "news",
                "subject": "", "prompt": ""}]
              + body
              + [{"line": paradox["answer"], "kind": "art", "paradox": True,
@@ -526,7 +557,7 @@ def _make(script, build_dir):
 # narrator's promise; in the last SLIDE seconds the past slides up to fill
 # the screen and the story begins on it.
 
-TEAR, ROLL, SLIDE = 0.8, 0.8, 0.45
+TEAR, ROLL, SLIDE = 0.3, 0.6, 0.35
 ORANGE = (255, 150, 40)
 MONO = "FreeMonoBold.ttf"
 _ORD = {w: i + 1 for i, w in enumerate(
@@ -670,12 +701,12 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
     _tag(f"NOW · {now}").save(nowtag)
     pattern, n_frames, changes = _counter_frames(now, then, os.path.join(build_dir, "nixie"))
     ticks = _ticks([TEAR + c for c in changes], os.path.join(build_dir, "ns_ticks.wav"))
-    slide_at = max(TEAR + ROLL + 0.6, seconds - SLIDE)
+    slide_at = max(TEAR + ROLL + 0.3, seconds - SLIDE)
     frames = max(1, round(seconds * FPS))
     cw = _nixie(then).size
     half = H // 2
     graph = (
-        f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+        f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{BRIGHT}"
         f"fps={FPS},setsar=1[now];"
         f"[1:v]scale={W}:{H},setsar=1[past];"
         f"[now][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a];"
