@@ -674,6 +674,8 @@ def main():
         # source on screen; all of them are listed in the description
         from claim_sources import attach
         script["claim_sources"] = attach(scenes, story["sources"], story.get("sheet"))
+        # the news this story was found from: the native Short's NOW photo
+        script["trend"] = story.get("trend")
         script["source_article"] = {"title": story["sources"].get("title"),
                                     "url": story["sources"].get("url")}
         script["related_articles"] = story.get("related") or []

@@ -141,23 +141,59 @@ def _vertical_fit(img, width, height):
     return img.crop((x, y, x + width, y + height))
 
 
+def _faces_in(path):
+    try:
+        import cv2
+        from cast_engine import _faces, faces_available
+        return len(_faces(cv2.imread(path))) if faces_available() else 1
+    except Exception:
+        return 1
+
+
 def _photo(subject, era, path, person=False):
-    """(path, credit) of a real photo of `subject`, or None."""
+    """(path, credit) of a real photo of `subject`, or None; a second,
+    different one goes to path "-2" (beat["still2"]) when there is one.
+    A person's photo shows that person alone where the archive has one: a
+    Khrushchev photo cropped onto Stalin's face (24 Oct)."""
     if not subject:
         return None
     from archive_engine import download_archival_image, format_credit, search_archives
     from longform_visual import _era_appropriate
     from media_sources import relevant
+    got, crowded = [], []
     for cand in search_archives(subject):
+        if len(got) >= 2:
+            break
         if not _era_appropriate(cand, era):
             continue
         # a person is that person or nobody: every part of the name in the
         # title (the officer's portrait that stood in for Yemen's leaders)
         if person and not relevant(cand, subject):
             continue
-        if download_archival_image(cand, path, W, H, fit=_vertical_fit):
-            return path, format_credit(cand)
-    return None
+        trial = path.replace(".jpg", f"-try{len(got)}{len(crowded)}.jpg")
+        if download_archival_image(cand, trial, W, H, fit=_vertical_fit):
+            if person and _faces_in(trial) > 1:
+                crowded.append((trial, cand))
+                continue
+            got.append((trial, format_credit(cand)))
+    if person and not got and crowded:
+        trial, cand = crowded[0]
+        got.append((trial, format_credit(cand)))
+    # the first picture under the beat's own name, the second beside it
+    import shutil
+    for i, (trial, credit) in enumerate(got):
+        dest = path if i == 0 else path.replace(".jpg", "-2.jpg")
+        shutil.move(trial, dest)
+        got[i] = (dest, credit)
+    if not got:
+        return None
+    if len(got) > 1:
+        _SECOND[got[0][0]] = got[1][0]
+    return got[0]
+
+
+# the second photo found for a beat, keyed by its first (picture_for reads it)
+_SECOND = {}
 
 
 def _footage(subject, era, path, seconds):
@@ -252,10 +288,36 @@ def picture_for(beat, script, k, build_dir, seconds):
         if got:
             path, credit = got
             beat["video" if path.endswith(".mp4") else "still"] = path
+            if _SECOND.get(path):
+                beat["still2"] = _SECOND[path]
             beat["credit"], beat["used"] = credit, kind
             print(f"🖼️  Beat {k} ({kind}): {beat['line'][:60]!r}")
             return True
     return False
+
+
+def now_photo(script, build_dir):
+    """(path, credit) of a real photo of today's news, at most two years old:
+    the trend the story was found from, then the title's names. Or None."""
+    import datetime as dt
+    from archive_engine import download_archival_image, format_credit, search_archives
+    from media_sources import relevant, search_dvids
+    this_year = dt.date.today().year
+    names = re.findall(r"\b[A-Z][a-zA-Z]{2,}\b", f"{script.get('trend') or ''} "
+                                                 f"{script.get('title') or ''}")
+    names = [n for n in dict.fromkeys(names) if n.lower() not in {"again", "the", "in", "it"}]
+    queries = ([script["now_query"]] if script.get("now_query") else []) + \
+        [" ".join(names[:2]), names[0] if names else ""]
+    path = os.path.join(build_dir, "ns_now_photo.jpg")
+    for q in dict.fromkeys(q for q in queries if q):
+        cands = search_dvids(q, "image", 6) + search_archives(f"{q} {this_year - 1}")
+        for c in cands:
+            if (c.get("year") or 0) < this_year - 2 or not relevant(c, q):
+                continue
+            if download_archival_image(c, path, W, H, fit=_vertical_fit):
+                print(f"📰 NOW photo: {c.get('title', '')[:70]!r} ({q!r})")
+                return path, format_credit(c)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -275,21 +337,20 @@ def _beat_clip(beat, k, seconds, out):
         vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
               f"{bright}fps={FPS},setsar=1,trim=end_frame={frames}")
         inputs = ["-stream_loop", "-1", "-i", beat["video"]]
-    elif seconds > SHOT_MAX:
+    elif seconds > SHOT_MAX and beat.get("still2"):
         # Something new on screen every ~3 seconds (owner, 23 Oct): a long
-        # sentence's still is cut in two, the wide picture then a punch-in on
-        # it, so the eye never sits on one frame for six or seven seconds.
-        from video_engine import _punch_filter
+        # sentence gets a second, different real picture of its subject. A
+        # punch-in on the same picture read as a duplicate (24 Oct).
         first = max(1, frames // 2)
         second = frames - first
         graph = (f"[0:v]{_ken_burns_filter(first / FPS, k % 2)},setsar=1,"
                  f"trim=end_frame={first},setpts=PTS-STARTPTS[a];"
-                 f"[1:v]{_punch_filter(second / FPS)},setsar=1,"
+                 f"[1:v]{_ken_burns_filter(second / FPS, (k + 1) % 2)},setsar=1,"
                  f"trim=end_frame={second},setpts=PTS-STARTPTS[b];"
                  f"[a][b]concat=n=2:v=1:a=0,format=yuv420p[v]")
         subprocess.run(["ffmpeg", "-y",
                         "-loop", "1", "-framerate", str(FPS), "-i", beat["still"],
-                        "-loop", "1", "-framerate", str(FPS), "-i", beat["still"],
+                        "-loop", "1", "-framerate", str(FPS), "-i", beat["still2"],
                         "-filter_complex", graph, "-map", "[v]", "-an",
                         "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                         "-r", str(FPS), "-frames:v", str(frames), out],
@@ -341,9 +402,9 @@ def render(beats, promise, out_path, build_dir, script=None):
     clips, sfx = [], []
     for i, b in enumerate(beats):
         clip = os.path.join(build_dir, f"ns_clip_{i:02d}.mp4")
-        if b.get("intro_still") and b.get("video"):
+        if b.get("intro_still") and (b.get("video") or b.get("still")):
             try:
-                sfx.append(intro_clip(b["video"], b["intro_still"], b["seconds"],
+                sfx.append(intro_clip(b.get("video") or b["still"], b["intro_still"], b["seconds"],
                                       script, build_dir, clip))
             except Exception as e:
                 print(f"   ↩️  THEN / NOW failed ({type(e).__name__}: {e}) — plain opening.")
@@ -475,9 +536,15 @@ def _make(script, build_dir):
 
     credits = []
     news = news_footage(script, beats[0]["duration"] + 0.5, build_dir)
+    if not news:
+        # no footage of today (diplomacy has no strike footage): a real
+        # photo of today's news from the last two years still carries the
+        # NOW half of the opening (owner, 24 Oct: "where is the 2026 opening")
+        news = now_photo(script, build_dir)
     if news:
-        beats[0].update(video=news[0], credit=news[1], used="news")
-        credits.append(f"Opening footage: {news[1]}")
+        key = "video" if news[0].endswith(".mp4") else "still"
+        beats[0].update({key: news[0]}, credit=news[1], used="news")
+        credits.append(f"Opening: {news[1]}")
     else:
         beats[0]["kind"], beats[0]["subject"] = "photo", (script.get("places") or [""])[0]
         beats[0]["prompt"] = body[0]["prompt"]
@@ -489,7 +556,8 @@ def _make(script, build_dir):
             # so the twist about 1994 plays over 2026 (THEN / NOW closed);
             # else the story's strongest real picture
             if beats[0].get("used") == "news":
-                b.update(video=beats[0]["video"], used="news")
+                b.update(video=beats[0].get("video"), still=beats[0].get("still"),
+                         used="news")
                 continue
             prev = [x for x in beats[1:-1] if x.get("used") in ("photo", "person", "footage")]
             if prev:
@@ -524,9 +592,12 @@ def _make(script, build_dir):
 
     # THEN / NOW: the past half is the first real (or painted) still of the
     # story, so the slide up lands on the picture the story starts with
-    if beats[0].get("video"):
+    if beats[0].get("used") == "news":
+        then_image = script.get("native_then_image")
         first = next((x for x in beats[1:-1] if x.get("still")), None)
-        if first:
+        if then_image and os.path.exists(then_image):
+            beats[0]["intro_still"] = then_image
+        elif first:
             beats[0]["intro_still"] = first["still"]
     out = os.path.join(build_dir, "native_short.mp4")
     length, music_credit = render(beats, on_screen, out, build_dir, script)
@@ -721,7 +792,9 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
         f"[c][cnt]overlay=x={(W - cw[0]) // 2}:y={half - cw[1] // 2}:eof_action=repeat:"
         f"enable='between(t,{TEAR},{slide_at:.3f})',"
         f"trim=end_frame={frames},format=yuv420p[v]")
-    subprocess.run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", news_video,
+    now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
+              if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
+    subprocess.run(["ffmpeg", "-y", *now_in,
                     "-loop", "1", "-framerate", str(FPS), "-i", past,
                     "-loop", "1", "-i", nowtag,
                     "-framerate", str(FPS), "-i", pattern,
