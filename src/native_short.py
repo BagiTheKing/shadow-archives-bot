@@ -296,6 +296,63 @@ def picture_for(beat, script, k, build_dir, seconds):
     return False
 
 
+def _video_candidates(queries, recent=None, era=None):
+    """Real footage for queries from DVIDS and Commons: titles naming the
+    subject, no lectures or ceremonies (media_sources._JUNK), from the last
+    two years (recent=this year) or from the story's own years (era)."""
+    from archive_engine import search_commons_video
+    from media_sources import _JUNK, relevant, search_dvids
+    out, seen = [], set()
+    for q in dict.fromkeys(q for q in queries if q):
+        for c in search_dvids(q, "video", 6) + search_commons_video(q)[:8]:
+            y = c.get("year") or 0
+            if c["url"] in seen or _JUNK.search(c.get("title", "")) or not relevant(c, q):
+                continue
+            if recent and y < recent - 2:
+                continue
+            if era and not (era - 1 <= y <= era + 2):
+                continue
+            seen.add(c["url"])
+            out.append(c)
+    return out
+
+
+def _fetch_first(cands, path, seconds):
+    from archive_engine import fetch_commons_video, format_credit
+    for c in cands:
+        if fetch_commons_video(c, path, seconds=seconds + 0.5):
+            print(f"🎞️  {c.get('title', '')[:70]!r}")
+            return path, format_credit(c)
+    return None
+
+
+def now_footage(script, seconds, build_dir):
+    """Real footage of today's news even when nothing is being struck (the
+    Alaska summit, a meeting, an arrival): the opening always moves (owner,
+    24 Oct: "we always need to start with a video, a real video")."""
+    import datetime as dt
+    from longform_clips import _ACTION, _news_queries
+    names = re.findall(r"\b[A-Z][a-zA-Z]{2,}\b", f"{script.get('trend') or ''}")
+    queries = ([script["now_query"]] if script.get("now_query") else []) + \
+        _news_queries(script.get("title") or "") + [" ".join(names[:2])]
+    cands = _video_candidates(queries, recent=dt.date.today().year)
+    cands.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
+    return _fetch_first(cands, os.path.join(build_dir, "ns_now.mp4"), seconds)
+
+
+def then_footage(script, seconds, build_dir):
+    """Real footage of the story itself, from its own years, for the THEN
+    half of the opening (a 1962 newsreel under the 2026 summit)."""
+    era = script.get("era_year")
+    if not era:
+        return None
+    topic = re.sub(r"\s*\(.*?\)", "", script.get("topic") or "").strip()
+    queries = ([script["then_query"]] if script.get("then_query") else []) + \
+        ([topic] if len(topic.split()) <= 6 else [])
+    cands = _video_candidates(queries, era=era)
+    return _fetch_first(cands, os.path.join(build_dir, "ns_then.mp4"), seconds)
+
+
 def now_photo(script, build_dir):
     """(path, credit) of a real photo of today's news, at most two years old:
     the trend the story was found from, then the title's names. Or None."""
@@ -535,7 +592,8 @@ def _make(script, build_dir):
         b.update(audio_path=s["audio_path"], duration=s["duration"], words=s["words"])
 
     credits = []
-    news = news_footage(script, beats[0]["duration"] + 0.5, build_dir)
+    news = (news_footage(script, beats[0]["duration"] + 0.5, build_dir)
+            or now_footage(script, beats[0]["duration"] + 0.5, build_dir))
     if not news:
         # no footage of today (diplomacy has no strike footage): a real
         # photo of today's news from the last two years still carries the
@@ -593,6 +651,12 @@ def _make(script, build_dir):
     # THEN / NOW: the past half is the first real (or painted) still of the
     # story, so the slide up lands on the picture the story starts with
     if beats[0].get("used") == "news":
+        # the past half moves too when the story's own years were filmed
+        then = then_footage(script, beats[0]["duration"] + 1.0, build_dir)
+        if then:
+            beats[0]["intro_still"] = then[0]
+            credits.append(f"Archive footage: {then[1]}")
+    if beats[0].get("used") == "news" and not beats[0].get("intro_still"):
         then_image = script.get("native_then_image")
         first = next((x for x in beats[1:-1] if x.get("still")), None)
         if then_image and os.path.exists(then_image):
@@ -682,31 +746,42 @@ def _tag(text, size=44):
     return img
 
 
+def _past_layer(label, date):
+    """Scan lines, the THEN tag and a camcorder date, on a clear canvas,
+    placed in the half of the past that is on screen (its top)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for y in range(0, H, 4):
+        d.line((0, y, W, y), fill=(0, 0, 0, 55))
+    # below the counter, which sits on the seam
+    layer.alpha_composite(_tag(label), (40, 150))
+    if date:
+        f = _font(52)
+        glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        x, y = W - 60 - int(f.getlength(date)), H // 2 - 110
+        ImageDraw.Draw(glow).text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        layer = Image.alpha_composite(layer, glow.filter(ImageFilter.GaussianBlur(3)))
+        d = ImageDraw.Draw(layer)
+        d.text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        d.text((60, H // 2 - 110), "▶ PLAY", font=f, fill=(255, 255, 255, 255))
+    return layer
+
+
+def _past_overlay(label, date, out):
+    """The layer alone, as a PNG to lay over past footage."""
+    _past_layer(label, date).save(out)
+    return out
+
+
 def _past_frame(src, label, date, out):
-    """The past as the bottom half shows it: desaturated, scan lines, the
-    THEN tag and a camcorder date in the half that is on screen (its top)."""
-    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+    """The past as the bottom half shows it: desaturated, with the layer."""
+    from PIL import Image, ImageEnhance
     img = Image.open(src).convert("RGB")
     img = _vertical_fit(img, W, H) if img.size != (W, H) else img
     img = ImageEnhance.Color(img).enhance(0.35)
     img = ImageEnhance.Contrast(img).enhance(1.12)
-    lines = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(lines)
-    for y in range(0, H, 4):
-        d.line((0, y, W, y), fill=(0, 0, 0, 55))
-    img = Image.alpha_composite(img.convert("RGBA"), lines)
-    # below the counter, which sits on the seam
-    img.alpha_composite(_tag(label), (40, 150))
-    if date:
-        f = _font(52)
-        glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        g = ImageDraw.Draw(glow)
-        x, y = W - 60 - int(f.getlength(date)), H // 2 - 110
-        g.text((x, y), date, font=f, fill=(255, 255, 255, 255))
-        img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(3)))
-        ImageDraw.Draw(img).text((x, y), date, font=f, fill=(255, 255, 255, 255))
-        ImageDraw.Draw(img).text((60, H // 2 - 110), "▶ PLAY", font=f,
-                                 fill=(255, 255, 255, 255))
+    img = Image.alpha_composite(img.convert("RGBA"), _past_layer(label, date))
     img.convert("RGB").save(out, quality=94)
     return out
 
@@ -766,8 +841,12 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
     now = dt.date.today().year
     date, then = story_date(script)
     then = then or script.get("era_year") or now
-    past = _past_frame(past_still, f"THEN · {then}", date,
-                       os.path.join(build_dir, "ns_past.jpg"))
+    past_is_video = past_still.endswith(".mp4")
+    if past_is_video:
+        past = _past_overlay(f"THEN · {then}", date, os.path.join(build_dir, "ns_past_overlay.png"))
+    else:
+        past = _past_frame(past_still, f"THEN · {then}", date,
+                           os.path.join(build_dir, "ns_past.jpg"))
     nowtag = os.path.join(build_dir, "ns_now.png")
     _tag(f"NOW · {now}").save(nowtag)
     pattern, n_frames, changes = _counter_frames(now, then, os.path.join(build_dir, "nixie"))
@@ -779,7 +858,10 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
     graph = (
         f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{BRIGHT}"
         f"fps={FPS},setsar=1[now];"
-        f"[1:v]scale={W}:{H},setsar=1[past];"
+        + (f"[1:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+           f"fps={FPS},hue=s=0.35,eq=contrast=1.12,setsar=1[pv];"
+           f"[pv][4:v]overlay=0:0[past];" if past_is_video else
+           f"[1:v]scale={W}:{H},setsar=1[past];") +
         f"[now][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a];"
         # the past slides in across the bottom half at TEAR, then up at the end
         f"[a][past]overlay=eval=frame:"
@@ -794,10 +876,12 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
         f"trim=end_frame={frames},format=yuv420p[v]")
     now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
               if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
-    subprocess.run(["ffmpeg", "-y", *now_in,
-                    "-loop", "1", "-framerate", str(FPS), "-i", past,
+    past_in = (["-stream_loop", "-1", "-i", past_still] if past_is_video
+               else ["-loop", "1", "-framerate", str(FPS), "-i", past])
+    subprocess.run(["ffmpeg", "-y", *now_in, *past_in,
                     "-loop", "1", "-i", nowtag,
                     "-framerate", str(FPS), "-i", pattern,
+                    *(["-loop", "1", "-i", past] if past_is_video else []),
                     "-filter_complex", graph, "-map", "[v]", "-an",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                     "-r", str(FPS), "-frames:v", str(frames), out],

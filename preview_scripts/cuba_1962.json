@@ -651,6 +651,7 @@
   }
  ],
  "trend": "US diplomatic engagement with Russia during Ukraine war",
- "now_query": "Putin Trump",
- "native_then_image": "preview_scripts/cuba_images/then.jpg"
+ "now_query": "Putin Alaska",
+ "native_then_image": "preview_scripts/cuba_images/then.jpg",
+ "then_query": "Cuban Crisis"
 }
