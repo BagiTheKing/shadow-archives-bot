@@ -163,7 +163,9 @@ def _photo(subject, era, path, person=False):
     got, crowded = [], []
     for cand in search_archives(subject):
         if len(got) >= 2:
-            break
+            if not _same_picture(got[0][0], got[1][0]):
+                break
+            os.remove(got.pop()[0])         # the same photo again: keep looking
         if not _era_appropriate(cand, era):
             continue
         # a person is that person or nobody: every part of the name in the
@@ -187,9 +189,25 @@ def _photo(subject, era, path, person=False):
         got[i] = (dest, credit)
     if not got:
         return None
-    if len(got) > 1:
+    if len(got) > 1 and not _same_picture(got[0][0], got[1][0]):
         _SECOND[got[0][0]] = got[1][0]
     return got[0]
+
+
+def _same_picture(a, b, bits=10):
+    """Whether two files are the same photograph (a copy, a crop, another
+    scan): their 8x8 difference hashes differ by fewer than `bits` bits. The
+    Cuba Short's "second" Khrushchev was the first one again (24 Oct)."""
+    from PIL import Image
+
+    def dhash(path):
+        im = Image.open(path).convert("L").resize((9, 8))
+        px = list(im.getdata())
+        return [px[r * 9 + c] > px[r * 9 + c + 1] for r in range(8) for c in range(8)]
+    try:
+        return sum(x != y for x, y in zip(dhash(a), dhash(b))) < bits
+    except Exception:
+        return True
 
 
 # the second photo found for a beat, keyed by its first (picture_for reads it)
@@ -321,6 +339,7 @@ def _fetch_first(cands, path, seconds):
     from archive_engine import fetch_commons_video, format_credit
     for c in cands:
         if fetch_commons_video(c, path, seconds=seconds + 0.5):
+            _NOW_USED.append(c["url"])
             print(f"🎞️  {c.get('title', '')[:70]!r}")
             return path, format_credit(c)
     return None
@@ -338,6 +357,20 @@ def now_footage(script, seconds, build_dir):
     cands = _video_candidates(queries, recent=dt.date.today().year)
     cands.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
     return _fetch_first(cands, os.path.join(build_dir, "ns_now.mp4"), seconds)
+
+
+_NOW_USED = []
+
+
+def now_second(script, seconds, build_dir):
+    """Another real clip of today's news, not the opening's."""
+    import datetime as dt
+    from longform_clips import _news_queries
+    queries = ([script["now_query"]] if script.get("now_query") else []) + \
+        _news_queries(script.get("title") or "")
+    cands = [c for c in _video_candidates(queries, recent=dt.date.today().year)
+             if c["url"] not in _NOW_USED]
+    return _fetch_first(cands, os.path.join(build_dir, "ns_now2.mp4"), seconds)
 
 
 def then_footage(script, seconds, build_dir):
@@ -610,6 +643,12 @@ def _make(script, build_dir):
     else:
         beats[0]["kind"], beats[0]["subject"] = "photo", (script.get("places") or [""])[0]
         beats[0]["prompt"] = body[0]["prompt"]
+    if beats[0].get("used") == "news":
+        # the past half moves too when the story's own years were filmed
+        then = then_footage(script, beats[0]["duration"] + 1.0, build_dir)
+        if then:
+            beats[0]["intro_still"] = then[0]
+            credits.append(f"Archive footage: {then[1]}")
     for k, b in enumerate(beats):
         if b.get("video") or b.get("still"):
             continue
@@ -617,9 +656,16 @@ def _make(script, build_dir):
             # the paradox lands back on TODAY: the opening's footage again,
             # so the twist about 1994 plays over 2026 (THEN / NOW closed);
             # else the story's strongest real picture
-            if beats[0].get("used") == "news":
-                b.update(video=beats[0].get("video"), still=beats[0].get("still"),
-                         used="news")
+            # the paradox goes back to TODAY on a different clip of it (the
+            # opening's own clip again read as a duplicate, 24 Oct); else
+            # the past footage full screen
+            second = now_second(script, b["duration"] + 1.5, build_dir)
+            if second:
+                b.update(video=second[0], used="news2")
+                credits.append(f"Closing footage: {second[1]}")
+                continue
+            if beats[0].get("intro_still", "").endswith(".mp4"):
+                b.update(video=beats[0]["intro_still"], used="then")
                 continue
             prev = [x for x in beats[1:-1] if x.get("used") in ("photo", "person", "footage")]
             if prev:
@@ -654,12 +700,6 @@ def _make(script, build_dir):
 
     # THEN / NOW: the past half is the first real (or painted) still of the
     # story, so the slide up lands on the picture the story starts with
-    if beats[0].get("used") == "news":
-        # the past half moves too when the story's own years were filmed
-        then = then_footage(script, beats[0]["duration"] + 1.0, build_dir)
-        if then:
-            beats[0]["intro_still"] = then[0]
-            credits.append(f"Archive footage: {then[1]}")
     if beats[0].get("used") == "news" and not beats[0].get("intro_still"):
         then_image = script.get("native_then_image")
         first = next((x for x in beats[1:-1] if x.get("still")), None)
@@ -839,53 +879,84 @@ def _ticks(changes, out):
     return out
 
 
+def _moving(src_label, w, h, out_label, seed, zoom=0.10):
+    """A clip (or still) brought to w x h and kept moving: a slow push-in
+    with a slight hand-held drift (owner, 24 Oct: "it should look like
+    something is happening")."""
+    return (f"[{src_label}]scale={int(w * 1.2)}:{int(h * 1.2)}:"
+            f"force_original_aspect_ratio=increase,"
+            f"crop={int(w * 1.2)}:{int(h * 1.2)},fps={FPS},"
+            f"zoompan=z='min(1+{zoom / (FPS * 4):.6f}*on,{1 + zoom:.3f})':"
+            f"x='iw/2-(iw/zoom/2)+5*sin(on/{6 + seed})':"
+            f"y='ih/2-(ih/zoom/2)+4*cos(on/{8 + seed})':d=1:s={w}x{h}:fps={FPS},"
+            f"setsar=1[{out_label}]")
+
+
 def intro_clip(news_video, past_still, seconds, script, build_dir, out):
-    """Beat 0 as THEN / NOW. Returns the tick track to mix at 0, or None."""
+    """Beat 0 as THEN / NOW. Returns the tick track to mix at 0, or None.
+
+    Placement (owner, 24 Oct): each half is its own crop of its picture,
+    centred on what matters (Trump and Putin in the top half, not their
+    feet; the newsreel's middle in the bottom half, not its sky), both
+    moving; once the counter has landed, the past slides up over the whole
+    screen and plays full frame."""
     import datetime as dt
     now = dt.date.today().year
     date, then = story_date(script)
     then = then or script.get("era_year") or now
+    half = H // 2
     past_is_video = past_still.endswith(".mp4")
-    if past_is_video:
-        past = _past_overlay(f"THEN · {then}", date, os.path.join(build_dir, "ns_past_overlay.png"))
-    else:
-        past = _past_frame(past_still, f"THEN · {then}", date,
-                           os.path.join(build_dir, "ns_past.jpg"))
+    layer_full = os.path.join(build_dir, "ns_past_full.png")
+    layer_half = os.path.join(build_dir, "ns_past_half.png")
+    _past_layer(f"THEN · {then}", date).save(layer_full)
+    _past_layer(f"THEN · {then}", date).crop((0, 0, W, half)).save(layer_half)
     nowtag = os.path.join(build_dir, "ns_now.png")
     _tag(f"NOW · {now}").save(nowtag)
     pattern, n_frames, changes = _counter_frames(now, then, os.path.join(build_dir, "nixie"))
     ticks = _ticks([TEAR + c for c in changes], os.path.join(build_dir, "ns_ticks.wav"))
-    slide_at = max(TEAR + ROLL + 0.3, seconds - SLIDE)
+    # the past takes the screen soon after the counter lands, not at the end
+    slide_at = min(TEAR + ROLL + 0.7, max(TEAR + ROLL + 0.3, seconds - SLIDE))
     frames = max(1, round(seconds * FPS))
     cw = _nixie(then).size
-    half = H // 2
-    graph = (
-        f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{BRIGHT}"
-        f"fps={FPS},setsar=1[now];"
-        + (f"[1:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-           f"fps={FPS},hue=s=0.35,eq=contrast=1.12,setsar=1[pv];"
-           f"[pv][4:v]overlay=0:0[past];" if past_is_video else
-           f"[1:v]scale={W}:{H},setsar=1[past];") +
-        f"[now][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a];"
-        # the past slides in across the bottom half at TEAR, then up at the end
-        f"[a][past]overlay=eval=frame:"
-        f"x='if(lt(t,{TEAR}),-{W},if(lt(t,{TEAR + 0.25}),-{W}+{W}*(t-{TEAR})/0.25,0))':"
-        f"y='if(lt(t,{slide_at:.3f}),{half},max(0,{half}-{half}*(t-{slide_at:.3f})/{SLIDE}))'[b];"
-        # the tear on the seam, while the halves hold
-        f"[b]drawbox=x=0:y={half - 4}:w={W}:h=8:color=0xFF9628@0.95:t=fill:"
-        f"enable='between(t,{TEAR},{slide_at:.3f})'[c];"
-        f"[3:v]setpts=PTS-STARTPTS+{TEAR}/TB[cnt];"
-        f"[c][cnt]overlay=x={(W - cw[0]) // 2}:y={half - cw[1] // 2}:eof_action=repeat:"
-        f"enable='between(t,{TEAR},{slide_at:.3f})',"
-        f"trim=end_frame={frames},format=yuv420p[v]")
+    grade = "hue=s=0.35,eq=contrast=1.12,"
+    graph = ";".join([
+        "[0:v]split=2[n0][n1]",
+        _moving("n0", W, H, "nf", 0),                      # NOW, full screen
+        _moving("n1", W, half, "nh", 1),                   # NOW, top half
+        "[nf]" + BRIGHT.rstrip(",") + "[nfb]",
+        "[nh]" + BRIGHT.rstrip(",") + "[nhb]",
+        "[1:v]split=2[p0][p1]",
+        _moving("p0", W, half, "ph0", 2),                  # THEN, bottom half
+        _moving("p1", W, H, "pf0", 3, zoom=0.08),          # THEN, full screen
+        f"[ph0]{grade}setsar=1[ph1]",
+        f"[pf0]{grade}setsar=1[pf1]",
+        "[ph1][5:v]overlay=0:0[ph]",
+        "[pf1][4:v]overlay=0:0[pf]",
+        # NOW full, then NOW top half from the tear
+        f"[nfb][nhb]overlay=0:0:enable='gte(t,{TEAR})'[a0]",
+        f"[a0][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a1]",
+        # THEN slides in across the bottom half
+        f"[a1][ph]overlay=eval=frame:y={half}:"
+        f"x='if(lt(t,{TEAR}),-{W},if(lt(t,{TEAR + 0.25}),-{W}+{W}*(t-{TEAR})/0.25,0))'[a2]",
+        f"[a2]drawbox=x=0:y={half - 4}:w={W}:h=8:color=0xFF9628@0.95:t=fill:"
+        f"enable='between(t,{TEAR},{slide_at:.3f})'[a3]",
+        f"[3:v]setpts=PTS-STARTPTS+{TEAR}/TB[cnt]",
+        f"[a3][cnt]overlay=x={(W - cw[0]) // 2}:y={half - cw[1] // 2}:eof_action=repeat:"
+        f"enable='between(t,{TEAR},{slide_at:.3f})'[a4]",
+        # then the past, full frame, slides up over everything and plays
+        f"[a4][pf]overlay=eval=frame:x=0:"
+        f"y='if(lt(t,{slide_at:.3f}),{H},max(0,{H}-{H}*(t-{slide_at:.3f})/{SLIDE}))',"
+        f"trim=end_frame={frames},format=yuv420p[v]",
+    ])
     now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
               if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
     past_in = (["-stream_loop", "-1", "-i", past_still] if past_is_video
-               else ["-loop", "1", "-framerate", str(FPS), "-i", past])
+               else ["-loop", "1", "-framerate", str(FPS), "-i", past_still])
     subprocess.run(["ffmpeg", "-y", *now_in, *past_in,
                     "-loop", "1", "-i", nowtag,
                     "-framerate", str(FPS), "-i", pattern,
-                    *(["-loop", "1", "-i", past] if past_is_video else []),
+                    "-loop", "1", "-i", layer_full,
+                    "-loop", "1", "-i", layer_half,
                     "-filter_complex", graph, "-map", "[v]", "-an",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                     "-r", str(FPS), "-frames:v", str(frames), out],
