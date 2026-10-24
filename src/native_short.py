@@ -306,7 +306,9 @@ def picture_for(beat, script, k, build_dir, seconds):
         if got:
             path, credit = got
             beat["video" if path.endswith(".mp4") else "still"] = path
-            if _SECOND.get(path):
+            # "single": the owner wants one picture, one movement (24 Oct:
+            # two scans of the same Khrushchev photo read as a glitch)
+            if _SECOND.get(path) and not beat.get("single"):
                 beat["still2"] = _SECOND[path]
             beat["credit"], beat["used"] = credit, kind
             print(f"🖼️  Beat {k} ({kind}): {beat['line'][:60]!r}")
