@@ -1,0 +1,46 @@
+{
+ "beats": [
+  {
+   "line": "US & Russia Negotiate Again. Almost nobody knows how this ended.",
+   "kind": "news",
+   "used": "news",
+   "subject": ""
+  },
+  {
+   "line": "American spy planes discovered Soviet nuclear missiles hidden on the island of Cuba.",
+   "kind": "map",
+   "used": "map",
+   "subject": "Cuba"
+  },
+  {
+   "line": "Soviet Premier Nikita Khrushchev secretly shipped the warheads to balance American weapons deployed near his border.",
+   "kind": "person",
+   "used": "person",
+   "subject": "Nikita Khrushchev 1962"
+  },
+  {
+   "line": "US President John F. Kennedy rejected an immediate military strike and ordered a naval quarantine instead.",
+   "kind": "person",
+   "used": "person",
+   "subject": "John F. Kennedy"
+  },
+  {
+   "line": "American warships blocked the Caribbean Sea while Soviet vessels steamed directly toward them.",
+   "kind": "footage",
+   "used": "given",
+   "subject": "Caribbean Sea blockade 1962"
+  },
+  {
+   "line": "The two superpowers stood face to face on the edge of total nuclear destruction.",
+   "kind": "art",
+   "used": "given",
+   "subject": ""
+  },
+  {
+   "line": "Kennedy secretly removed his missiles from Turkey, but Khrushchev suffered the humiliating public retreat that ended his political career.",
+   "kind": "art",
+   "used": "news2",
+   "subject": ""
+  }
+ ]
+}
