@@ -50,7 +50,9 @@ _JUNK = re.compile(r"\b(ceremony|change of command|decoration|award|visit|wwe|"
                    r"graduat|recruit|reenlist|5k|memorial run|feature|"
                    r"interview|podcast|hometown|lecture|talk|panel|seminar|"
                    r"symposium|presentation|discussion|speaker|book|history of|"
-                   r"remembrance|anniversary|commemorat|museum|exhibit)", re.I)
+                   r"remembrance|anniversary|commemorat|museum|exhibit|threat is real|"
+                   r"explained|explainer|animation|infographic|psa|trailer|"
+                   r"hype|promo|recap|highlights)", re.I)
 _STOP = {"the", "and", "with", "from", "into", "over", "against", "attack",
          "attacks", "launch", "launches", "war", "civil", "missile", "strike",
          "strikes", "forces"}

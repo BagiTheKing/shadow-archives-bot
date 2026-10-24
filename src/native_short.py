@@ -592,8 +592,12 @@ def _make(script, build_dir):
         b.update(audio_path=s["audio_path"], duration=s["duration"], words=s["words"])
 
     credits = []
-    news = (news_footage(script, beats[0]["duration"] + 0.5, build_dir)
-            or now_footage(script, beats[0]["duration"] + 0.5, build_dir))
+    # the story's own NOW search first when it has one (the Alaska summit),
+    # then strike footage, then any real footage of the news
+    seconds0 = beats[0]["duration"] + 0.5
+    news = ((now_footage(script, seconds0, build_dir) if script.get("now_query") else None)
+            or news_footage(script, seconds0, build_dir)
+            or now_footage(script, seconds0, build_dir))
     if not news:
         # no footage of today (diplomacy has no strike footage): a real
         # photo of today's news from the last two years still carries the
