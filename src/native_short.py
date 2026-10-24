@@ -335,13 +335,42 @@ def _video_candidates(queries, recent=None, era=None):
     return out
 
 
-def _fetch_first(cands, path, seconds):
+def _people_at(cand, want=1, probes=8):
+    """The first moment in a clip where at least `want` faces are on screen,
+    or None: raw B-roll opens on empty tarmac (the Alaska summit's red
+    carpet, nobody on it, 24 Oct). Frames are read straight from the source
+    at a few points, nothing downloaded whole."""
+    import tempfile
+    from archive_engine import HEADERS
+    dur = float(cand.get("duration") or 0)
+    if dur < 6:
+        return None
+    tmp = os.path.join(tempfile.gettempdir(), "ns_probe.jpg")
+    for i in range(probes):
+        t = dur * (0.08 + 0.84 * i / max(1, probes - 1))
+        try:
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error",
+                            "-user_agent", HEADERS["User-Agent"], "-ss", f"{t:.1f}",
+                            "-i", cand["url"], "-frames:v", "1", tmp],
+                           timeout=60, check=True, capture_output=True)
+        except Exception:
+            continue
+        if os.path.exists(tmp) and _faces_in(tmp) >= want:
+            return max(0.0, t - 0.5)
+    return None
+
+
+def _fetch_first(cands, path, seconds, people=0):
     from archive_engine import fetch_commons_video, format_credit
     for c in cands:
         if c["url"] in _NOW_USED:
             continue
-        if fetch_commons_video(c, path, seconds=seconds + 0.5) or \
-                fetch_commons_video(c, path, seconds=seconds + 0.5):
+        start = _people_at(c, people) if people else None
+        if people and start is None:
+            print(f"   ↩️  {c.get('title', '')[:60]!r}: no one on screen — skipped.")
+            continue
+        if fetch_commons_video(c, path, seconds=seconds + 0.5, start=start) or \
+                fetch_commons_video(c, path, seconds=seconds + 0.5, start=start):
             _NOW_USED.append(c["url"])
             print(f"🎞️  {c.get('title', '')[:70]!r}")
             return path, format_credit(c)
@@ -357,7 +386,7 @@ def now_footage(script, seconds, build_dir):
     queries = _now_queries(script)
     cands = _video_candidates(queries, recent=dt.date.today().year)
     cands.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
-    return _fetch_first(cands, os.path.join(build_dir, "ns_now.mp4"), seconds)
+    return _fetch_first(cands, os.path.join(build_dir, "ns_now.mp4"), seconds, people=1)
 
 
 _NOW_USED = []
@@ -382,7 +411,7 @@ def now_second(script, seconds, build_dir):
     from longform_clips import _news_queries
     cands = [c for c in _video_candidates(_now_queries(script), recent=dt.date.today().year)
              if c["url"] not in _NOW_USED]
-    return _fetch_first(cands, os.path.join(build_dir, "ns_now2.mp4"), seconds)
+    return _fetch_first(cands, os.path.join(build_dir, "ns_now2.mp4"), seconds, people=1)
 
 
 def then_footage(script, seconds, build_dir):
