@@ -377,12 +377,31 @@ def _fetch_first(cands, path, seconds, people=0):
     return None
 
 
+def _picked(script, key, path, seconds):
+    """A clip and moment chosen by eye from a contact sheet
+    (tools/footage_sheet.py): script[key] = {"url", "title", "start",
+    "credit"}."""
+    pick = script.get(key)
+    if not pick:
+        return None
+    from archive_engine import fetch_commons_video
+    cand = {"url": pick["url"], "title": pick.get("title", ""), "duration": 0}
+    if fetch_commons_video(cand, path, seconds=seconds + 0.5, start=float(pick["start"])):
+        _NOW_USED.append(pick["url"] + f"#{pick['start']}")
+        print(f"🎞️  {pick.get('title', '')[:60]!r} from {pick['start']}s (picked)")
+        return path, pick.get("credit") or pick.get("title", "")
+    return None
+
+
 def now_footage(script, seconds, build_dir):
     """Real footage of today's news even when nothing is being struck (the
     Alaska summit, a meeting, an arrival): the opening always moves (owner,
     24 Oct: "we always need to start with a video, a real video")."""
     import datetime as dt
     from longform_clips import _ACTION, _news_queries
+    got = _picked(script, "now_pick", os.path.join(build_dir, "ns_now.mp4"), seconds)
+    if got:
+        return got
     queries = _now_queries(script)
     cands = _video_candidates(queries, recent=dt.date.today().year)
     cands.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
@@ -408,6 +427,9 @@ def _now_queries(script):
 def now_second(script, seconds, build_dir):
     """Another real clip of today's news, not the opening's."""
     import datetime as dt
+    got = _picked(script, "now2_pick", os.path.join(build_dir, "ns_now2.mp4"), seconds)
+    if got:
+        return got
     from longform_clips import _news_queries
     cands = [c for c in _video_candidates(_now_queries(script), recent=dt.date.today().year)
              if c["url"] not in _NOW_USED]

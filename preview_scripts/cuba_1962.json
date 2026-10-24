@@ -653,5 +653,17 @@
  "trend": "US diplomatic engagement with Russia during Ukraine war",
  "now_query": "Putin Alaska",
  "native_then_image": "preview_scripts/cuba_images/then.jpg",
- "then_query": "Cuban Crisis"
+ "then_query": "Cuban Crisis",
+ "now_pick": {
+  "url": "https://d34w7g4gy10iej.cloudfront.net/video/2508/DOD_111260887/DOD_111260887.mp4",
+  "title": "Trump, Putin meet for Alaska 2025 Summit B-Roll",
+  "start": 44,
+  "credit": "Trump, Putin meet for Alaska 2025 Summit B-Roll — DVIDS — Public domain"
+ },
+ "now2_pick": {
+  "url": "https://d34w7g4gy10iej.cloudfront.net/video/2508/DOD_111260887/DOD_111260887.mp4",
+  "title": "Trump, Putin meet for Alaska 2025 Summit B-Roll",
+  "start": 95,
+  "credit": "Trump, Putin meet for Alaska 2025 Summit B-Roll — DVIDS — Public domain"
+ }
 }
