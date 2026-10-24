@@ -338,7 +338,10 @@ def _video_candidates(queries, recent=None, era=None):
 def _fetch_first(cands, path, seconds):
     from archive_engine import fetch_commons_video, format_credit
     for c in cands:
-        if fetch_commons_video(c, path, seconds=seconds + 0.5):
+        if c["url"] in _NOW_USED:
+            continue
+        if fetch_commons_video(c, path, seconds=seconds + 0.5) or \
+                fetch_commons_video(c, path, seconds=seconds + 0.5):
             _NOW_USED.append(c["url"])
             print(f"🎞️  {c.get('title', '')[:70]!r}")
             return path, format_credit(c)
@@ -351,9 +354,7 @@ def now_footage(script, seconds, build_dir):
     24 Oct: "we always need to start with a video, a real video")."""
     import datetime as dt
     from longform_clips import _ACTION, _news_queries
-    names = re.findall(r"\b[A-Z][a-zA-Z]{2,}\b", f"{script.get('trend') or ''}")
-    queries = ([script["now_query"]] if script.get("now_query") else []) + \
-        _news_queries(script.get("title") or "") + [" ".join(names[:2])]
+    queries = _now_queries(script)
     cands = _video_candidates(queries, recent=dt.date.today().year)
     cands.sort(key=lambda c: not _ACTION.search(c.get("title", "")))
     return _fetch_first(cands, os.path.join(build_dir, "ns_now.mp4"), seconds)
@@ -362,13 +363,24 @@ def now_footage(script, seconds, build_dir):
 _NOW_USED = []
 
 
+def _now_queries(script):
+    """Searches for footage of today's news that name at least two things
+    (Putin + Alaska): a one-word search ("Russia") brought "Police of Russia
+    2025" and "Easter in Russia" into the Cuba Short (24 Oct). The story's
+    own NOW search alone when it has one."""
+    from longform_clips import _news_queries
+    if script.get("now_query"):
+        return [script["now_query"]]
+    names = re.findall(r"\b[A-Z][a-zA-Z]{2,}\b", f"{script.get('trend') or ''}")
+    queries = _news_queries(script.get("title") or "") + [" ".join(names[:2])]
+    return [q for q in queries if len(re.findall(r"[A-Za-z]{3,}", q)) >= 2]
+
+
 def now_second(script, seconds, build_dir):
     """Another real clip of today's news, not the opening's."""
     import datetime as dt
     from longform_clips import _news_queries
-    queries = ([script["now_query"]] if script.get("now_query") else []) + \
-        _news_queries(script.get("title") or "")
-    cands = [c for c in _video_candidates(queries, recent=dt.date.today().year)
+    cands = [c for c in _video_candidates(_now_queries(script), recent=dt.date.today().year)
              if c["url"] not in _NOW_USED]
     return _fetch_first(cands, os.path.join(build_dir, "ns_now2.mp4"), seconds)
 
