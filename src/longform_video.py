@@ -45,6 +45,7 @@ from music_attribution import attribution_for
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
+OPENING_SECONDS = 4.5    # the THEN / NOW opening, before the scene's own pictures
 PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
 # The Far Cry 6 style cold-open card: black screen, an original line (or a
@@ -1488,23 +1489,23 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
         if idx == 0 and opening:
+            # the first OPENING_SECONDS only: then the scene's own pictures
+            # (the first render looped one newsreel street for 9 seconds)
             try:
                 from native_short import intro_clip_wide
                 then = opening.get("then")
                 past = then[0] if then else (s.get("video_path") or s["image_path"])
                 out = os.path.join(build_dir, "lf_opening.mp4")
-                ticks = intro_clip_wide(opening["now"][0], past, s["duration"] + XFADE,
-                                        opening["script"], build_dir, out)
-                s["video_path"], s["_is_map"], s["_ticks"] = out, True, ticks
-                s.pop("anim_path", None)
+                s["_ticks"] = intro_clip_wide(opening["now"][0], past,
+                                              min(OPENING_SECONDS, s["duration"] + XFADE),
+                                              opening["script"], build_dir, out)
+                s["_opening"] = out
                 s["credit"] = [c for c in (opening["now"][1], then[1] if then else "") if c] \
-                    or s.get("credit") or []
-                print(f"🕰️  THEN / NOW opening over the first {s['duration']:.1f}s.")
+                    + list(s.get("credit") or [])
+                print(f"🕰️  THEN / NOW opening over the first {OPENING_SECONDS:.1f}s.")
             except Exception as e:
                 print(f"⚠️ THEN / NOW opening failed ({type(e).__name__}: {e}) — plain opening.")
-        if s.get("_ticks"):
-            pass                        # the opening is this scene's picture
-        elif s.get("map"):
+        if s.get("map"):
             # A map beat (up to two per video) replaces this scene's pictures
             # for its whole line; any failure leaves the photos as they were.
             from map_engine import render_map_scene
@@ -1535,6 +1536,19 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             else f"{shots} shot(s)"
         print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
         _scene_clip(s, s["_clip"], idx % 8)
+        if s.get("_opening"):
+            # the opening laid over the start of the scene's own clip
+            tmp = s["_clip"] + ".open.mp4"
+            try:
+                _run(["ffmpeg", "-y", "-i", s["_clip"], "-i", s["_opening"],
+                      "-filter_complex", "[1:v]setpts=PTS-STARTPTS[o];"
+                      "[0:v][o]overlay=0:0:eof_action=pass[v]",
+                      "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "veryfast",
+                      "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "copy", tmp])
+                os.replace(tmp, s["_clip"])
+            except Exception as e:
+                s.pop("_ticks", None)
+                print(f"⚠️ THEN / NOW opening not laid ({type(e).__name__}: {e}).")
 
     # ---- Phase 2: one reel per chapter, crossfaded inside ----
     chapters, current, current_idx = [], [], None

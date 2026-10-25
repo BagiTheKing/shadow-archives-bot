@@ -386,7 +386,8 @@ def search_archives(query: str, limit: int = 10) -> list:
         results += search_dvids(query, "image", 6)
         if len(results) < 3:
             results += search_openverse(query, 8)
-    return results
+    from media_sources import OFF_TOPIC
+    return [c for c in results if not OFF_TOPIC.search(c.get("title") or "")]
 
 
 def format_credit(candidate: dict) -> str:
