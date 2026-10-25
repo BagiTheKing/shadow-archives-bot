@@ -992,7 +992,8 @@ def build_score(acts, total: float, out: str):
 # Held low on purpose. These are punctuation, not effects — the moment a viewer
 # notices the sound design as sound design, it reads as a template channel.
 IMPACT_GAIN = 0.28
-WHOOSH_GAIN = 0.3           # into a cast card's freeze
+WHOOSH_GAIN = 0.3           # into a cast card's freeze (if its own sound fails)
+CAST_SFX_GAIN = 0.8         # the cast card's own sound, native_cast.card_sfx
 STAMPS_ENABLED = False
 ROLL_GAIN = 0.05            # date ticker: a tick per day rolled past
 DATEHIT_GAIN = 0.4          # date ticker: landing on the spoken date
@@ -1123,6 +1124,14 @@ def _sfx_sources(cues):
                 f"aevalsrc='(sin(2*PI*70*t)*0.6+(random(0)*2-1)*exp(-80*t)*0.3)*exp(-9*t)'"
                 f":s=44100:d=0.6,volume={DATEHIT_GAIN},"
                 f"aformat=channel_layouts=stereo,adelay={delay}|{delay}[{label}]")
+            labels.append(label)
+            continue
+        if kind == "file":
+            # a sound rendered ahead (a cast card's, native_cast.card_sfx)
+            src = os.path.abspath(cue[2]).replace("\\", "/").replace(":", "\\:")
+            frags.append(
+                f"amovie='{src}',volume={CAST_SFX_GAIN},aformat=sample_rates=44100:"
+                f"channel_layouts=stereo,adelay={delay}|{delay}[{label}]")
             labels.append(label)
             continue
         if kind == "whoosh":
@@ -1451,7 +1460,7 @@ def _build_black_clip(duration: float, build_dir: str) -> str:
 
 
 def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
-                            verdict_epigraph=None):
+                            verdict_epigraph=None, opening=None):
     """Renders the finished video. Returns (path, total_seconds, chapter_marks,
     music_attribution) where chapter_marks is [(heading, start_seconds), ...]
     for the description, and music_attribution is the required credit text
@@ -1465,7 +1474,12 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     is inserted the same way immediately before the LAST chapter (a sad,
     weary pattern-interrupt ahead of the verdict), scored as that closing
     chapter's opening. Needs at least 3 chapters so the two insertion
-    points cannot collide."""
+    points cannot collide.
+
+    opening, when given ({"now": (path, credit), "then": (path, credit) or
+    None, "script": the script}), turns the first scene into the native
+    Short's THEN / NOW opening: today's news, the tear, the year counter
+    rolling back, the past sliding up (native_short.intro_clip_wide)."""
     print("🎬 Long-form video engine starting...")
     usable = [s for s in scenes if s.get("image_path") and s.get("audio_path")]
 
@@ -1473,7 +1487,24 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     map_targets = []        # where each rendered map landed, see map_engine
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
-        if s.get("map"):
+        if idx == 0 and opening:
+            try:
+                from native_short import intro_clip_wide
+                then = opening.get("then")
+                past = then[0] if then else (s.get("video_path") or s["image_path"])
+                out = os.path.join(build_dir, "lf_opening.mp4")
+                ticks = intro_clip_wide(opening["now"][0], past, s["duration"] + XFADE,
+                                        opening["script"], build_dir, out)
+                s["video_path"], s["_is_map"], s["_ticks"] = out, True, ticks
+                s.pop("anim_path", None)
+                s["credit"] = [c for c in (opening["now"][1], then[1] if then else "") if c] \
+                    or s.get("credit") or []
+                print(f"🕰️  THEN / NOW opening over the first {s['duration']:.1f}s.")
+            except Exception as e:
+                print(f"⚠️ THEN / NOW opening failed ({type(e).__name__}: {e}) — plain opening.")
+        if s.get("_ticks"):
+            pass                        # the opening is this scene's picture
+        elif s.get("map"):
             # A map beat (up to two per video) replaces this scene's pictures
             # for its whole line; any failure leaves the photos as they were.
             from map_engine import render_map_scene
@@ -1594,11 +1625,22 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             if front:
                 stamp_cues.append((cursor + o + 0.5, front))
                 rhythm_cues.append(("keys", cursor + o + 0.5, len(front) * TYPE_RATE))
-            # a cast card's freeze: a short whoosh into it, a low hit on it
+            if g.get("_ticks"):
+                rhythm_cues.append(("file", cursor + o, g["_ticks"]))
+            # a cast card's freeze: the native Short's card sound (owner,
+            # 25 Oct: whoosh in, flash crack, a boom on the name, the stamp)
             if g.get("_cast_freeze") is not None:
                 hit_at = cursor + o + g["_cast_freeze"]
-                rhythm_cues.append(("whoosh", max(0.0, hit_at - 0.3)))
-                rhythm_cues.append(("impact", hit_at))
+                try:
+                    from native_cast import card_sfx
+                    lead = min(0.6, hit_at)
+                    wav = card_sfx(os.path.join(build_dir, f"lf_cast_sfx_{len(rhythm_cues):03d}.wav"),
+                                   lead, lead + 2.8, slam_after=0.2, stamp_after=0.45)
+                    rhythm_cues.append(("file", hit_at - lead, wav))
+                except Exception as e:
+                    print(f"   ↩️  Cast card sound failed ({type(e).__name__}: {e}).")
+                    rhythm_cues.append(("whoosh", max(0.0, hit_at - 0.3)))
+                    rhythm_cues.append(("impact", hit_at))
 
         # A chapter's punch phrase, flashed over whatever frame is on screen
         # at the exact moment it is spoken. The phrase is attached to the

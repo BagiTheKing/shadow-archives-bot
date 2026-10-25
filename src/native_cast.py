@@ -310,9 +310,10 @@ def sfx_path(card_mp4):
 SFX_GAIN = 1.1
 
 
-def card_sfx(out_wav, tf, duration):
-    """The card's sound, `duration` long, with the freeze at tf."""
-    slam, stamp = tf + 0.16, tf + 0.42
+def card_sfx(out_wav, tf, duration, slam_after=0.16, stamp_after=0.42):
+    """The card's sound, `duration` long, with the freeze at tf (the long
+    video's 16:9 card slams its name at +0.2 and stamps at +0.45)."""
+    slam, stamp = tf + slam_after, tf + stamp_after
     whoosh = max(0.0, tf - 0.5)
     layers = [
         # whoosh: pink noise swelling into the freeze, opening up as it comes

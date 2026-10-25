@@ -224,58 +224,13 @@ def _same_picture(a, b, bits=10):
 _SECOND = {}
 
 
-def _levels(path):
-    """(black, white): the 5th and 95th luma percentiles over three frames of
-    a clip. The Cuba Short's 1962 newsreel had no blacks at all (black at
-    ~110 of 255, where good footage sits under 35) and read as a grey wash
-    exactly where the viewers left (0:03-0:08, 25 Oct)."""
-    import numpy as np
-    from PIL import Image
-    lo, hi = [], []
-    for at in ("0.4", "1.5", "2.6"):
-        png = path + ".lv.png"
-        try:
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", at, "-i", path,
-                            "-frames:v", "1", "-vf", "scale=270:-2", png], check=True)
-            a = np.asarray(Image.open(png).convert("L"), float)
-            p5, p95 = np.percentile(a, [5, 95])
-            lo.append(p5)
-            hi.append(p95)
-        except Exception:
-            continue
-        finally:
-            if os.path.exists(png):
-                os.remove(png)
-    if not lo:
-        return 0.0, 255.0
-    return sorted(lo)[len(lo) // 2], sorted(hi)[len(hi) // 2]
-
-
-PALE, DARK = 70, 60          # black above this is a wash; white below this is murk
-
-
-def _restore(path, levels):
-    """Stretches a washed-out clip back to real blacks and whites, in place."""
-    lo, hi = levels
-    if lo <= 30 and hi >= 200:
-        return
-    lo, hi = min(lo, 160) / 255, max(hi, lo + 60) / 255
-    tmp = path + ".lv.mp4"
-    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-vf",
-                        f"colorlevels=rimin={lo:.3f}:gimin={lo:.3f}:bimin={lo:.3f}:"
-                        f"rimax={hi:.3f}:gimax={hi:.3f}:bimax={hi:.3f}",
-                        "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-                        "-pix_fmt", "yuv420p", tmp])
-    if r.returncode == 0:
-        os.replace(tmp, path)
-
-
 def _fetch_lively(cands, path, seconds, start_for=None):
-    """The first candidate clip that is neither a grey wash nor murk, with
-    its levels made whole; a washed-out one only when nothing else came,
-    and then restored. (path, cand) or None. start_for(cand) gives the cut's
+    """The first candidate clip that is neither a grey wash nor murk; a
+    washed-out one (its blacks restored on fetch, footage_levels) only when
+    nothing else came. (path, cand) or None. start_for(cand) gives the cut's
     start, or False to skip the candidate."""
     from archive_engine import fetch_commons_video
+    from footage_levels import DARK, PALE
     spare = None
     for c in cands:
         start = start_for(c) if start_for else None
@@ -283,22 +238,21 @@ def _fetch_lively(cands, path, seconds, start_for=None):
             continue
         if not fetch_commons_video(c, path, seconds=seconds + 0.5, start=start):
             continue
-        lv = _levels(path)
+        # the clip's levels before fetch_commons_video restored them
+        lv = c.get("_levels") or (0.0, 255.0)
         if lv[1] < DARK:
             print(f"   ↩️  {c.get('title', '')[:60]!r}: too dark — skipped.")
             continue
         if lv[0] > PALE:
             print(f"   ↩️  {c.get('title', '')[:60]!r}: washed out (black at {lv[0]:.0f}).")
             if spare is None:
-                spare = (c, lv)
+                spare = c
                 os.replace(path, path + ".spare.mp4")
             continue
-        _restore(path, lv)
         return path, c
     if spare:
         os.replace(path + ".spare.mp4", path)
-        _restore(path, spare[1])
-        return path, spare[0]
+        return path, spare
     return None
 
 
@@ -1055,9 +1009,13 @@ def _past_frame(src, label, date, out):
     return out
 
 
-def _nixie(year, size=150):
+NIXIE = 150                       # tube digit size; smaller on the wide opening
+
+
+def _nixie(year, size=None):
     """Four glowing tubes reading `year`."""
     from PIL import Image, ImageDraw, ImageFilter
+    size = size or NIXIE
     f = _font(size)
     tube_w, tube_h, gap = int(size * 0.78), int(size * 1.25), 14
     w, h = 4 * tube_w + 3 * gap + 40, tube_h + 40
@@ -1108,9 +1066,12 @@ def _moving(src_label, w, h, out_label, seed, zoom=0.10):
     """A clip (or still) brought to w x h and kept moving: a slow push-in
     with a slight hand-held drift (owner, 24 Oct: "it should look like
     something is happening")."""
+    # cropped a little above the middle: faces sit in a frame's upper part,
+    # and a wide strip of a 16:9 clip (the long video's halves) cut from
+    # its exact middle showed the leaders from the chest down
     return (f"[{src_label}]scale={int(w * 1.2)}:{int(h * 1.2)}:"
             f"force_original_aspect_ratio=increase,"
-            f"crop={int(w * 1.2)}:{int(h * 1.2)},fps={FPS},"
+            f"crop={int(w * 1.2)}:{int(h * 1.2)}:(iw-ow)/2:(ih-oh)*0.4,fps={FPS},"
             f"zoompan=z='min(1+{zoom / (FPS * 4):.6f}*on,{1 + zoom:.3f})':"
             f"x='iw/2-(iw/zoom/2)+5*sin(on/{6 + seed})':"
             f"y='ih/2-(ih/zoom/2)+4*cos(on/{8 + seed})':d=1:s={w}x{h}:fps={FPS},"
@@ -1187,3 +1148,37 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
                     "-r", str(FPS), "-frames:v", str(frames), out],
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
     return ticks
+
+
+def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
+    """The same THEN / NOW opening at 1920x1080, for the long video (owner,
+    25 Oct: "transfer the introduction ... to the long form"): the halves
+    are wide strips, the counter on the seam between them."""
+    global W, H, NIXIE
+    old = (W, H, NIXIE)
+    W, H, NIXIE = 1920, 1080, 110
+    try:
+        return intro_clip(news_video, past, seconds, script, build_dir, out)
+    finally:
+        W, H, NIXIE = old
+
+
+def opening_media(script, seconds, build_dir):
+    """{"now": (path, credit), "then": (path, credit) or None} for the long
+    video's THEN / NOW opening, or None when today's news has no real
+    footage or photo. Only for a story the news led to (the timely lane):
+    an encore has no NOW."""
+    if script.get("lane") != "timely":
+        return None
+    from longform_clips import news_footage
+    os.makedirs(build_dir, exist_ok=True)
+    _NOW_USED.clear()            # the Short's clips may open the long video too
+    now = ((now_footage(script, seconds, build_dir) if script.get("now_query") else None)
+           or news_footage(script, seconds, build_dir)
+           or now_footage(script, seconds, build_dir)
+           or now_photo(script, build_dir))
+    if not now:
+        return None
+    then = then_footage(script, seconds + 1.0, build_dir)
+    return {"now": now, "then": then}
+

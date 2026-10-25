@@ -293,9 +293,10 @@ jobs:
           # the teaser and the main event, each linking back to the full
           # video. Same privacy as the video itself. 0 turns them off.
           LONGFORM_CLIPS: '0'
-          # Shorts paused (owner, 22 Oct): no native Short and no clips until
-          # the Houthi Short's 48-hour numbers are reviewed
-          NATIVE_SHORT: '0'
+          # Shorts paused (owner, 22 Oct): no native Short and no clips,
+          # except on a dry run, which makes the Short with the video so
+          # both can be reviewed together (kept in the render artifact)
+          NATIVE_SHORT: ${{ inputs.skip_upload && '1' || '0' }}
           TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
           STORY_TOPIC: ${{ inputs.story_topic }}
           STORY_STAGE: ${{ inputs.story_stage || 'full' }}
@@ -326,6 +327,8 @@ jobs:
             build/thumbnail.jpg
             build/thumbnails/
             build/captions.srt
+            build/native/native_short.mp4
+            build/native/native_short.json
           if-no-files-found: ignore
           compression-level: 0
           retention-days: 4
