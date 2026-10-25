@@ -20,3 +20,6 @@ venv/
 # Environment / secrets
 .env
 previews/
+
+# Local copies of rendered previews (they live on the preview-media branch)
+preview/
