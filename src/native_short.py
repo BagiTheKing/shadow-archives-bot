@@ -199,9 +199,30 @@ def _photo(subject, era, path, person=False):
         got[i] = (dest, credit)
     if not got:
         return None
-    if len(got) > 1 and not _same_picture(got[0][0], got[1][0]):
+    if len(got) > 1 and not _same_picture(got[0][0], got[1][0]) and \
+            (not person or _same_face(got[0][0], got[1][0])):
         _SECOND[got[0][0]] = got[1][0]
     return got[0]
+
+
+def _same_face(a, b):
+    """Whether the largest faces in two photos are the same person (SFace,
+    cast_engine.MATCH). A photo whose title names Nasser showed a stranger
+    with a camera as Nasser's second picture (25 Oct). Without the face
+    models, or without a face, the second photo is not used."""
+    try:
+        import cv2
+        import cast_engine as ce
+        if not ce.faces_available():
+            return False
+        ra = ce.face_reference(a)
+        img = cv2.imread(b)
+        faces = ce._faces(img) if img is not None else []
+        if ra is None or not faces:
+            return False
+        return ce._similarity(ra, ce._embed(img, faces[0])) >= ce.MATCH
+    except Exception:
+        return False
 
 
 def _same_picture(a, b, bits=10):
@@ -842,10 +863,9 @@ def _make(script, build_dir):
             if beats[0].get("intro_still", "").endswith(".mp4"):
                 b.update(video=beats[0]["intro_still"], used="then")
                 continue
-            prev = [x for x in beats[1:-1] if x.get("used") in ("photo", "person", "footage")]
-            if prev:
-                b.update(still=prev[-1].get("still"), video=prev[-1].get("video"))
-                continue
+            # else a picture of its own (its painting prompt): never an
+            # earlier beat again (the Six-Day War Short ended on King
+            # Hussein's card a second time, 25 Oct)
         if not picture_for(b, script, k, build_dir, b["duration"] + 1.5):
             # Nothing found or generated (the image quota spent, 21 Oct):
             # the story's main place on a map, else the last real picture
