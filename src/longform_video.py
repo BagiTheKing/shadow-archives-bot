@@ -45,7 +45,7 @@ from music_attribution import attribution_for
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
-OPENING_SECONDS = 4.5    # the THEN / NOW opening, before the scene's own pictures
+OPENING_SECONDS = 5.5    # the THEN / NOW opening (today on screen 3 s), then the scene's own pictures
 PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
 # The Far Cry 6 style cold-open card: black screen, an original line (or a
@@ -1489,7 +1489,7 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
     for idx, s in enumerate(usable):
         s["_clip"] = os.path.join(build_dir, f"lf_clip_{idx:03d}.mp4")
         if idx == 0 and opening:
-            # the first OPENING_SECONDS only: then the scene's own pictures
+            # the first OPENING_SECONDS only, then the scene's own pictures
             # (the first render looped one newsreel street for 9 seconds)
             try:
                 from native_short import intro_clip_wide

@@ -1150,17 +1150,106 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
     return ticks
 
 
+# The long video's opening is split left and right (owner, 25 Oct: top and
+# bottom strips of a 16:9 frame showed nothing): today full screen until
+# TEAR_WIDE, then today on the left and the past sliding in on the right
+# with the counter rolling on the seam, both held until NOW_WIDE (today on
+# screen 3 seconds), then the past sliding over the whole frame.
+TEAR_WIDE, NOW_WIDE = 1.0, 3.0
+
+
+def _past_layer_wide(label, date, w, h):
+    """Scan lines, the THEN tag, ▶ PLAY and the camcorder date on a w x h
+    canvas (the right half, or the whole frame)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for y in range(0, h, 4):
+        d.line((0, y, w, y), fill=(0, 0, 0, 55))
+    layer.alpha_composite(_tag(label), (40, 40))
+    if date:
+        f = _font(44)
+        x, y = w - 50 - int(f.getlength(date)), h - 110
+        glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ImageDraw.Draw(glow).text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        layer = Image.alpha_composite(layer, glow.filter(ImageFilter.GaussianBlur(3)))
+        d = ImageDraw.Draw(layer)
+        d.text((x, y), date, font=f, fill=(255, 255, 255, 255))
+        d.text((50, y), "▶ PLAY", font=f, fill=(255, 255, 255, 255))
+    return layer
+
+
 def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
-    """The same THEN / NOW opening at 1920x1080, for the long video (owner,
-    25 Oct: "transfer the introduction ... to the long form"): the halves
-    are wide strips, the counter on the seam between them."""
-    global W, H, NIXIE
-    old = (W, H, NIXIE)
-    W, H, NIXIE = 1920, 1080, 110
+    """THEN / NOW at 1920x1080, split left (today) and right (the past).
+    Returns the counter's tick track, to mix from the clip's start."""
+    import datetime as dt
+    global NIXIE
+    w, h, half = 1920, 1080, 960
+    now = dt.date.today().year
+    date, then = story_date(script)
+    then = then or script.get("era_year") or now
+    lay_full = os.path.join(build_dir, "lf_past_full.png")
+    lay_half = os.path.join(build_dir, "lf_past_half.png")
+    _past_layer_wide(f"THEN · {then}", date, w, h).save(lay_full)
+    _past_layer_wide(f"THEN · {then}", date, half, h).save(lay_half)
+    nowtag = os.path.join(build_dir, "lf_now.png")
+    _tag(f"NOW · {now}").save(nowtag)
+    old = NIXIE
+    NIXIE = 110
     try:
-        return intro_clip(news_video, past, seconds, script, build_dir, out)
+        pattern, _, changes = _counter_frames(now, then, os.path.join(build_dir, "lf_nixie"))
+        cw = _nixie(then).size
     finally:
-        W, H, NIXIE = old
+        NIXIE = old
+    ticks = _ticks([TEAR_WIDE + c for c in changes], os.path.join(build_dir, "lf_ticks.wav"))
+    slide_at = min(NOW_WIDE, max(TEAR_WIDE + ROLL + 0.3, seconds - SLIDE))
+    frames = max(1, round(seconds * FPS))
+    grade = "hue=s=0.35,eq=contrast=1.12,"
+    graph = ";".join([
+        "[0:v]split=2[n0][n1]",
+        _moving("n0", w, h, "nf", 0),                       # today, full frame
+        _moving("n1", half, h, "nh", 1),                    # today, left half
+        "[nf]" + BRIGHT.rstrip(",") + "[nfb]",
+        "[nh]" + BRIGHT.rstrip(",") + "[nhb]",
+        "[1:v]split=2[p0][p1]",
+        _moving("p0", half, h, "ph0", 2),                   # the past, right half
+        _moving("p1", w, h, "pf0", 3, zoom=0.08),           # the past, full frame
+        f"[ph0]{grade}setsar=1[ph1]",
+        f"[pf0]{grade}setsar=1[pf1]",
+        "[ph1][5:v]overlay=0:0[ph]",
+        "[pf1][4:v]overlay=0:0[pf]",
+        # today full, then today on the left from the tear
+        f"[nfb][nhb]overlay=0:0:enable='gte(t,{TEAR_WIDE})'[a0]",
+        f"[a0][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a1]",
+        # the past slides in from the right into the right half
+        f"[a1][ph]overlay=eval=frame:y=0:"
+        f"x='if(lt(t,{TEAR_WIDE}),{w},if(lt(t,{TEAR_WIDE + 0.25}),"
+        f"{w}-{half}*(t-{TEAR_WIDE})/0.25,{half}))'[a2]",
+        f"[a2]drawbox=x={half - 4}:y=0:w=8:h={h}:color=0xFF9628@0.95:t=fill:"
+        f"enable='between(t,{TEAR_WIDE},{slide_at:.3f})'[a3]",
+        f"[3:v]setpts=PTS-STARTPTS+{TEAR_WIDE}/TB[cnt]",
+        # the counter on the seam, in the lower third, clear of the faces
+        f"[a3][cnt]overlay=x={(w - cw[0]) // 2}:y={int(h * 0.70) - cw[1] // 2}:"
+        f"eof_action=repeat:enable='between(t,{TEAR_WIDE},{slide_at:.3f})'[a4]",
+        # then the past slides over the whole frame and plays
+        f"[a4][pf]overlay=eval=frame:y=0:"
+        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE}))',"
+        f"trim=end_frame={frames},format=yuv420p[v]",
+    ])
+    now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
+              if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
+    past_in = (["-stream_loop", "-1", "-i", past] if past.endswith(".mp4")
+               else ["-loop", "1", "-framerate", str(FPS), "-i", past])
+    subprocess.run(["ffmpeg", "-y", *now_in, *past_in,
+                    "-loop", "1", "-i", nowtag,
+                    "-framerate", str(FPS), "-i", pattern,
+                    "-loop", "1", "-i", lay_full,
+                    "-loop", "1", "-i", lay_half,
+                    "-filter_complex", graph, "-map", "[v]", "-an",
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+                    "-r", str(FPS), "-frames:v", str(frames), out],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
+    return ticks
 
 
 def opening_media(script, seconds, build_dir):
