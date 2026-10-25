@@ -187,6 +187,7 @@ def render(name, role, src, out_mp4, duration, freeze_at, lead=None, seed=1):
     """src: the photo (PIL) or, with lead, the footage's freeze frame;
     lead: the footage frames before it, played until freeze_at."""
     plain, frozen_bg, person, outline, glow, centre, geo = _layers(src)
+    full_photo = ImageOps.fit(src.convert("RGB"), (W, H), Image.LANCZOS, centering=(0.5, 0.35))
     lines, lines_off = _speed_lines(centre, seed)
     slash = _slash()
     stamp = ce._stamp_tile(ce.short_role(role, 22)) if role else None
@@ -215,8 +216,10 @@ def render(name, role, src, out_mp4, duration, freeze_at, lead=None, seed=1):
                     j = min(len(lead) - 1, int(round((t / tf) * (len(lead) - 1))))
                     base = _lead_frame(lead[j], geo)
                 else:
-                    # the photo rushes in towards the freeze
-                    base = _zoom(plain, 1.0 + 0.10 * (1 - t / tf) ** 2, centre)
+                    # the photo full screen, rushing in until the freeze
+                    # snaps it into the card (a small framed photo in the
+                    # dark read as dead air, 25 Oct)
+                    base = _zoom(full_photo, 1.0 + 0.12 * (t / tf) ** 2, (W / 2, H * 0.4))
                 img = base.convert("RGBA")
             else:
                 img = Image.blend(plain, frozen_bg, k).convert("RGBA")
@@ -278,7 +281,7 @@ def render(name, role, src, out_mp4, duration, freeze_at, lead=None, seed=1):
             frame.save(os.path.join(work, f"f{fi:04d}.jpg"), quality=90)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS),
                         "-i", os.path.join(work, "f%04d.jpg"),
-                        "-vf", "noise=alls=7:allf=t,format=yuv420p",
+                        "-vf", "format=yuv420p",
                         "-r", str(FPS), "-c:v", "libx264", "-preset", "medium",
                         "-crf", "19", "-frames:v", str(frames), out_mp4], check=True)
     finally:

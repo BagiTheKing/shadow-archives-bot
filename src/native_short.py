@@ -19,7 +19,7 @@ What it is, from what the clip previews taught (20-21 Oct):
   the danger on real footage, no map before 0:10, washed-out archive clips
   passed over (or their blacks restored), a person introduced by a
   fighting-game card (native_cast), every still landing with an impact zoom
-  and drifting under grain;
+  and drifting;
 - a dip to black, then the story's paradox in the voice alone, and the
   signature line heard, never written.
 
@@ -592,13 +592,14 @@ def _alive(seconds, seed):
     """A still that never sits still (owner, 25 Oct: "we either use clips or
     we animate the picture"): it lands with an impact zoom (from 20% closer
     to its frame in a quarter second), keeps pushing in with a hand-held
-    drift, under film grain and a vignette."""
+    drift, under a vignette. (Film grain made the Short four times larger
+    for nothing a phone shows, 25 Oct.)"""
     frames = max(1, round(seconds * FPS))
     return (f"scale={W * 2}:{H * 2}:flags=lanczos,"
             f"zoompan=z='if(lt(on,8),1.05+0.20*pow(1-on/8,2),1.05+0.0011*(on-8))':"
             f"x='iw/2-(iw/zoom/2)+16*sin(on/9+{seed})':"
             f"y='ih/2-(ih/zoom/2)+12*cos(on/11+{seed})':d={frames}:s={W}x{H}:fps={FPS},"
-            f"noise=alls=6:allf=t,vignette=PI/5")
+            f"vignette=PI/5")
 
 
 def _beat_clip(beat, k, seconds, out):
