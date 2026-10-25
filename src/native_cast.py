@@ -208,7 +208,9 @@ def render(name, role, src, out_mp4, duration, freeze_at, lead=None, seed=1):
     try:
         for fi in range(frames):
             t = fi / FPS
-            k = ce._ease((t - tf) / 0.18)
+            # footage eases into the freeze; a photo snaps under the flash
+            # (easing out of the small framed copy showed it for a beat)
+            k = ce._ease((t - tf) / 0.18) if lead or t < tf else 1.0
             pop = ce._back_out((t - tf) / 0.3) if t >= tf else 0.0
             after = max(0.0, t - tf)
             if t < tf:
