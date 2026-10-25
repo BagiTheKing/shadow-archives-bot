@@ -288,7 +288,66 @@ def render(name, role, src, out_mp4, duration, freeze_at, lead=None, seed=1):
                         "-crf", "19", "-frames:v", str(frames), out_mp4], check=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+    try:
+        card_sfx(sfx_path(out_mp4), tf, duration)
+    except Exception as e:
+        print(f"   ↩️  Card sound failed ({type(e).__name__}: {e}).")
     return out_mp4
+
+
+def sfx_path(card_mp4):
+    return card_mp4[:-4] + "_sfx.wav"
+
+
+# ---------------------------------------------------------------------------
+# The sound (owner, 25 Oct: "a sound effect ... as great as the edit")
+# ---------------------------------------------------------------------------
+# All synthesised, nothing to license: a whoosh rising into the freeze, a
+# bright crack on the flash, a deep boom that drops in pitch under the name
+# slam with a hall tail, and a dull thud on the stamp. Low-passed: the first
+# Short's hit was too harsh (22 Oct), so this one is felt more than heard.
+
+SFX_GAIN = 1.1
+
+
+def card_sfx(out_wav, tf, duration):
+    """The card's sound, `duration` long, with the freeze at tf."""
+    slam, stamp = tf + 0.16, tf + 0.42
+    whoosh = max(0.0, tf - 0.5)
+    layers = [
+        # whoosh: pink noise swelling into the freeze, opening up as it comes
+        (whoosh, tf - whoosh + 0.05,
+         "anoisesrc=r=44100:d={d:.3f}:c=pink:a=0.8,highpass=f=700,lowpass=f=7000,"
+         "volume=eval=frame:volume='pow(t/{d:.3f},2.2)*0.9'"),
+        # crack: the flash, a snapped transient with a metallic ring
+        (tf, 0.5,
+         "aevalsrc='((random(0)*2-1)*exp(-90*t)*0.8+sin(2*PI*2300*t)*exp(-28*t)*0.18"
+         "+sin(2*PI*3400*t)*exp(-40*t)*0.1)*0.3':s=44100:d={d:.3f},lowpass=f=9000"),
+        # boom: a sub drop (95 Hz down to ~40) with a noise body and a hall
+        (slam, 2.4,
+         "aevalsrc='(sin(2*PI*(95*t-28*t*t))*0.9+sin(2*PI*(190*t-56*t*t))*0.25"
+         "+(random(0)*2-1)*exp(-14*t)*0.45)*exp(-2.4*t)*0.8':s=44100:d={d:.3f},"
+         "lowpass=f=2200,aecho=0.8:0.6:90|210:0.35|0.2"),
+        # stamp: a dull thud with a short click on top
+        (stamp, 0.5,
+         "aevalsrc='(sin(2*PI*150*t)*exp(-26*t)*0.7+(random(0)*2-1)*exp(-160*t)*0.4)*0.38'"
+         ":s=44100:d={d:.3f},lowpass=f=3000"),
+    ]
+    ins, mix = [], []
+    for i, (at, d, src) in enumerate(layers):
+        d = max(0.05, d)
+        ms = int(max(0.0, at) * 1000)
+        mix.append(src.format(d=d) + f",aformat=channel_layouts=stereo,adelay={ms}|{ms}[s{i}]")
+    # a silent bed from 0 sets the length (a trim after the mix cut its
+    # first half second and every hit came early); the boom's tail may run
+    # on under the next beat
+    mix.append(f"anullsrc=r=44100:cl=stereo,atrim=0:{duration:.3f}[s{len(layers)}]")
+    n = len(layers) + 1
+    graph = ";".join(mix) + ";" + "".join(f"[s{i}]" for i in range(n)) + \
+        f"amix=inputs={n}:normalize=0:duration=longest,volume={SFX_GAIN}[a]"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *ins, "-filter_complex", graph,
+                    "-map", "[a]", "-ar", "44100", out_wav], check=True)
+    return out_wav
 
 
 def person_card(beat, script, photo, out_mp4, seconds, build_dir):

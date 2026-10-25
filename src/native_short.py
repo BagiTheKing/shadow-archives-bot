@@ -400,8 +400,11 @@ def picture_for(beat, script, k, build_dir, seconds):
             from native_cast import person_card
             card = person_card(beat, script, got[0], base + "_card.mp4", seconds, build_dir)
             if card:
+                from native_cast import sfx_path
                 beat.update(video=card[0], credit="; ".join(c for c in (card[1], got[1]) if c),
                             used="person")
+                if os.path.exists(sfx_path(card[0])):
+                    beat["sfx"] = sfx_path(card[0])
                 print(f"🖼️  Beat {k} (person card): {beat['line'][:60]!r}")
                 return True
         if got:
@@ -698,6 +701,15 @@ def render(beats, promise, out_path, build_dir, script=None):
         ins += ["-i", track]
         amix.append(f"[{len(beats) + j}:a]aformat=channel_layouts=stereo:"
                     f"sample_rates=44100[n{len(beats) + j}]")
+    # each person card's own sound, from that beat's first frame
+    for i, b in enumerate(beats):
+        if b.get("sfx"):
+            ms = int((offsets[i] - b["lead"]) * 1000)
+            ins += ["-i", b["sfx"]]
+            n = len(beats) + len(sfx)
+            amix.append(f"[{n}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
+                        f"adelay={ms}|{ms}[n{n}]")
+            sfx.append(b["sfx"])
     total = len(beats) + len(sfx)
     subprocess.run(["ffmpeg", "-y", *ins, "-filter_complex",
                     ";".join(amix) + ";" + "".join(f"[n{i}]" for i in range(total))
@@ -809,14 +821,29 @@ def _make(script, build_dir):
     # No map before 0:10 (owner, 25 Oct): the Cuba Short lost a third of
     # its viewers on a dark map at 0:05-0:09. An early map beat shows real
     # footage of its place in the story's years instead.
+    # The map itself stays (owner, 25 Oct: "the map is good ... better than
+    # pictures that are just moving"): when the early one goes, a later
+    # beat about a place, else the first later beat that is not a person,
+    # becomes the map.
     t = beats[0]["duration"] + GAP
+    moved = []
     for b in beats[1:-1]:
         b["start"] = t
         if b["kind"] == "map" and t < EARLY_MAP and not b.get("image"):
+            moved.append(b["subject"])
             b["kind"] = "footage"
             b["subject"] = f"{b['subject']} {script.get('era_year') or ''}".strip()
             print(f"   ↩️  Map at {t:.1f}s becomes footage of {b['subject']!r}.")
         t += b["duration"] + GAP
+    places = [p for p in moved + list(script.get("places") or []) if p]
+    if places and not any(b["kind"] == "map" for b in beats[1:-1]):
+        later = [b for b in beats[1:-1] if b["start"] >= EARLY_MAP and not b.get("image")
+                 and b["kind"] in ("photo", "footage", "art")]
+        named = [(b, p) for b in later for p in places if p.lower() in b["line"].lower()]
+        b, place = named[0] if named else ((later[0], places[0]) if later else (None, None))
+        if b:
+            b["kind"], b["subject"] = "map", place
+            print(f"   ↩️  The map moves to {b['start']:.1f}s: {place!r}.")
 
     credits = []
     # the story's own NOW search first when it has one (the Alaska summit),
