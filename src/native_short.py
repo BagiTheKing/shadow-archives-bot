@@ -15,6 +15,11 @@ What it is, from what the clip previews taught (20-21 Oct):
   last resort;
 - every picture made or cropped for 9:16, hard cuts on the sentence, no
   crossfade, no box, no wipe;
+- nothing still (25 Oct, the Cuba Short's numbers): the first story beat is
+  the danger on real footage, no map before 0:10, washed-out archive clips
+  passed over (or their blacks restored), a person introduced by a
+  fighting-game card (native_cast), every still landing with an impact zoom
+  and drifting under grain;
 - a dip to black, then the story's paradox in the voice alone, and the
   signature line heard, never written.
 
@@ -33,6 +38,7 @@ LEAD = 0.4                        # silence before the paradox is spoken
 GAP = 0.12                        # breath between two beats
 MUSIC_LEVEL = 0.08
 KINDS = ("map", "person", "photo", "footage", "art")
+EARLY_MAP = 10.0                  # no map starts before this second
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +90,11 @@ def write_beats(script):
         "- a mood or an idea with nothing physical to show: kind \"art\", "
         "prompt = one concrete scene to paint (no text, no flags)\n"
         "Use at least one map and at least one person when the story has "
-        "them. Never the same kind three times in a row.\n\n"
+        "them. Never the same kind three times in a row.\n"
+        "The FIRST sentence is what was at stake, the danger at its height "
+        "(it plays at second 3, when a viewer decides to stay or swipe): its "
+        "picture is kind \"footage\" of that moment. No map in the first two "
+        "sentences.\n\n"
         f"SCRIPT:\n{_source_text(script)[:12000]}\n\n"
         'Reply as {"beats": [{"line": "...", "kind": "...", "subject": "...", '
         '"prompt": "..."}]}')
@@ -214,17 +224,98 @@ def _same_picture(a, b, bits=10):
 _SECOND = {}
 
 
+def _levels(path):
+    """(black, white): the 5th and 95th luma percentiles over three frames of
+    a clip. The Cuba Short's 1962 newsreel had no blacks at all (black at
+    ~110 of 255, where good footage sits under 35) and read as a grey wash
+    exactly where the viewers left (0:03-0:08, 25 Oct)."""
+    import numpy as np
+    from PIL import Image
+    lo, hi = [], []
+    for at in ("0.4", "1.5", "2.6"):
+        png = path + ".lv.png"
+        try:
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", at, "-i", path,
+                            "-frames:v", "1", "-vf", "scale=270:-2", png], check=True)
+            a = np.asarray(Image.open(png).convert("L"), float)
+            p5, p95 = np.percentile(a, [5, 95])
+            lo.append(p5)
+            hi.append(p95)
+        except Exception:
+            continue
+        finally:
+            if os.path.exists(png):
+                os.remove(png)
+    if not lo:
+        return 0.0, 255.0
+    return sorted(lo)[len(lo) // 2], sorted(hi)[len(hi) // 2]
+
+
+PALE, DARK = 70, 60          # black above this is a wash; white below this is murk
+
+
+def _restore(path, levels):
+    """Stretches a washed-out clip back to real blacks and whites, in place."""
+    lo, hi = levels
+    if lo <= 30 and hi >= 200:
+        return
+    lo, hi = min(lo, 160) / 255, max(hi, lo + 60) / 255
+    tmp = path + ".lv.mp4"
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-vf",
+                        f"colorlevels=rimin={lo:.3f}:gimin={lo:.3f}:bimin={lo:.3f}:"
+                        f"rimax={hi:.3f}:gimax={hi:.3f}:bimax={hi:.3f}",
+                        "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+                        "-pix_fmt", "yuv420p", tmp])
+    if r.returncode == 0:
+        os.replace(tmp, path)
+
+
+def _fetch_lively(cands, path, seconds, start_for=None):
+    """The first candidate clip that is neither a grey wash nor murk, with
+    its levels made whole; a washed-out one only when nothing else came,
+    and then restored. (path, cand) or None. start_for(cand) gives the cut's
+    start, or False to skip the candidate."""
+    from archive_engine import fetch_commons_video
+    spare = None
+    for c in cands:
+        start = start_for(c) if start_for else None
+        if start is False:
+            continue
+        if not fetch_commons_video(c, path, seconds=seconds + 0.5, start=start):
+            continue
+        lv = _levels(path)
+        if lv[1] < DARK:
+            print(f"   ↩️  {c.get('title', '')[:60]!r}: too dark — skipped.")
+            continue
+        if lv[0] > PALE:
+            print(f"   ↩️  {c.get('title', '')[:60]!r}: washed out (black at {lv[0]:.0f}).")
+            if spare is None:
+                spare = (c, lv)
+                os.replace(path, path + ".spare.mp4")
+            continue
+        _restore(path, lv)
+        return path, c
+    if spare:
+        os.replace(path + ".spare.mp4", path)
+        _restore(path, spare[1])
+        return path, spare[0]
+    return None
+
+
 def _footage(subject, era, path, seconds):
     if not subject:
         return None
-    from archive_engine import fetch_commons_video, format_credit, search_commons_video
+    from archive_engine import format_credit, search_commons_video
     from media_sources import search_dvids
     cands = search_commons_video(subject, era=era)[:4]
     cands += [c for c in search_dvids(subject, "video", 4)
               if not era or not c.get("year") or abs(c["year"] - era) <= 2]
-    for cand in cands:
-        if fetch_commons_video(cand, path, seconds=seconds + 0.5):
-            return path, format_credit(cand)
+    # never the opening's clips again
+    cands = [c for c in cands if c["url"] not in _NOW_USED]
+    got = _fetch_lively(cands, path, seconds)
+    if got:
+        _NOW_USED.append(got[1]["url"])
+        return path, format_credit(got[1])
     return None
 
 
@@ -303,6 +394,16 @@ def picture_for(beat, script, k, build_dir, seconds):
         except Exception as e:
             print(f"   ↩️  Beat {k} {kind} failed ({type(e).__name__}: {e}).")
             got = None
+        if got and kind == "person":
+            # the person is introduced like a fighter on a select screen:
+            # their footage (or photo) freezes on the name (native_cast)
+            from native_cast import person_card
+            card = person_card(beat, script, got[0], base + "_card.mp4", seconds, build_dir)
+            if card:
+                beat.update(video=card[0], credit="; ".join(c for c in (card[1], got[1]) if c),
+                            used="person")
+                print(f"🖼️  Beat {k} (person card): {beat['line'][:60]!r}")
+                return True
         if got:
             path, credit = got
             beat["video" if path.endswith(".mp4") else "still"] = path
@@ -363,19 +464,23 @@ def _people_at(cand, want=1, probes=8):
 
 
 def _fetch_first(cands, path, seconds, people=0):
-    from archive_engine import fetch_commons_video, format_credit
-    for c in cands:
+    from archive_engine import format_credit
+
+    def start_for(c):
         if c["url"] in _NOW_USED:
-            continue
-        start = _people_at(c, people) if people else None
-        if people and start is None:
+            return False
+        if not people:
+            return None
+        start = _people_at(c, people)
+        if start is None:
             print(f"   ↩️  {c.get('title', '')[:60]!r}: no one on screen — skipped.")
-            continue
-        if fetch_commons_video(c, path, seconds=seconds + 0.5, start=start) or \
-                fetch_commons_video(c, path, seconds=seconds + 0.5, start=start):
-            _NOW_USED.append(c["url"])
-            print(f"🎞️  {c.get('title', '')[:70]!r}")
-            return path, format_credit(c)
+            return False
+        return start
+    got = _fetch_lively(cands, path, seconds, start_for)
+    if got:
+        _NOW_USED.append(got[1]["url"])
+        print(f"🎞️  {got[1].get('title', '')[:70]!r}")
+        return path, format_credit(got[1])
     return None
 
 
@@ -483,9 +588,21 @@ SHOT_MAX = 4.5                    # longest a still holds before a punch-in
 BRIGHT = "eq=brightness=0.05:contrast=1.08:gamma=1.25:saturation=1.1,"
 
 
+def _alive(seconds, seed):
+    """A still that never sits still (owner, 25 Oct: "we either use clips or
+    we animate the picture"): it lands with an impact zoom (from 20% closer
+    to its frame in a quarter second), keeps pushing in with a hand-held
+    drift, under film grain and a vignette."""
+    frames = max(1, round(seconds * FPS))
+    return (f"scale={W * 2}:{H * 2}:flags=lanczos,"
+            f"zoompan=z='if(lt(on,8),1.05+0.20*pow(1-on/8,2),1.05+0.0011*(on-8))':"
+            f"x='iw/2-(iw/zoom/2)+16*sin(on/9+{seed})':"
+            f"y='ih/2-(ih/zoom/2)+12*cos(on/11+{seed})':d={frames}:s={W}x{H}:fps={FPS},"
+            f"noise=alls=6:allf=t,vignette=PI/5")
+
+
 def _beat_clip(beat, k, seconds, out):
     """One beat's picture, silent, exactly `seconds` long, 1080x1920."""
-    from video_engine import _ken_burns_filter
     frames = max(1, round(seconds * FPS))
     if beat.get("video"):
         bright = BRIGHT if beat.get("used") == "news" else ""
@@ -498,9 +615,9 @@ def _beat_clip(beat, k, seconds, out):
         # punch-in on the same picture read as a duplicate (24 Oct).
         first = max(1, frames // 2)
         second = frames - first
-        graph = (f"[0:v]{_ken_burns_filter(first / FPS, k % 2)},setsar=1,"
+        graph = (f"[0:v]{_alive(first / FPS, k)},setsar=1,"
                  f"trim=end_frame={first},setpts=PTS-STARTPTS[a];"
-                 f"[1:v]{_ken_burns_filter(second / FPS, (k + 1) % 2)},setsar=1,"
+                 f"[1:v]{_alive(second / FPS, k + 1)},setsar=1,"
                  f"trim=end_frame={second},setpts=PTS-STARTPTS[b];"
                  f"[a][b]concat=n=2:v=1:a=0,format=yuv420p[v]")
         subprocess.run(["ffmpeg", "-y",
@@ -512,8 +629,7 @@ def _beat_clip(beat, k, seconds, out):
                        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
         return
     else:
-        vf = (f"{_ken_burns_filter(seconds, k % 2)},setsar=1,"
-              f"trim=end_frame={frames}")
+        vf = f"{_alive(seconds, k)},setsar=1,trim=end_frame={frames}"
         inputs = ["-loop", "1", "-framerate", str(FPS), "-i", beat["still"]]
     subprocess.run(["ffmpeg", "-y", *inputs, "-vf", vf + ",format=yuv420p", "-an",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "19",
@@ -689,6 +805,18 @@ def _make(script, build_dir):
             return None
         b.update(audio_path=s["audio_path"], duration=s["duration"], words=s["words"])
 
+    # No map before 0:10 (owner, 25 Oct): the Cuba Short lost a third of
+    # its viewers on a dark map at 0:05-0:09. An early map beat shows real
+    # footage of its place in the story's years instead.
+    t = beats[0]["duration"] + GAP
+    for b in beats[1:-1]:
+        b["start"] = t
+        if b["kind"] == "map" and t < EARLY_MAP and not b.get("image"):
+            b["kind"] = "footage"
+            b["subject"] = f"{b['subject']} {script.get('era_year') or ''}".strip()
+            print(f"   ↩️  Map at {t:.1f}s becomes footage of {b['subject']!r}.")
+        t += b["duration"] + GAP
+
     credits = []
     # the story's own NOW search first when it has one (the Alaska summit),
     # then strike footage, then any real footage of the news
@@ -746,7 +874,8 @@ def _make(script, build_dir):
             maps_used = sum(1 for x in beats[:k] if x.get("used") == "map")
             got = (_map(place, script, b, os.path.join(build_dir, f"ns_{k:02d}_fb.mp4"),
                         b["duration"] + 1.5)
-                   if place and maps_used < 2 and beats[k - 1].get("used") != "map" else None)
+                   if place and maps_used < 2 and beats[k - 1].get("used") != "map"
+                   and b.get("start", EARLY_MAP) >= EARLY_MAP else None)
             if got:
                 b.update(video=got[0], used="map")
             else:
@@ -801,7 +930,10 @@ def _make(script, build_dir):
 # narrator's promise; in the last SLIDE seconds the past slides up to fill
 # the screen and the story begins on it.
 
-TEAR, ROLL, SLIDE = 0.3, 0.6, 0.35
+# Today's footage holds the screen for 2 seconds (owner, 25 Oct: most
+# viewers come from the feed, not from the title, so 2 and not 3): full
+# screen until TEAR, the top half until NOW_FOR, then the past slides up.
+TEAR, ROLL, SLIDE, NOW_FOR = 0.6, 0.6, 0.35, 2.0
 ORANGE = (255, 150, 40)
 MONO = "FreeMonoBold.ttf"
 _ORD = {w: i + 1 for i, w in enumerate(
@@ -980,7 +1112,7 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
     pattern, n_frames, changes = _counter_frames(now, then, os.path.join(build_dir, "nixie"))
     ticks = _ticks([TEAR + c for c in changes], os.path.join(build_dir, "ns_ticks.wav"))
     # the past takes the screen soon after the counter lands, not at the end
-    slide_at = min(TEAR + ROLL + 0.7, max(TEAR + ROLL + 0.3, seconds - SLIDE))
+    slide_at = min(NOW_FOR, max(TEAR + ROLL + 0.3, seconds - SLIDE))
     frames = max(1, round(seconds * FPS))
     cw = _nixie(then).size
     grade = "hue=s=0.35,eq=contrast=1.12,"
