@@ -1,0 +1,670 @@
+{
+  "topic": "Cuban Missile Crisis (1962)",
+  "title": "US & Russia Negotiate Again. In 1962 It Almost Caused Nuclear War",
+  "description": "As US envoys meet with Moscow to discuss ending the war in Ukraine, tension between the two superpowers revives memories of their most dangerous showdown. In October 1962, the deployment of Soviet nuclear missiles to Cuba brought the world to the edge of total destruction. For thirteen tense days, military standoffs and secret diplomacy were all that prevented global catastrophe.",
+  "tags": [
+    "Cuban Missile Crisis",
+    "Cuban Missile Crisis 1962",
+    "John F Kennedy",
+    "Nikita Khrushchev",
+    "US Soviet Tensions",
+    "Cold War History",
+    "Nuclear War History",
+    "Bay of Pigs",
+    "Cuba History",
+    "US Russia Diplomacy",
+    "Cold War Documentary",
+    "History Documentary"
+  ],
+  "thumbnail_text": "IT HAPPENED BEFORE",
+  "thumbnail_badge": "1962",
+  "thumbnail_variants": {
+    "faceoff": {
+      "big": "5000 WARHEADS",
+      "box": "13 DAYS FROM WAR"
+    },
+    "person": {
+      "setup": "SUPERPOWERS MEET AGAIN",
+      "twist": "LAST TIME NEARLY ENDED IT"
+    },
+    "map": {
+      "tag": "13 DAYS OF FEAR"
+    }
+  },
+  "comment_question": "Was Khrushchev's decision to place missiles in Cuba a reckless gamble or a logical response to US missiles in Turkey?",
+  "places": [
+    "Cuba",
+    "Washington D.C.",
+    "Moscow",
+    "Caribbean Sea",
+    "Turkey"
+  ],
+  "chapters": [
+    {
+      "heading": "The World on Edge",
+      "scenes": [
+        {
+          "narration": "In October 1962, the world stood at the brink of nuclear war. Humanity faced sudden and total destruction.",
+          "image_prompt": "Wide shot of a desolate Caribbean coastline under a stormy night sky, ominous shadows looming over the dark water, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "Two superpowers, the United States and the Soviet Union, faced off over ballistic missiles positioned on the island of Cuba.",
+          "image_prompt": "Medium shot of a Soviet ballistic missile shrouded in heavy canvas tarps on a flatbed transport in a dense tropical clearing, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet missiles Cuba 1962"
+        },
+        {
+          "narration": "Those weapons sat just ninety miles from American shores, placing major cities directly inside their operational strike zone.",
+          "image_prompt": "Long shot of a concrete launchpad under construction amidst palm trees, floodlights casting harsh silhouettes through tropical mist, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "San Cristobal Cuba missile site 1962"
+        },
+        {
+          "narration": "The terrifying confrontation lasted thirteen days, bringing civilization closer to annihilation than at any other moment in human history.",
+          "image_prompt": "Eye-level medium shot of an empty 1962 war room desk with a glowing green lamp, an austere black telephone, and blank file folders, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "White House Cabinet Room 1962"
+        },
+        {
+          "narration": "When the standoff ended, the world was forever changed, and the superpowers established a direct hotline between their capitals.",
+          "image_prompt": "Close-up shot of a vintage 1960s teleprinter terminal resting on an oak desk in a dimly lit office, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Moscow Washington hotline teletype"
+        },
+        {
+          "narration": "How did the world's leaders navigate this terrifying moment, and what prevented catastrophe? How close did the world come to nuclear annihilation?",
+          "image_prompt": "Wide shot of a lone naval warship cutting through the dark waters of the Caribbean Sea beneath storm clouds, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Cuban blockade 1962"
+        }
+      ],
+      "punch_phrase": "thirteen days",
+      "punch_idx": 3,
+      "arc_index": 0,
+      "pacing": {
+        "role": "open",
+        "words_per_image": 22,
+        "tts_rate": "+10%"
+      }
+    },
+    {
+      "heading": "Leaders in a Dangerous Game",
+      "scenes": [
+        {
+          "narration": "In April 1961, an invasion at the Bay of Pigs ended in disaster. The failed assault left Washington humiliated and determined to halt communist expansion across the Caribbean Sea.",
+          "image_prompt": "Wide shot of a deserted Caribbean beachhead littered with abandoned military gear and wooden crates in 1961, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Bay of Pigs 1961"
+        },
+        {
+          "narration": "US President John F. Kennedy led the nation, commanding about 5,000 strategic warheads while facing his first major test of strength against his rival superpower.",
+          "image_prompt": "Medium shot of John F. Kennedy sitting alone at a polished wooden desk in an office in 1962, wearing a tailored dark suit, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F. Kennedy 1962",
+          "dossier": {
+            "name": "John F. Kennedy",
+            "shown": "John F. Kennedy",
+            "role": "US President",
+            "decision": false,
+            "file_no": 1,
+            "side": "left"
+          }
+        },
+        {
+          "narration": "Across the globe in Moscow, Soviet Premier Nikita Khrushchev held only about 300 warheads and sought to balance that American advantage.",
+          "image_prompt": "Medium shot of Nikita Khrushchev standing near a large window in a Soviet palace in 1962, wearing a heavy overcoat, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev 1962",
+          "dossier": {
+            "name": "Nikita Khrushchev",
+            "shown": "Nikita Khrushchev",
+            "role": "Soviet Premier",
+            "decision": true,
+            "file_no": 2,
+            "side": "right"
+          }
+        },
+        {
+          "narration": "In July 1962, Cuban Prime Minister Fidel Castro agreed to let Khrushchev place nuclear weapons onto the island of Cuba to guard against Kennedy.",
+          "image_prompt": "Medium shot of Fidel Castro wearing olive green military fatigues and a field cap, standing outdoors in Cuba in 1962, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Fidel Castro 1962",
+          "dossier": {
+            "name": "Fidel Castro",
+            "shown": "Fidel Castro",
+            "role": "Cuban Prime Minister",
+            "decision": false,
+            "file_no": 3,
+            "side": "left"
+          }
+        },
+        {
+          "narration": "Soviet Foreign Minister Andrei Gromyko supported Khrushchev, delivering outright denials to American officials that any offensive arms were bound for the island.",
+          "image_prompt": "Medium shot of Andrei Gromyko seated formally in a conference room in 1962, wearing a dark formal suit and tie, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Andrei Gromyko 1962",
+          "dossier": {
+            "name": "Andrei Gromyko",
+            "shown": "Andrei Gromyko",
+            "role": "Soviet Foreign Minister",
+            "decision": false,
+            "file_no": 4,
+            "side": "right"
+          }
+        },
+        {
+          "narration": "US Secretary of State Dean Rusk stood firmly with Kennedy, preparing his team for worst-case threats and organizing a united government front.",
+          "image_prompt": "Medium shot of Dean Rusk reviewing blank papers in an official government office in Washington D.C. in 1962, wearing a dark suit and glasses, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Dean Rusk 1962",
+          "dossier": {
+            "name": "Dean Rusk",
+            "shown": "Dean Rusk",
+            "role": "US Secretary of State",
+            "decision": false,
+            "file_no": 5,
+            "side": "left"
+          }
+        },
+        {
+          "narration": "Now look at the map. Washington had placed Jupiter missiles right on the Soviet border in Turkey, and Khrushchev planned to match that threat on Castro's soil.",
+          "image_prompt": "Long shot of a Jupiter ballistic missile standing vertically on an open launch pad in Turkey in 1962, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Jupiter missile Turkey 1962"
+        }
+      ],
+      "punch_phrase": "sought to balance",
+      "punch_idx": 2,
+      "arc_index": 1,
+      "pacing": {
+        "role": "build",
+        "words_per_image": 40,
+        "tts_rate": "+6%"
+      },
+      "stamp": "BAY OF PIGS · APRIL 1961"
+    },
+    {
+      "heading": "Escalation of Tensions",
+      "scenes": [
+        {
+          "narration": "In 1959, the American government deployed Thor nuclear missiles onto English soil under Project Emily. These weapons placed major industrial centers deep inside rival territory within easy striking distance.",
+          "image_prompt": "A low-angle medium shot of a Thor ballistic missile resting on a concrete launchpad in rural England in 1959, shrouded in low-hanging gray mist, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Thor missile England 1959"
+        },
+        {
+          "narration": "Two years later, in 1961, Washington reinforced that ring by sending additional Jupiter missiles into southern Europe and Turkey. From his office in Moscow, Soviet Premier Nikita Khrushchev watched weapons arrive near his borders.",
+          "image_prompt": "A medium shot of Soviet Premier Nikita Khrushchev standing beside a wooden desk inside an office in Moscow in 1961, staring gravely out an arched window, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev Moscow 1961"
+        },
+        {
+          "narration": "In 1962, the Soviet leader possessed only 20 intercontinental ballistic missiles capable of striking American soil. The strategic balance tilted overwhelmingly against him. Khrushchev decided he had to act to erase that severe gap.",
+          "image_prompt": "A wide shot of a solitary Soviet ballistic missile erected in a desolate snow-covered forest in 1962, framed by bare birch trees, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet ICBM 1962"
+        },
+        {
+          "narration": "Khrushchev studied his American opponent. He believed the White House would hesitate during a crisis. He remarked, \"I know for certain that Kennedy doesn't have a strong background, nor, generally speaking, does he have the courage to stand up to a serious challenge.\"",
+          "image_prompt": "A close-up portrait of Soviet Premier Nikita Khrushchev in 1962, wearing a dark wool suit and speaking with an intense, skeptical expression, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev 1962"
+        },
+        {
+          "narration": "Meanwhile, in Washington D.C., US President John F. Kennedy faced intense domestic pressure. In late 1961, his administration authorized the Cuban Project, launching a covert campaign of terrorism and sabotage inside Cuba.",
+          "image_prompt": "A medium shot of US President John F. Kennedy seated in the Oval Office in Washington D.C. in late 1961, leaning over his wooden desk with a furrowed brow, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy Oval Office 1961",
+          "map": {
+            "target": "CUBA",
+            "origin": "WASHINGTON",
+            "action": "strike",
+            "light": [
+              "CUBA"
+            ],
+            "ll": [
+              -80.0,
+              22.0
+            ]
+          }
+        },
+        {
+          "narration": "Across the Caribbean Sea, the clandestine attacks alarmed the island government, fueling fears of a direct invasion. Khrushchev recognized an opening. By mid-1962, he planned to secretly base nuclear missiles on the island to shift the strategic balance.",
+          "image_prompt": "A wide shot of a cargo freighter navigating dark waters across the Caribbean Sea under a stormy twilight sky in 1962, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "In August 1962, American officials suspected construction on the island. By September 1962, analysts found surface-to-air missile sites arranged in patterns identical to bases built to guard long-range nuclear weapons.",
+          "image_prompt": "An overhead high-angle shot of military analysts in 1962 examining aerial photographs spread across an illuminated light table inside a dim room, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "National Photographic Interpretation Center 1962"
+        },
+        {
+          "narration": "On the ninth of October, 1962, American leaders authorized new reconnaissance flights, but severe weather grounded the planes. Unknown to the world, the stage was set for a confrontation that would test the limits of human endurance and nuclear brinkmanship.",
+          "image_prompt": "A long shot of an American U-2 reconnaissance aircraft parked on a rain-slicked runway under dark storm clouds in October 1962, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "U-2 aircraft 1962"
+        }
+      ],
+      "punch_phrase": "terrorism and sabotage",
+      "punch_idx": 4,
+      "arc_index": 2,
+      "pacing": {
+        "role": "build",
+        "words_per_image": 40,
+        "tts_rate": "+6%"
+      },
+      "stamp": "TURKEY · 1961"
+    },
+    {
+      "heading": "Discovery of the Missiles",
+      "scenes": [
+        {
+          "narration": "In August 1962, American intelligence agencies tracked suspicious cargo movements toward Cuba. Surveillance flights revealed unusual groundwork cutting through the inland brush. Concrete slabs and access roads emerged where only wilderness had stood weeks before.",
+          "image_prompt": "Wide shot of a vintage 1962 U-2 reconnaissance aircraft flying high above rolling tropical hills, clear skies below, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "U-2 aircraft 1962"
+        },
+        {
+          "narration": "By late September, analysts in Washington D.C. studied ground positions guarding those clearings. Anti-aircraft batteries matched Soviet defensive formations erected around strategic intercontinental weapons. The identical geometry proved Moscow was shielding an asset of immense strategic importance.",
+          "image_prompt": "Medium shot of an intelligence officer in 1962 military dress uniform examining photographic prints under a green shaded lamp, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Defense Intelligence Agency 1962"
+        },
+        {
+          "narration": "On the fourteenth of October, 1962, a U-2 reconnaissance mission swept across the western Cuban countryside. High-altitude cameras cut through clearing autumn skies. Roll after roll of film captured long cylindrical objects hidden beneath forest canopies.",
+          "image_prompt": "Overhead aerial shot of a camouflaged military installation in a tropical forest with elongated shapes under canvas tarpaulins, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "San Cristobal Cuba October 1962"
+        },
+        {
+          "narration": "This was the moment the crisis began. On the fifteenth of October, analysts examined the rolls frame by frame. The lenses had caught medium-range ballistic missiles resting on mobile transporters right beside newly poured launch pads.",
+          "image_prompt": "Close-up shot of hands using a brass magnifying glass over black-and-white aerial surveillance films on an illuminated light table, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "National Photographic Interpretation Center 1962"
+        },
+        {
+          "narration": "Technicians measured the missile bodies and fuel trailers against known Soviet arsenals. The calculations revealed medium-range ballistic missiles capable of striking deep across North America. Those nuclear weapons sat barely ninety miles off the coastline.",
+          "image_prompt": "Medium shot of military analysts in dark 1962 suits pointing at an empty slate board inside a dimly lit war room, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet medium range ballistic missiles Cuba 1962"
+        },
+        {
+          "narration": "On the eighteenth of October, Soviet Foreign Minister Andrei Gromyko walked into the White House. He looked US President John F. Kennedy directly in the face. Gromyko claimed Soviet military equipment in Cuba was strictly defensive.",
+          "image_prompt": "Medium shot of Soviet Foreign Minister Andrei Gromyko seated in an armchair inside an ornate 1962 executive office, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Andrei Gromyko 1962"
+        },
+        {
+          "narration": "Kennedy listened in silence while holding photographic evidence of nuclear warheads in his desk drawer. With the truth exposed, Kennedy faced an agonizing choice that would determine the fate of the world.",
+          "image_prompt": "Medium close-up shot of US President John F. Kennedy sitting behind a wooden desk in 1962, his face shadowed in thought, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy October 1962"
+        }
+      ],
+      "punch_phrase": "medium-range ballistic missiles",
+      "punch_idx": 4,
+      "arc_index": 3,
+      "pacing": {
+        "role": "build",
+        "words_per_image": 40,
+        "tts_rate": "+6%"
+      },
+      "stamp": "CUBA · AUGUST 1962"
+    },
+    {
+      "heading": "The Executive Decision",
+      "scenes": [
+        {
+          "narration": "Inside the Situation Room in Washington D.C., US President John F. Kennedy convened his most trusted military and political advisors.",
+          "image_prompt": "A medium shot of John F. Kennedy sitting at the head of a wood-paneled conference table in a dimly lit office room, wearing a dark 1960s tailored suit, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy 1962"
+        },
+        {
+          "narration": "With National Security Action Memorandum 196, Kennedy formally established a secret executive committee. This elite war council became known as EXCOMM.",
+          "image_prompt": "A close-up shot of a fountain pen resting on a dark leather folder over a wooden desk, dramatically illuminated, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "EXCOMM meeting 1962"
+        },
+        {
+          "narration": "US Secretary of State Dean Rusk pulled up a chair to evaluate the options. The council debated strategies continuously across six grueling days.",
+          "image_prompt": "A medium shot of Dean Rusk sitting in a high-backed chair in a shadowy room, wearing thick glasses and a 1960s business suit, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Dean Rusk 1962"
+        },
+        {
+          "narration": "Advisors argued over diplomatic pressure, a full-scale military invasion of Cuba, and targeted air strikes.",
+          "image_prompt": "A wide shot of a group of men in dark 1960s suits leaning over a large map table in a shadowy room, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "EXCOMM meeting Washington DC 1962"
+        },
+        {
+          "narration": "Tension mounted as fresh intelligence reports arrived at the table. Soviet cargo ships were pushing through the ocean toward the Caribbean Sea.",
+          "image_prompt": "A long shot of a 1960s steel freighter ship plowing through dark ocean waves under an overcast night sky, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet ship Caribbean Sea 1962",
+          "map": {
+            "target": "CARIBBEAN SEA",
+            "origin": "",
+            "action": "move",
+            "light": [
+              "CUBA"
+            ],
+            "ll": [
+              -75.0,
+              15.0
+            ]
+          }
+        },
+        {
+          "narration": "Analysts reported that those incoming vessels were likely carrying nuclear warheads directly to the island.",
+          "image_prompt": "A close-up shot of heavy metal cargo crates lashed down on the rain-slicked deck of a ship at night, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "Military hawks demanded an instant military strike. Kennedy refused their aggressive invasion plan.",
+          "image_prompt": "A medium shot of an military officer in a 1960s uniform speaking forcefully at a conference table, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "The President chose a naval blockade instead. He named the operation a quarantine to prevent further weapons shipments from reaching Cuba.",
+          "image_prompt": "A wide shot of a 1960s naval destroyer cutting through rough dark ocean waters, ocean spray rising from its bow, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "US Navy blockade Cuba 1962"
+        },
+        {
+          "narration": "On the twenty-second of October, 1962, Kennedy stepped before television cameras to address the world.",
+          "image_prompt": "A medium shot of a 1960s television broadcast camera focused on a man seated behind a wooden desk, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy address 22 October 1962"
+        },
+        {
+          "narration": "He revealed the naval blockade to millions of shocked citizens watching from home.",
+          "image_prompt": "A medium shot of a family sitting in a dimly lit 1960s living room, staring intently at a glowing television set, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "Kennedy declared that any nuclear missile launched from Cuba would trigger a full retaliatory response against the Soviet Union.",
+          "image_prompt": "A close-up shot of John F. Kennedy speaking intently into microphones on a desk, illuminated by bright television studio lights against deep shadows, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy speech October 22 1962"
+        }
+      ],
+      "punch_phrase": "a full retaliatory response",
+      "punch_idx": 10,
+      "arc_index": 4,
+      "pacing": {
+        "role": "pivot",
+        "words_per_image": 24,
+        "tts_rate": "+2%"
+      },
+      "stamp": "SITUATION ROOM"
+    },
+    {
+      "heading": "Thirteen Days to Hell",
+      "scenes": [
+        {
+          "narration": "On the twenty-third of October, 1962, American warships locked into place across the Caribbean Sea.",
+          "image_prompt": "Wide shot of a 1962 American warship slicing through open ocean waters, grey steel hull, naval antennas, overcast sky, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "US Navy warship 1962"
+        },
+        {
+          "narration": "Soviet cargo vessels continued steaming directly toward the quarantine line, holding ground on a collision course.",
+          "image_prompt": "Medium shot of a 1962 Soviet freighter ship churning through dark ocean waves, large cargo hold decks, ocean spray, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet cargo ship 1962"
+        },
+        {
+          "narration": "In Moscow, Soviet Premier Nikita Khrushchev slammed the blockade as an act of international aggression.",
+          "image_prompt": "Medium shot of Soviet Premier Nikita Khrushchev sitting at a dark wooden desk in Moscow, formal 1960s suit, harsh desk light, intense expression, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev"
+        },
+        {
+          "narration": "Privately, Khrushchev once thought, \"I know for certain that Kennedy doesn't have a strong background, nor, generally speaking, does he have the courage to stand up to a serious challenge.\"",
+          "image_prompt": "Close-up profile shot of Nikita Khrushchev in deep thought, 1960s Kremlin interior background, soft shadow casting across his face, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev 1962"
+        },
+        {
+          "narration": "Now Khrushchev scrambled to test US President John F. Kennedy's true resolve.",
+          "image_prompt": "Medium shot of US President John F. Kennedy standing in a dim office, 1960s suit, backlit by window light, stern stance, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy 1962"
+        },
+        {
+          "narration": "The Soviet military prepared its own nuclear forces for immediate orders.",
+          "image_prompt": "Wide shot of a 1962 military control room, glowing radar scopes, dark interior, military officers at consoles, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet military command center 1962"
+        },
+        {
+          "narration": "Soviet bombers sat parked on airfields inside Cuba, ready for launch.",
+          "image_prompt": "Medium shot of a 1960s Soviet bomber aircraft parked on a tropical airfield runway in Cuba, palm trees in soft focus, twilight atmosphere, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Soviet bombers Cuba 1962"
+        },
+        {
+          "narration": "Nuclear warheads stood assembled on the island, prepared for direct targeting.",
+          "image_prompt": "Low angle wide shot of a 1962 missile launch pad built in a cleared tropical jungle clearing, spotlights illuminating steel structures, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Cuba missile site 1962"
+        },
+        {
+          "narration": "The two superpowers stepped directly to the brink of nuclear war.",
+          "image_prompt": "Wide dramatic shot of a naval vessel at sea, dark storm clouds gathering overhead, turbulent dark water, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "Behind closed doors in Washington D.C. and Moscow, secret messages passed between the leaders.",
+          "image_prompt": "Close-up shot of a 1962 desk phone on a wooden table, dark office interior, subtle lighting on cold metal, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "Kennedy held firm against retreats, yet offered Khrushchev a private exit to save face.",
+          "image_prompt": "Medium shot of John F. Kennedy speaking intently into a telephone receiver, dark room, single overhead light source, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F Kennedy White House 1962"
+        },
+        {
+          "narration": "On the twenty-eighth of October, Premier Khrushchev announced the Soviet Union would dismantle and remove all offensive weapons from Cuba.",
+          "image_prompt": "Medium shot of Nikita Khrushchev standing behind a radio microphone in Moscow, 1962 tailored dark suit, sharp side lighting, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev radio 1962"
+        },
+        {
+          "narration": "In return, Kennedy made a confidential pledge never to launch another invasion against Cuban Prime Minister Fidel Castro.",
+          "image_prompt": "Medium shot of Cuban Prime Minister Fidel Castro in dark military fatigue uniform, standing in an office, dark shadowed background, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Fidel Castro 1962"
+        },
+        {
+          "narration": "Under absolute secrecy, Kennedy promised to dismantle American nuclear missiles stationed in Turkey.",
+          "image_prompt": "Wide shot of American Jupiter nuclear missiles standing in an arid installation in Turkey, 1962, dark twilight atmosphere, sharp silhouettes, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Jupiter missiles Turkey 1962",
+          "map": {
+            "target": "TURKEY",
+            "origin": "WASHINGTON",
+            "action": "move",
+            "light": [
+              "TURKEY"
+            ],
+            "ll": [
+              32.85,
+              39.91666667
+            ]
+          }
+        },
+        {
+          "narration": "Thirteen days of global terror drew to a sudden close.",
+          "image_prompt": "Wide shot of an empty briefing room, scattered chairs around a mahogany conference table, soft dust motes in light shafts, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        },
+        {
+          "narration": "And this was the moment the crisis ended.",
+          "image_prompt": "Close-up shot of a vintage 1962 calendar on a wooden wall, soft dim light illuminating October dates, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        }
+      ],
+      "punch_phrase": "the brink of nuclear war",
+      "punch_idx": 8,
+      "arc_index": 5,
+      "pacing": {
+        "role": "drive",
+        "words_per_image": 18,
+        "tts_rate": "+12%"
+      },
+      "stamp": "CARIBBEAN SEA · 23 OCTOBER 1962"
+    },
+    {
+      "heading": "Aftermath and Legacy",
+      "scenes": [
+        {
+          "narration": "Through October and November of 1962, Soviet bombers remained parked in Cuba while crews dismantled missile facilities. High above the island, American reconnaissance aircraft continued flying to monitor the work.",
+          "image_prompt": "A wide shot of an American reconnaissance plane flying over a tropical airfield where Soviet bombers sit parked on asphalt, bright daylight, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "U-2 reconnaissance aircraft 1962"
+        },
+        {
+          "narration": "On the twentieth of November, 1962, American warships formally ended the blockade across the Caribbean Sea. Every offensive missile and bomber had finally been removed from Cuban soil.",
+          "image_prompt": "A medium shot of an American naval officer looking out across the ocean from the deck of a warship, dusk setting in over the water, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "US Navy blockade Caribbean 1962"
+        },
+        {
+          "narration": "In 1963, US President John F. Kennedy quietly carried out the secret agreement. American workers dismantled Jupiter nuclear missiles stationed in Turkey and in a neighboring Southern European nation.",
+          "image_prompt": "A medium shot of military technicians working around a tall nuclear missile inside an launch silo, industrial steel background, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Jupiter missile Turkey 1963"
+        },
+        {
+          "narration": "That same year, British military forces publicly disbanded all Thor nuclear missiles stationed across their island. The dangerous border standoff had drawn to a quiet close.",
+          "image_prompt": "A long shot of an abandoned missile launch site in the damp British countryside under grey skies, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Thor missile site 1963"
+        },
+        {
+          "narration": "For Soviet Premier Nikita Khrushchev, the public retreat proved disastrous. The humiliating concessions damaged his standing among government officials inside Moscow.",
+          "image_prompt": "A close-up portrait of Soviet Premier Nikita Khrushchev sitting alone at a polished wooden conference table, looking grimly into the room, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev 1962"
+        },
+        {
+          "narration": "In 1964, the Soviet leadership ousted Khrushchev from power. His political career ended over the humiliation in the Caribbean.",
+          "image_prompt": "A medium shot of empty leather chairs inside a vast, darkened council chamber in Moscow, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Nikita Khrushchev"
+        },
+        {
+          "narration": "The crisis solidified Kennedy's reputation as a decisive leader who stood firm. Privately, he knew humanity had drifted terrifyingly close to a nuclear catastrophe.",
+          "image_prompt": "A medium shot of US President John F. Kennedy standing alone by a window in Washington D.C., looking out into the night, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "John F. Kennedy 1962"
+        },
+        {
+          "narration": "In 1963, the two nations established the Moscow–Washington hotline. The direct communication line was designed to ensure leaders could talk instantly before miscalculations brought down the world.",
+          "image_prompt": "A close-up shot of a vintage teletype machine sitting on an office desk, single lamp illuminating the mechanical keys, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": "Moscow Washington hotline 1963"
+        },
+        {
+          "narration": "After October 1962, a series of agreements reduced tensions for several years. The crisis proved that global survival depended not on warheads, but on direct communication.",
+          "image_prompt": "A wide shot of two diplomats shaking hands in a grand dimly lit hall with tall windows, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms, set in the year 1962, historically accurate 1960s period detail, period-accurate clothing architecture vehicles weapons and technology, nothing modern anywhere in frame, dramatic chiaroscuro lighting, dark moody cinematic oil painting, visible expressive brushwork, rich texture, muted color palette with one accent color, highly detailed, completely free of any text, letters, words, writing, numbers, captions, signage or watermarks — any page, book, document, sign or screen in frame is blank or angled away so no text is visible, and no flags, star emblems or national insignia on vehicles or uniforms",
+          "archive_query": null
+        }
+      ],
+      "punch_phrase": "ousted Khrushchev from power",
+      "punch_idx": 5,
+      "arc_index": 6,
+      "pacing": {
+        "role": "close",
+        "words_per_image": 30,
+        "tts_rate": "+7%"
+      }
+    }
+  ],
+  "word_count": 1469,
+  "era_year": 1962,
+  "format": "order",
+  "intro_epigraph": {
+    "sentences": [
+      "\"I know for certain that Kennedy doesn't have a strong background, nor, generally speaking, does he have the courage to stand up to a serious challenge.\""
+    ],
+    "keyword": "have the courage",
+    "attribution": "Nikita Khrushchev",
+    "attribution_title": "Premier of the Soviet Union"
+  },
+  "verdict_epigraph": {
+    "sentences": [
+      "Dick Nixon is the victim of the worst press that ever hit a politician in this country. What they did to him in the Helen Gahagan Douglas race was disgusting."
+    ],
+    "keyword": "Helen Gahagan Douglas race was disgusting",
+    "attribution": "John F. Kennedy",
+    "attribution_title": ""
+  },
+  "lane": "timely",
+  "has_short": false,
+  "claim_sources": [
+    {
+      "label": "Gaddis 2005, The Cold War",
+      "full": "Gaddis, John Lewis (2005). The Cold War: A New History. Penguin Press"
+    },
+    {
+      "label": "Reeves 1993, President Kennedy",
+      "full": "Reeves, Richard (1993). President Kennedy: Profile of Power. New York: Simon & Schuster"
+    },
+    {
+      "label": "Giglio 2006, The Presidency of John F. Kennedy",
+      "full": "Giglio, James N. (2006). The Presidency of John F. Kennedy (2nd ed.). University Press of Kansas"
+    },
+    {
+      "label": "Christopher Sandford, Harold and Jack (2014)",
+      "full": "Christopher Sandford, Harold and Jack: The Remarkable Friendship of Prime Minister Macmillan and President Kennedy (2014)"
+    },
+    {
+      "label": "Remarks by LTG Ronald L",
+      "full": "Remarks by LTG Ronald L. Burgess Jr., Director, Defense Intelligence Agency"
+    },
+    {
+      "label": "Off the Record Meeting on Cuba: The White House (1962)",
+      "full": "\"Off the Record Meeting on Cuba: The White House\". John F. Kennedy Presidential Library and Museum. 16 October 1962"
+    },
+    {
+      "label": "TWE Remembers: The OAS Endorses a Quarantine of Cuba (Cuban Mis…",
+      "full": "\"TWE Remembers: The OAS Endorses a Quarantine of Cuba (Cuban Missile Crisis, Day Eight) | Council on Foreign Relations\". 23 October 2012"
+    },
+    {
+      "label": "Russ, 26, 2009#P12844 Life in Legacy",
+      "full": "Russ. \"26, 2009#P12844 Life in Legacy\". Lifeinlegacy.com"
+    },
+    {
+      "label": "Herring 2008, From Colony to Superpower; U.S. Foreign Relations…",
+      "full": "Herring, George C. (2008). From Colony to Superpower; U.S. Foreign Relations Since 1776. Oxford University Press"
+    }
+  ],
+  "source_article": {
+    "title": "Cuban Missile Crisis",
+    "url": "https://en.wikipedia.org/wiki/Cuban_Missile_Crisis"
+  },
+  "related_articles": [
+    {
+      "title": "Cold War",
+      "url": "https://en.wikipedia.org/wiki/Cold_War"
+    },
+    {
+      "title": "Presidency of John F. Kennedy",
+      "url": "https://en.wikipedia.org/wiki/Presidency_of_John_F._Kennedy"
+    },
+    {
+      "title": "Nikita Khrushchev",
+      "url": "https://en.wikipedia.org/wiki/Nikita_Khrushchev"
+    }
+  ],
+  "paradox": {
+    "answer": "Kennedy secretly removed his missiles from Turkey, but Khrushchev suffered the humiliating public retreat that ended his political career."
+  },
+  "native_beats": [
+    {
+      "line": "American spy planes discovered Soviet nuclear missiles hidden on the island of Cuba.",
+      "kind": "map",
+      "subject": "Cuba",
+      "prompt": "American spy planes discovered Soviet nuclear missiles hidden on the island of Cuba.",
+      "image": null
+    },
+    {
+      "line": "Soviet Premier Nikita Khrushchev secretly shipped the warheads to balance American weapons deployed near his border.",
+      "kind": "person",
+      "subject": "Nikita Khrushchev 1962",
+      "prompt": "Soviet Premier Nikita Khrushchev secretly shipped the warheads to balance American weapons deployed near his border.",
+      "image": null,
+      "single": true
+    },
+    {
+      "line": "US President John F. Kennedy rejected an immediate military strike and ordered a naval quarantine instead.",
+      "kind": "person",
+      "subject": "John F. Kennedy",
+      "prompt": "US President John F. Kennedy rejected an immediate military strike and ordered a naval quarantine instead.",
+      "image": null
+    },
+    {
+      "line": "American warships blocked the Caribbean Sea while Soviet vessels steamed directly toward them.",
+      "kind": "footage",
+      "subject": "Caribbean Sea blockade 1962",
+      "prompt": "American warships blocked the Caribbean Sea while Soviet vessels steamed directly toward them.",
+      "image": "preview_scripts/cuba_images/warships.jpg"
+    },
+    {
+      "line": "The two superpowers stood face to face on the edge of total nuclear destruction.",
+      "kind": "art",
+      "subject": "",
+      "prompt": "Two silhouetted men facing each other in a dimly lit room over a glowing nuclear detonator",
+      "image": "preview_scripts/cuba_images/standoff.jpg"
+    }
+  ],
+  "trend": "US diplomatic engagement with Russia during Ukraine war",
+  "now_query": "Putin Alaska",
+  "native_then_image": "preview_scripts/cuba_images/then.jpg",
+  "then_query": "Cuban Crisis",
+  "now_pick": {
+    "url": "https://d34w7g4gy10iej.cloudfront.net/video/2508/DOD_111260887/DOD_111260887.mp4",
+    "title": "Trump, Putin meet for Alaska 2025 Summit B-Roll",
+    "start": 44,
+    "credit": "Trump, Putin meet for Alaska 2025 Summit B-Roll — DVIDS — Public domain"
+  },
+  "now2_pick": {
+    "url": "https://d34w7g4gy10iej.cloudfront.net/video/2508/DOD_111260887/DOD_111260887.mp4",
+    "title": "Trump, Putin meet for Alaska 2025 Summit B-Roll",
+    "start": 95,
+    "credit": "Trump, Putin meet for Alaska 2025 Summit B-Roll — DVIDS — Public domain"
+  }
+}

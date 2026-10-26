@@ -386,7 +386,8 @@ def search_archives(query: str, limit: int = 10) -> list:
         results += search_dvids(query, "image", 6)
         if len(results) < 3:
             results += search_openverse(query, 8)
-    return results
+    from media_sources import OFF_TOPIC
+    return [c for c in results if not OFF_TOPIC.search(c.get("title") or "")]
 
 
 def format_credit(candidate: dict) -> str:
@@ -647,6 +648,9 @@ def fetch_archival_video(identifier: str, output_path: str) -> bool:
         if ok and is_static(output_path):
             os.remove(output_path)
             return False
+        if ok:
+            from footage_levels import fix
+            fix(output_path)
         return ok
     except Exception as e:
         print(f"⚠️ Could not trim Internet Archive clip ({identifier}): {e}")
@@ -886,6 +890,10 @@ def fetch_commons_video(candidate: dict, output_path: str,
         print(f"   ↩️  {candidate.get('title')!r}: still photographs, not footage — skipped.")
         candidate["_static"] = True
         ok = False
+    if ok:
+        # a grey wash gets its blacks back (footage_levels)
+        from footage_levels import fix
+        candidate["_levels"] = fix(output_path)
     if not ok and os.path.exists(output_path):
         os.remove(output_path)
     return ok

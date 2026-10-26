@@ -20,7 +20,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -28,6 +28,17 @@ jobs:
           path: out
           run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
+      # A long video is too large for a branch (GitHub refuses files over
+      # 100 MB): it is brought down to a 720p review copy, and the scene
+      # clips that ride along in the artifact are dropped.
+      - name: Shrink a long video for review
+        run: |
+          [ -f out/final_longform.mp4 ] || exit 0
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          ffmpeg -y -loglevel error -i out/final_longform.mp4 -vf scale=1280:-2 \
+            -c:v libx264 -preset veryfast -crf 30 -c:a aac -b:a 96k out/longform_review.mp4
+          rm -f out/final_longform.mp4 out/lf_clip_*.mp4
+          ls -la out
       - name: Push to preview-media
         run: |
           cd out

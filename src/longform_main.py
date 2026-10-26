@@ -674,6 +674,8 @@ def main():
         # source on screen; all of them are listed in the description
         from claim_sources import attach
         script["claim_sources"] = attach(scenes, story["sources"], story.get("sheet"))
+        # the news this story was found from: the native Short's NOW photo
+        script["trend"] = story.get("trend")
         script["source_article"] = {"title": story["sources"].get("title"),
                                     "url": story["sources"].get("url")}
         script["related_articles"] = story.get("related") or []
@@ -744,10 +746,23 @@ def main():
     check_visual_quality(workers_ai_generated, total_generated,
                          total_shots=sum(len(s.get("image_paths") or [1]) for s in usable))
 
+    # The native Short's THEN / NOW opening, on the long video too (owner,
+    # 25 Oct): today's news, the year rolling back, the past sliding up.
+    opening = None
+    if os.getenv("LONGFORM_THEN_NOW", "1") == "1" and usable:
+        try:
+            from native_short import opening_media
+            got = opening_media(script, usable[0]["duration"] + 1.0,
+                                os.path.join(BUILD_DIR, "opening"))
+            if got:
+                opening = {**got, "script": script}
+        except Exception as e:
+            print(f"⚠️ THEN / NOW opening skipped ({type(e).__name__}: {e}).")
+
     # Phase 3: render
     video_path, total, chapter_marks, music_attribution = generate_longform_video(
         scenes, BUILD_DIR, intro_epigraph=script.get("intro_epigraph"),
-        verdict_epigraph=script.get("verdict_epigraph"))
+        verdict_epigraph=script.get("verdict_epigraph"), opening=opening)
 
     minutes = total / 60
     if minutes < 4:

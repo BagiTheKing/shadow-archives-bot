@@ -62,7 +62,8 @@ def main(out, *queries):
             "commons": search_commons(q, limit=8),
             "loc": search_loc(q),
             "dvids_photo": ms.search_dvids(q, "image", 8, raw=raw),
-            "dvids_video": ms.search_dvids(q, "video", 4, raw=raw),
+            "dvids_video": ms.search_dvids(q, "video", 6, raw=raw),
+            "commons_video": __import__("archive_engine").search_commons_video(q)[:6],
             "openverse": ms.search_openverse(q, 8, raw=raw),
         }
         report[q] = {k: [{x: c.get(x) for x in ("title", "year", "width", "height",

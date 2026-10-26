@@ -28,7 +28,7 @@ def main(video, meta_path):
     publish_at = None if (slot - now).total_seconds() < 600 else short_slots.iso(slot)
     print(f"🗓️  {'Public now' if not publish_at else 'Scheduled for ' + publish_at}")
     video_id = upload_video_to_youtube(video, meta["title"], meta["description"],
-                                       ["history", "shorts", "documentary", "yemen"],
+                                       meta.get("tags") or ["history", "shorts", "documentary"],
                                        first_comment=meta.get("comment"),
                                        publish_at=publish_at)
     if not video_id:
