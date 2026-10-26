@@ -1204,14 +1204,37 @@ def _past_layer_wide(label, date, w, h):
     return layer
 
 
-def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
+def _caption(text, max_w):
+    """One line of the opening's paradox (owner, 26 Oct: "Israel warns Iran
+    off the bomb / while building its own"): Anton on a dark band, at most
+    max_w wide, on a transparent canvas."""
+    from PIL import Image, ImageDraw
+    size = 64
+    while size > 30 and _font(size, "Anton-Regular.ttf").getlength(text) > max_w - 60:
+        size -= 2
+    f = _font(size, "Anton-Regular.ttf")
+    tw = int(f.getlength(text))
+    img = Image.new("RGBA", (tw + 60, size + 40), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, img.width, img.height), fill=(0, 0, 0, 170))
+    d.rectangle((0, 0, 8, img.height), fill=(255, 150, 40, 255))
+    d.text((34, 12), text, font=f, fill=(245, 245, 245, 255))
+    return img
+
+
+def intro_clip_wide(news_video, past, seconds, script, build_dir, out,
+                    then_year=None, then_date=None, captions=None):
     """THEN / NOW at 1920x1080, split left (today) and right (the past).
+    then_year / then_date override the story's first date on the THEN side;
+    captions = (today's line, the past's line) under each half.
     Returns the counter's tick track, to mix from the clip's start."""
     import datetime as dt
     global NIXIE
     w, h, half = 1920, 1080, 960
     now = dt.date.today().year
     date, then = story_date(script)
+    if then_year:
+        then, date = then_year, then_date
     then = then or script.get("era_year") or now
     lay_full = os.path.join(build_dir, "lf_past_full.png")
     lay_half = os.path.join(build_dir, "lf_past_half.png")
@@ -1261,9 +1284,35 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
         f"eof_action=repeat:enable='between(t,{roll_at},{slide_at:.3f})'[a4]",
         # then the past slides over the whole frame and plays
         f"[a4][pf]overlay=eval=frame:y=0:"
-        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE_WIDE}))',"
-        f"trim=end_frame={frames},format=yuv420p[v]",
+        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE_WIDE}))'"
+        + ("[a5]" if captions else f",trim=end_frame={frames},format=yuv420p[v]"),
     ])
+    extra = []
+    if captions:
+        # today's line under today (full width, then its half), the past's
+        # under the past (its half, then the whole frame)
+        cy = int(h * 0.83)
+        now_c, then_c = (_caption(t, half) if t else None for t in captions)
+        parts, lab, n = [], "a5", 6
+        def lay(img, x, start, end, tag):
+            nonlocal lab, n
+            if img is None:
+                return
+            pth = os.path.join(build_dir, f"lf_cap_{tag}.png")
+            img.save(pth)
+            extra.extend(["-loop", "1", "-i", pth])
+            parts.append(f"[{lab}][{n}:v]overlay=x={x}:y={cy}:"
+                         f"enable='between(t,{start:.3f},{end:.3f})'[c{n}]")
+            lab, n = f"c{n}", n + 1
+        if now_c:
+            lay(now_c, (w - now_c.width) // 2, 0.4, TEAR_WIDE, "now_full")
+            lay(now_c, (half - now_c.width) // 2, TEAR_WIDE + SPLIT_IN, slide_at, "now_half")
+        if then_c:
+            lay(then_c, half + (half - then_c.width) // 2, roll_at + 0.3, slide_at, "then_half")
+            lay(then_c, (w - then_c.width) // 2, slide_at + SLIDE_WIDE, seconds, "then_full")
+        graph += ";" + ";".join(parts) + \
+            f";[{lab}]trim=end_frame={frames},format=yuv420p[v]" if parts else \
+            f";[a5]trim=end_frame={frames},format=yuv420p[v]"
     now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
               if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
     past_in = (["-stream_loop", "-1", "-i", past] if past.endswith(".mp4")
@@ -1273,6 +1322,7 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
                     "-framerate", str(FPS), "-i", pattern,
                     "-loop", "1", "-i", lay_full,
                     "-loop", "1", "-i", lay_half,
+                    *extra,
                     "-filter_complex", graph, "-map", "[v]", "-an",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                     "-r", str(FPS), "-frames:v", str(frames), out],

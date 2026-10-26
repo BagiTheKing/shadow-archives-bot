@@ -1,0 +1,80 @@
+name: Opening Preview
+
+# Manual. Builds only the THEN / NOW opening for review (tools/opening_preview.py):
+# contact sheets of what each side could show, and the 8.5 s opening from the
+# picks, pushed to the preview-media branch. Nothing is published.
+on:
+  workflow_dispatch:
+    inputs:
+      now_queries:
+        description: "Today's side: searches, separated by |"
+        required: true
+      then_queries:
+        description: "The past's side: searches, separated by |"
+        required: true
+      wiki:
+        description: "now-articles || then-articles (Wikipedia titles, each list separated by |)"
+        required: false
+        default: ''
+      picks:
+        description: "now,then candidate numbers from the sheets (e.g. 3,0)"
+        required: false
+        default: '0,0'
+      then_year:
+        description: "Year the counter lands on"
+        required: true
+      lines:
+        description: "Today's line || the past's line"
+        required: false
+        default: ''
+      owner_media:
+        description: "Folder with your own now.* / then.* (they win over the searches)"
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  opening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          pip install -r requirements.txt
+      - name: Build the opening
+        env:
+          DVIDS_API_KEY: ${{ secrets.DVIDS_API_KEY }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+          NOW_QUERIES: ${{ inputs.now_queries }}
+          THEN_QUERIES: ${{ inputs.then_queries }}
+          WIKI: ${{ inputs.wiki }}
+          PICKS: ${{ inputs.picks }}
+          LINES: ${{ inputs.lines }}
+          THEN_YEAR: ${{ inputs.then_year }}
+          OWNER_MEDIA_DIR: ${{ inputs.owner_media }}
+        run: |
+          export NOW_WIKI="${WIKI%%||*}" THEN_WIKI=""
+          case "$WIKI" in *"||"*) export THEN_WIKI="${WIKI#*||}";; esac
+          export NOW_PICK="${PICKS%%,*}" THEN_PICK="${PICKS#*,}"
+          export NOW_LINE="${LINES%%||*}" THEN_LINE=""
+          case "$LINES" in *"||"*) export THEN_LINE="${LINES#*||}";; esac
+          python tools/opening_preview.py out
+      - name: Push to preview-media
+        if: always()
+        run: |
+          [ -d out ] || exit 0
+          cd out
+          rm -rf work
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Opening preview (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
