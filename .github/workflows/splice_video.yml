@@ -1,0 +1,75 @@
+name: Splice Video
+
+# Manual. Lays an approved opening (owner_media/<story>/opening_clip.mp4)
+# over a dry run's finished render, without rendering it again, and keeps
+# the result as an artifact (1080p, 7 days) and a 720p review copy on
+# preview-media, with the owner folder's source pictures for thumbnail work.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The render's workflow run id"
+        required: true
+      artifact:
+        description: "Its video artifact, e.g. timely-video-82"
+        required: true
+      owner_media:
+        description: "Owner folder, e.g. owner_media/israel-nuclear"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  splice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          path: in
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Splice
+        run: |
+          mkdir -p out/media
+          python tools/splice.py in/final_longform.mp4 "${{ inputs.owner_media }}" out/final_longform.mp4
+      - name: Source pictures for the thumbnail
+        continue-on-error: true
+        env:
+          OWNER_MEDIA_DIR: ${{ inputs.owner_media }}
+        run: |
+          cd src && python -c "
+          import owner_media, shutil
+          for side in ('now', 'then'):
+              got = owner_media.opening(side)
+              if got: shutil.copy(got[0], f'../out/media/{side}.jpg')
+          "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spliced-${{ inputs.run_id }}
+          path: out/final_longform.mp4
+          compression-level: 0
+          retention-days: 7
+      - name: Review copy to preview-media
+        run: |
+          ffmpeg -y -loglevel error -i out/final_longform.mp4 -vf scale=1280:-2 \
+            -c:v libx264 -preset veryfast -crf 30 -c:a aac -b:a 96k out/media/longform_review.mp4
+          ffmpeg -y -loglevel error -i out/final_longform.mp4 -t 12 -c copy out/media/first_12s.mp4
+          cd out/media
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Spliced ${{ inputs.artifact }} from run ${{ inputs.run_id }}"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
