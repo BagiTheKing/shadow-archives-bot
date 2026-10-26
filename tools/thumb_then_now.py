@@ -47,10 +47,25 @@ def tear_mask(seam_x, slant, seed=7):
     return mask, pts
 
 
-def base(now, then, seam_x=640, slant=120, now_focus=0.45, then_focus=0.5):
-    left = cover(now, W, H, now_focus, 0.25)
+def place(img, focus, target, zoom):
+    """The picture scaled to zoom x the frame's height, cropped so its
+    subject (focus, as fractions of the picture) lands on target (pixels)."""
+    s = H * zoom / img.height
+    img = img.resize((int(img.width * s) + 1, int(img.height * s) + 1), Image.LANCZOS)
+    x = min(max(0, int(focus[0] * img.width - target[0])), img.width - W)
+    y = min(max(0, int(focus[1] * img.height - target[1])), img.height - H)
+    return img.crop((x, y, x + W, y + H))
+
+
+# where each picture's subject is: Netanyahu's face, Dimona's reactor tower
+NOW_FOCUS = (0.48, 0.30)
+THEN_FOCUS = (0.44, 0.60)
+
+
+def base(now, then, seam_x=640, slant=120):
+    left = place(now, NOW_FOCUS, (300, 230), 1.35)
     left = ImageEnhance.Contrast(ImageEnhance.Color(left).enhance(1.25)).enhance(1.15)
-    right = cover(then, W, H, then_focus, 0.6)
+    right = place(then, THEN_FOCUS, (930, 360), 2.0)
     right = ImageOps.grayscale(right).convert("RGB")
     right = ImageEnhance.Contrast(right).enhance(1.6)
     right = ImageEnhance.Brightness(right).enhance(0.85)
