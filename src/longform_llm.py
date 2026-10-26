@@ -2354,6 +2354,18 @@ def _default_keyword(text):
     return " ".join(words) if len(words) >= 2 else ""
 
 
+_GENERIC = {"there", "their", "these", "those", "would", "could", "should", "which",
+            "about", "after", "before", "where", "while", "great", "never", "every",
+            "other", "being", "think", "people", "world", "today", "still", "things"}
+
+
+def _content_words(text):
+    """Words of five letters or more, minus the common ones: what a quote
+    and the story it is set in must share to be about the same thing."""
+    return {w for w in re.findall(r"[a-z]{5,}", (text or "").lower())
+            if w not in _GENERIC}
+
+
 def _source_intro_quote(pool, topic, tone, context_before, context_after,
                         candidates, era_year=None, exclude_texts=None,
                         exclude_speakers=None, real_only=False, cast=None,
@@ -2405,8 +2417,17 @@ def _source_intro_quote(pool, topic, tone, context_before, context_after,
             # an invented line. When no quote hits the register, the most
             # card-like real one is used as written: a whole short quote,
             # 8-40 words, from a named speaker.
-            pick = sorted((c for c in usable if 8 <= len(c["text"].split()) <= 40),
-                          key=lambda c: abs(len(c["text"].split()) - 22))
+            # ...and only one about this moment of the story: picked by
+            # length alone, Peres on Iran opened the Israel nuclear video
+            # (26 Oct). At least two words in common with the story around
+            # the card, else the original line below.
+            around = _content_words(f"{topic} {context_before} {context_after}")
+            pick = sorted((c for c in usable if 8 <= len(c["text"].split()) <= 40
+                           and len(_content_words(c["text"]) & around) >= 2),
+                          # the fact sheet's own quotes (verbatim in the
+                          # event's article) before Wikiquote's
+                          key=lambda c: (c.get("source_page") != "Wikipedia",
+                                         abs(len(c["text"].split()) - 22)))
             if pick:
                 c = pick[0]
                 print(f"   📜 No quote hit the register — using the closest "

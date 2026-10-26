@@ -239,6 +239,93 @@ def article_lead_image(article_title: str):
     return found[0] if found else None
 
 
+
+def article_images(article_title: str, limit: int = 50) -> list:
+    """Every free picture a Wikipedia article uses, as Commons candidates,
+    best first. An article about a disaster carries the photographs editors
+    chose for it: the structure before, the wreckage after, the people, the
+    inquiry's diagrams. It is the most reliably relevant real imagery there
+    is, so every video draws on it before anything is generated.
+
+    Only files hosted on Commons are kept: English Wikipedia hosts its
+    fair-use files itself, and this channel may not reuse those."""
+    if not article_title:
+        return []
+    try:
+        r = _polite_get("https://en.wikipedia.org/w/api.php", params={
+            "action": "query", "format": "json", "titles": article_title,
+            "redirects": 1, "generator": "images", "gimlimit": limit,
+            "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": 1600}, timeout=30)
+        r.raise_for_status()
+        pages = (r.json().get("query") or {}).get("pages") or {}
+    except Exception as e:
+        print(f"⚠️ Article images lookup failed for {article_title!r}: {e}")
+        return []
+    free = {}
+    for key, page in pages.items():
+        if page.get("imagerepository") != "shared":
+            continue
+        info = (page.get("imageinfo") or [{}])[0]
+        meta = info.get("extmetadata") or {}
+        lic = _strip_html((meta.get("LicenseShortName") or {}).get("value", "")).lower()
+        nonfree = str((meta.get("NonFree") or {}).get("value", "")).lower()
+        if nonfree in ("true", "1") or "fair use" in lic or "non-free" in lic:
+            continue
+        free[key] = page
+    return _candidates(free)
+
+
+def category_images(category: str, limit: int = 60, depth: int = 1) -> list:
+    """The free pictures filed under a Commons category (and its direct
+    subcategories), as candidates, best first. An event's category holds far
+    more than its Wikipedia article shows: the Hyatt Regency article carries
+    three pictures, its category the investigation's photographs and figures
+    (National Bureau of Standards, public domain)."""
+    if not category:
+        return []
+    name = category if category.startswith("Category:") else f"Category:{category}"
+    pages, cats = {}, []
+    try:
+        r = _polite_get(COMMONS_API, params={
+            "action": "query", "format": "json", "generator": "categorymembers",
+            "gcmtitle": name, "gcmtype": "file|subcat", "gcmlimit": limit,
+            "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": 1600}, timeout=30)
+        r.raise_for_status()
+        for key, page in ((r.json().get("query") or {}).get("pages") or {}).items():
+            if page.get("ns") == 14:
+                cats.append(page.get("title", ""))
+            else:
+                pages[key] = page
+    except Exception as e:
+        print(f"⚠️ Commons category lookup failed for {name!r}: {e}")
+        return []
+    found = _candidates(pages)
+    for sub in cats[:6] if depth > 0 else []:
+        found += category_images(sub, limit=limit // 2, depth=depth - 1)
+    return found
+
+
+def commons_category_of(article_title: str):
+    """The Commons category Wikidata files the article's subject under
+    (property P373), or None."""
+    try:
+        r = _polite_get("https://www.wikidata.org/w/api.php", params={
+            "action": "wbgetentities", "format": "json", "sites": "enwiki",
+            "titles": article_title, "props": "claims"}, timeout=25)
+        r.raise_for_status()
+        for ent in (r.json().get("entities") or {}).values():
+            for claim in (ent.get("claims") or {}).get("P373") or []:
+                value = ((claim.get("mainsnak") or {}).get("datavalue") or {}).get("value")
+                if value:
+                    return value
+    except Exception as e:
+        print(f"⚠️ Commons category lookup on Wikidata failed for {article_title!r}: {e}")
+    return None
+
+
+
 def _fit_frame(img: Image.Image, w: int, h: int) -> Image.Image:
     """Fills w x h. Near-16:9 sources get a centred cover crop; everything else
     (portraits of people, tall paintings) sits over a blurred, darkened

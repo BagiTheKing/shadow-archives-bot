@@ -1054,10 +1054,10 @@ def _nixie(year, size=None):
     return Image.alpha_composite(Image.alpha_composite(base, glow), digits)
 
 
-def _counter_frames(now, then, work):
-    """PNG frames of the counter rolling from `now` to `then` over ROLL
-    seconds, then holding; returns (pattern, frame count, change times)."""
-    n = max(2, round(ROLL * FPS))
+def _counter_frames(now, then, work, roll=None):
+    """PNG frames of the counter rolling from `now` to `then` over `roll`
+    (ROLL) seconds, then holding; returns (pattern, frame count, change times)."""
+    n = max(2, round((roll or ROLL) * FPS))
     os.makedirs(work, exist_ok=True)
     changes, last = [], None
     for i in range(n + 1):
@@ -1071,12 +1071,12 @@ def _counter_frames(now, then, work):
     return os.path.join(work, "c%03d.png"), n + 1, changes
 
 
-def _ticks(changes, out):
+def _ticks(changes, out, roll=None):
     """A soft mechanical tick at every change of the counter."""
     parts = "+".join(f"(random(0)*2-1)*exp(-900*max(0,t-{c:.3f}))*gte(t,{c:.3f})"
                      for c in changes[:40])
     subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
-                    f"aevalsrc='({parts})*0.18':s=44100:d={ROLL + 0.3:.2f}",
+                    f"aevalsrc='({parts})*0.18':s=44100:d={max(changes[-1] if changes else 0, roll or ROLL) + 0.3:.2f}",
                     "-af", "highpass=f=1800,lowpass=f=7000", out],
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
     return out
@@ -1173,9 +1173,14 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
 # The long video's opening is split left and right (owner, 25 Oct: top and
 # bottom strips of a 16:9 frame showed nothing): today full screen until
 # TEAR_WIDE, then today on the left and the past sliding in on the right
-# with the counter rolling on the seam, both held until NOW_WIDE (today on
-# screen 3 seconds), then the past sliding over the whole frame.
-TEAR_WIDE, NOW_WIDE = 1.0, 3.0
+# with the counter rolling on the seam, the landed year held, then the past
+# sliding over the whole frame. Slow enough to read (owner, 26 Oct: today
+# was gone before it was seen and the years were cut before they moved):
+# today alone 2.5 s, the years roll 2.4 s and hold 1.2 s, the past slides
+# over in 0.6 s and plays on to WIDE_SECONDS.
+TEAR_WIDE, ROLL_WIDE, HOLD_WIDE, SLIDE_WIDE = 2.5, 2.4, 1.2, 0.6
+SPLIT_IN = 0.4                      # the past sliding into its half
+WIDE_SECONDS = TEAR_WIDE + SPLIT_IN + ROLL_WIDE + HOLD_WIDE + SLIDE_WIDE + 1.4
 
 
 def _past_layer_wide(label, date, w, h):
@@ -1217,12 +1222,15 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
     old = NIXIE
     NIXIE = 110
     try:
-        pattern, _, changes = _counter_frames(now, then, os.path.join(build_dir, "lf_nixie"))
+        pattern, _, changes = _counter_frames(now, then, os.path.join(build_dir, "lf_nixie"),
+                                              roll=ROLL_WIDE)
         cw = _nixie(then).size
     finally:
         NIXIE = old
-    ticks = _ticks([TEAR_WIDE + c for c in changes], os.path.join(build_dir, "lf_ticks.wav"))
-    slide_at = min(NOW_WIDE, max(TEAR_WIDE + ROLL + 0.3, seconds - SLIDE))
+    roll_at = TEAR_WIDE + SPLIT_IN           # the counter starts once both halves show
+    ticks = _ticks([roll_at + c for c in changes], os.path.join(build_dir, "lf_ticks.wav"),
+                   roll=ROLL_WIDE)
+    slide_at = min(roll_at + ROLL_WIDE + HOLD_WIDE, max(roll_at + 0.5, seconds - SLIDE_WIDE))
     frames = max(1, round(seconds * FPS))
     grade = "hue=s=0.35,eq=contrast=1.12,"
     graph = ";".join([
@@ -1243,17 +1251,17 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out):
         f"[a0][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a1]",
         # the past slides in from the right into the right half
         f"[a1][ph]overlay=eval=frame:y=0:"
-        f"x='if(lt(t,{TEAR_WIDE}),{w},if(lt(t,{TEAR_WIDE + 0.25}),"
-        f"{w}-{half}*(t-{TEAR_WIDE})/0.25,{half}))'[a2]",
+        f"x='if(lt(t,{TEAR_WIDE}),{w},if(lt(t,{TEAR_WIDE + SPLIT_IN}),"
+        f"{w}-{half}*(t-{TEAR_WIDE})/{SPLIT_IN},{half}))'[a2]",
         f"[a2]drawbox=x={half - 4}:y=0:w=8:h={h}:color=0xFF9628@0.95:t=fill:"
         f"enable='between(t,{TEAR_WIDE},{slide_at:.3f})'[a3]",
-        f"[3:v]setpts=PTS-STARTPTS+{TEAR_WIDE}/TB[cnt]",
+        f"[3:v]setpts=PTS-STARTPTS+{roll_at}/TB[cnt]",
         # the counter on the seam, in the lower third, clear of the faces
         f"[a3][cnt]overlay=x={(w - cw[0]) // 2}:y={int(h * 0.70) - cw[1] // 2}:"
-        f"eof_action=repeat:enable='between(t,{TEAR_WIDE},{slide_at:.3f})'[a4]",
+        f"eof_action=repeat:enable='between(t,{roll_at},{slide_at:.3f})'[a4]",
         # then the past slides over the whole frame and plays
         f"[a4][pf]overlay=eval=frame:y=0:"
-        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE}))',"
+        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE_WIDE}))',"
         f"trim=end_frame={frames},format=yuv420p[v]",
     ])
     now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
@@ -1279,15 +1287,24 @@ def opening_media(script, seconds, build_dir):
     an encore has no NOW."""
     if script.get("lane") != "timely":
         return None
-    from longform_clips import news_footage
+    import owner_media
     os.makedirs(build_dir, exist_ok=True)
-    _NOW_USED.clear()            # the Short's clips may open the long video too
-    now = ((now_footage(script, seconds, build_dir) if script.get("now_query") else None)
-           or news_footage(script, seconds, build_dir)
-           or now_footage(script, seconds, build_dir)
-           or now_photo(script, build_dir))
+    now, then = owner_media.opening("now"), owner_media.opening("then")
+    if not now and not script.get("trend") and not script.get("now_query"):
+        # a named story with no news behind it: a photo searched from the
+        # title's words opened the Israel video on a Hebrew stone relief
+        # (26 Oct). Today is the owner's picture, a NOW_QUERY, or nothing.
+        print("🕰️  No news and no NOW picture for this story — no THEN / NOW opening.")
+        return None
+    if not now:
+        from longform_clips import news_footage
+        _NOW_USED.clear()        # the Short's clips may open the long video too
+        now = ((now_footage(script, seconds, build_dir) if script.get("now_query") else None)
+               or news_footage(script, seconds, build_dir)
+               or now_footage(script, seconds, build_dir)
+               or now_photo(script, build_dir))
     if not now:
         return None
-    then = then_footage(script, seconds + 1.0, build_dir)
+    then = then or then_footage(script, seconds + 1.0, build_dir)
     return {"now": now, "then": then}
 

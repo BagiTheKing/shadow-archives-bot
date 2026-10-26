@@ -60,6 +60,14 @@ on:
         description: 'Only choose the topic and print it (no script, render or upload)'
         type: boolean
         default: false
+      owner_media:
+        description: 'Folder of your own pictures for this video (now.jpg, then.jpg, scene_012.jpg), e.g. owner_media/israel-nuclear'
+        type: string
+        default: ''
+      now_query:
+        description: "What today's side of the opening shows, for a named story (e.g. Iran nuclear talks)"
+        type: string
+        default: ''
       trend_geos:
         description: 'Override Trends regions, e.g. MA,ES (blank = weekly rotation)'
         type: string
@@ -109,6 +117,12 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
+    # A named story (story_topic) keeps its progress in its own slot, so a
+    # scheduled run never picks up a story the owner is still reviewing and
+    # publishes it (26 Oct: the Israel nuclear dry run sat in the lane's
+    # slot, one schedule away from going out with its AI pictures).
+    env:
+      CACHE_SLOT: ${{ inputs.story_topic != '' && 'story' || 'timely' }}
     # contents: write only to register the thumbnails on the thumb-rotation
     # branch (step "Register thumbnails for rotation")
     permissions:
@@ -200,15 +214,15 @@ jobs:
         id: render
         continue-on-error: true
         run: |
-          [ -f cache/timely/state.json ] || exit 0
-          python -c "import json; r=json.load(open('cache/timely/state.json')).get('rendered') or {}; print('run_id=' + str(r.get('run_id') or ''))" >> "$GITHUB_OUTPUT" || true
+          [ -f "cache/$CACHE_SLOT/state.json" ] || exit 0
+          python -c "import json; r=json.load(open('cache/$CACHE_SLOT/state.json')).get('rendered') or {}; print('run_id=' + str(r.get('run_id') or ''))" >> "$GITHUB_OUTPUT" || true
 
       - name: Restore last run's render
         if: steps.render.outputs.run_id != ''
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: render-timely
+          name: render-${{ env.CACHE_SLOT }}
           path: restore
           run-id: ${{ steps.render.outputs.run_id }}
           github-token: ${{ github.token }}
@@ -223,7 +237,9 @@ jobs:
       - name: Run trending long-form pipeline
         id: pipeline
         env:
-          RUN_CACHE_DIR: cache/timely
+          RUN_CACHE_DIR: cache/${{ env.CACHE_SLOT }}
+          # a named story is re-rendered as often as the owner reviews it
+          RUN_CACHE_MAX_RESUMES: ${{ env.CACHE_SLOT == 'story' && '20' || '2' }}
           STORY_QUEUE_DIR: queue
           RESTORE_DIR: restore
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -303,7 +319,11 @@ jobs:
           # Shorts paused (owner, 22 Oct): no native Short and no clips,
           # except on a dry run, which makes the Short with the video so
           # both can be reviewed together (kept in the render artifact)
-          NATIVE_SHORT: ${{ inputs.skip_upload && '1' || '0' }}
+          # no Shorts for now (owner, 26 Oct), dry runs included: a Short
+          # made first also spends the day's image quota before the video
+          NATIVE_SHORT: '0'
+          OWNER_MEDIA_DIR: ${{ inputs.owner_media }}
+          NOW_QUERY: ${{ inputs.now_query }}
           TOPIC_ONLY: ${{ inputs.topic_only && '1' || '0' }}
           STORY_TOPIC: ${{ inputs.story_topic }}
           STORY_STAGE: ${{ inputs.story_stage || 'full' }}
@@ -328,7 +348,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: render-timely
+          name: render-${{ env.CACHE_SLOT }}
           path: |
             build/final_longform.mp4
             build/thumbnail.jpg
@@ -415,7 +435,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: timely-script-${{ github.run_number }}
-          path: build/longform_script.json
+          # image_prompts.json: every picture still generated, for the owner
+          path: |
+            build/longform_script.json
+            build/image_prompts.json
           if-no-files-found: ignore
           retention-days: 7
 

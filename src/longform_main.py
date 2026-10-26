@@ -218,16 +218,13 @@ def build_metadata(script, chapter_marks, total_duration, scenes=None,
     if chapters:
         parts.append(chapters)
 
-    # Only claim a companion Short exists when the topic actually came from one.
-    cross_promo = ("\nThe 60-second version of this story is on the channel."
-                   if script.get("has_short") else "")
+    # No Shorts promise (owner, 26 Oct: no Shorts for now).
     fmt = formats.get(script.get("format"))
     series_line = (f"\n{SERIES_NAME} · {fmt['name']} — {fmt['promise']}."
-                   "\nIn full length here, and in 60 seconds on Shorts."
                    if SERIES_NAME else "")
     parts.append(
         f"{CHANNEL_NAME} — one catastrophic decision, examined in full."
-        f"{cross_promo}{series_line}\nSubscribe for the next one."
+        f"{series_line}\nSubscribe for the next one."
     )
 
     scenes = scenes or []
@@ -748,8 +745,12 @@ def main():
 
     # Phase 2: assets
     scenes = generate_audio_pipeline({"scenes": scenes}, BUILD_DIR)["scenes"]
+    source_titles = [a.get("title") for a in
+                     [script.get("source_article") or {}] + list(script.get("related_articles") or [])
+                     if a.get("title")]
     scenes, workers_ai_generated, total_generated = generate_longform_visuals(
-        scenes, BUILD_DIR, topic=script.get("topic"), places=script.get("places"))
+        scenes, BUILD_DIR, topic=script.get("topic"), places=script.get("places"),
+        source_titles=source_titles)
 
     try:
         import animate_engine
@@ -770,6 +771,10 @@ def main():
     # The native Short's THEN / NOW opening, on the long video too (owner,
     # 25 Oct): today's news, the year rolling back, the past sliding up.
     opening = None
+    if os.getenv("NOW_QUERY", "").strip():
+        # what today's side of the opening shows, for a named story with no
+        # news behind it (e.g. "Iran nuclear talks 2026")
+        script["now_query"] = os.getenv("NOW_QUERY").strip()
     if os.getenv("LONGFORM_THEN_NOW", "1") == "1" and usable:
         try:
             from native_short import opening_media

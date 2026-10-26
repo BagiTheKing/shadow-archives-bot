@@ -724,3 +724,34 @@ class LongformPace(unittest.TestCase):
     def test_an_hour_long_video_is_long(self):
         import published_history as P
         self.assertIsNotNone(P.longform_too_soon([self._ago(3, "PT1H2M")]))
+
+
+class OwnerMediaAndCards(unittest.TestCase):
+    """26 Oct, the Israel nuclear dry run: Peres on Iran opened it, Nixon on
+    a shopping centre closed it, and 35 scenes were AI pictures the owner
+    offered to make by hand."""
+
+    def test_off_subject_quote_shares_nothing_with_the_story(self):
+        around = L._content_words("Does Israel have nuclear weapons? Ben-Gurion "
+                                  "and France built the Dimona reactor in secret.")
+        self.assertLess(len(L._content_words(
+            "Iran is a great problem, but not necessarily a great country.") & around), 2)
+        self.assertGreaterEqual(len(L._content_words(
+            "Israel will not be the first country to introduce nuclear weapons "
+            "to the Middle East") & around), 2)
+
+    def test_owner_pictures_found_by_scene_number(self):
+        import tempfile
+        import owner_media
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("scene_012.jpg", "scene_012_1.png", "now.mp4"):
+                open(os.path.join(d, name), "wb").close()
+            os.environ["OWNER_MEDIA_DIR"] = d
+            try:
+                self.assertEqual([os.path.basename(p) for p in owner_media.scene_images(12)],
+                                 ["scene_012.jpg", "scene_012_1.png"])
+                self.assertEqual(owner_media.scene_images(3), [])
+                self.assertTrue(owner_media.opening("now")[0].endswith("now.mp4"))
+                self.assertIsNone(owner_media.opening("then"))
+            finally:
+                del os.environ["OWNER_MEDIA_DIR"]

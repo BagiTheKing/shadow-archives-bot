@@ -21,7 +21,7 @@ import json
 import os
 
 MAX_AGE_DAYS = 4
-MAX_RESUMES = 2
+MAX_RESUMES = int(os.getenv("RUN_CACHE_MAX_RESUMES", "2"))
 
 
 def _path():

@@ -51,7 +51,8 @@ from archive_engine import (search_archives, search_commons,
                             extract_poster_frame, search_archival_video,
                             fetch_archival_video, format_archival_video_credit,
                             search_commons_video, fetch_commons_video,
-                            footage_matches)
+                            footage_matches, article_lead_image, article_images,
+                            category_images, commons_category_of)
 from visual_engine import download_image, make_fallback_image
 
 # Delivery resolution for the long-form video.
@@ -403,6 +404,69 @@ def _is_war_scene(scene):
     return bool(words & WAR_WORDS)
 
 
+_POOL_STOP = {"the", "and", "with", "from", "that", "this", "were", "was", "their",
+              "they", "into", "over", "after", "before", "about", "which", "while",
+              "would", "could", "under", "years", "year", "photo", "file", "jpg"}
+
+
+def _words(text):
+    return {w for w in re.findall(r"[a-z]{4,}", (text or "").lower()) if w not in _POOL_STOP}
+
+
+def _story_pool(topic, source_titles):
+    """Real pictures of the whole story, most relevant first: each source
+    article's lead image and every free picture it uses, the main article's
+    Commons category (and its subcategories), then a Commons search on the
+    event's name. A scene whose own search finds nothing draws from it
+    before anything is generated (owner, 26 Oct: 35 of 57 scenes of the
+    Israel nuclear video were generated while its article and category
+    held real photographs; failure-point-bot draws on both)."""
+    from media_sources import OFF_TOPIC
+    out, seen = [], set()
+
+    def add(cands):
+        for c in cands or []:
+            if not c or not c.get("url") or c["url"] in seen:
+                continue
+            if (c.get("year") or 0) > HISTORY_CUTOFF or OFF_TOPIC.search(c.get("title") or ""):
+                continue
+            seen.add(c["url"])
+            out.append(c)
+
+    for n, title in enumerate(t for t in source_titles or [] if t):
+        try:
+            add([article_lead_image(title)])
+            add(article_images(title))
+            if n == 0:
+                cat = commons_category_of(title)
+                if cat:
+                    add(category_images(cat))
+        except Exception as e:
+            print(f"   ↩️  Pictures of {title!r} unavailable ({type(e).__name__}).")
+    name = re.split(r"\s*\(|,|:\s| — |\?", topic or "", maxsplit=1)[0].strip()
+    name = re.sub(r"^(the|does|did|how|why|what)\s+", "", name, flags=re.I)
+    if name and len(name.split()) <= 6:
+        try:
+            add(search_archives(name, limit=20))
+        except Exception:
+            pass
+    return out
+
+
+def _pool_pick(pool, scene, used_urls):
+    """The unused story picture that best matches what the scene says (its
+    line and its search), else the next unused one."""
+    want = _words(f"{scene.get('narration', '')} {scene.get('archive_query', '')}")
+    best, best_score = None, -1
+    for c in pool:
+        if c.get("url") in used_urls:
+            continue
+        score = len(want & _words(f"{c.get('title', '')} {c.get('about', '')}"))
+        if score > best_score:
+            best, best_score = c, score
+    return best
+
+
 def _missing_place(scene, places):
     """The story place the scene's narration names but its archive_query
     does not, or None. "Leaders gathered in Bucharest" searched as "Palace
@@ -418,7 +482,7 @@ def _missing_place(scene, places):
 
 
 def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: str = None,
-                              places=None):
+                              places=None, source_titles=None):
     """Fills each scene with image_paths (1-3 frames), possibly a video_path
     (muted b-roll), and a credit string when a real archival photo was used.
 
@@ -451,11 +515,33 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
     real_pool = []
     era0 = next((sc.get("era_year") for sc in scenes if sc.get("era_year")), None)
     war_pool = _WarPool(topic, era0)
+    story_pool = _story_pool(topic, source_titles)
+    print(f"🗄️  {len(story_pool)} real picture(s) found for the story as a whole.")
+    import owner_media
+    prompts_out = []          # build/image_prompts.json: what was still generated
 
     for idx, scene in enumerate(scenes):
         wanted = _shots_for(scene.get("duration", 0))
         era = scene.get("era_year")
         images, credits = [], []
+
+        # ---- The owner's own pictures for this scene come first ----
+        mine = owner_media.scene_images(idx)
+        if mine and not (scene.get("map") or scene.get("chain") or scene.get("dossier")):
+            for shot, src in enumerate(mine[:max(wanted, 1)]):
+                path = os.path.join(output_dir, f"lf_scene_{idx:03d}_{shot}.jpg")
+                try:
+                    Image.open(src).convert("RGB").save(path, "JPEG", quality=92)
+                    _to_kb_size(path)
+                    images.append(path)
+                    credits.append(owner_media.CREDIT)
+                except Exception as e:
+                    print(f"⚠️ Owner picture {src} unusable ({type(e).__name__}: {e}).")
+            if images:
+                print(f"🎨 Scene {idx}: the owner's picture(s) ({len(images)}).")
+                scene["image_paths"], scene["image_path"] = images, images[0]
+                scene["credit"] = credits
+                continue
 
         # ---- 0) Real archival FOOTAGE, before any still ----
         # Tried first on a spaced set of plain scenes (maps, chains and the
@@ -560,6 +646,24 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
                 print(f"📜 Scene {idx}: {len(images)} archival image(s) "
                       f"for {query!r}")
 
+        # ---- 1b) The story's own pictures, before anything is generated ----
+        # Fills the shots the scene's own search left empty, best match to
+        # the line first; each picture once in the whole video.
+        while len(images) < wanted and story_pool:
+            cand = _pool_pick(story_pool, scene, used_urls)
+            if not cand:
+                break
+            used_urls.add(cand.get("url"))
+            path = os.path.join(output_dir, f"lf_scene_{idx:03d}_{len(images)}.jpg")
+            if download_archival_image(cand, path, KB_W, KB_H):
+                images.append(path)
+                credits.append(format_credit(cand))
+                archival_used += 1
+                scene["is_real"] = True
+                real_pool.append(path)
+                print(f"📜 Scene {idx}: a real picture of the story "
+                      f"({cand.get('title', '')[:60]})")
+
         # ---- 2) Muted stock b-roll, timeless subjects only (optional) ----
         # Spaced through the video rather than granted first-come, so clips
         # and stills stay interleaved instead of clustering at the front.
@@ -601,6 +705,10 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
             # protection: a real run got 0/47 frames from Workers AI (the
             # free daily allocation was already spent by other runs) and
             # published anyway with nothing in the log calling that out.
+            prompts_out.append({"scene": idx, "shot": shot,
+                                "file": f"scene_{idx:03d}" + (f"_{shot}" if shot else "") + ".jpg",
+                                "narration": scene.get("narration", ""),
+                                "prompt": _vary_prompt(prompt, shot)})
             source = download_image(_vary_prompt(prompt, shot), path,
                                     width=LF_W, height=LF_H, era_year=era)
             if source:
@@ -629,6 +737,13 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
         if credits:
             scene["credit"] = credits
 
+    if prompts_out:
+        # the owner can make these and drop them in OWNER_MEDIA_DIR under
+        # the "file" name; a re-run of the saved script puts them in place
+        import json
+        with open(os.path.join(output_dir, "image_prompts.json"), "w", encoding="utf-8") as f:
+            json.dump(prompts_out, f, ensure_ascii=False, indent=1)
+        print(f"📝 {len(prompts_out)} generated picture(s) listed in image_prompts.json.")
     total_frames = sum(len(s.get("image_paths") or []) for s in scenes)
     workers_ai_generated = sum(1 for s in generated_sources if s == "workers-ai")
     print(f"✅ Visuals complete: {total_frames} frames for {len(scenes)} scenes "

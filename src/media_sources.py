@@ -57,7 +57,8 @@ _JUNK = re.compile(r"\b(ceremony|change of command|decoration|award|visit|wwe|"
 # title shares with the search: an "England national football team, 1959"
 # team photo and a cartoon cat stood in a Cuban Missile Crisis video (25 Oct).
 OFF_TOPIC = re.compile(r"\b(football|soccer|national team|basketball|baseball|"
-                       r"rugby|cricket|olympic|athletics|cartoon|animated|"
+                       r"rugby|cricket|olympic|olympisch|athletics|cycling|cyclist|wielren\w*|"
+                       r"tour de france|giro d'italia|peloton|cartoon|animated|"
                        r"animation|comic strip|felix the cat|disney|mickey)\b", re.I)
 _STOP = {"the", "and", "with", "from", "into", "over", "against", "attack",
          "attacks", "launch", "launches", "war", "civil", "missile", "strike",

@@ -45,7 +45,9 @@ from music_attribution import attribution_for
 W, H = 1920, 1080
 FPS = 30
 XFADE = 0.5              # crossfade within a chapter
-OPENING_SECONDS = 5.5    # the THEN / NOW opening (today on screen 3 s), then the scene's own pictures
+# the THEN / NOW opening (native_short.WIDE_SECONDS, ~8.5 s), laid over the
+# first chapter's reel, then that chapter's own pictures
+from native_short import WIDE_SECONDS as OPENING_SECONDS
 PUNCH_HOLD = 3.0         # seconds a punch-phrase callout stays on screen
 
 # The Far Cry 6 style cold-open card: black screen, an original line (or a
@@ -1496,8 +1498,10 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 then = opening.get("then")
                 past = then[0] if then else (s.get("video_path") or s["image_path"])
                 out = os.path.join(build_dir, "lf_opening.mp4")
-                s["_ticks"] = intro_clip_wide(opening["now"][0], past,
-                                              min(OPENING_SECONDS, s["duration"] + XFADE),
+                # its full length, over the first chapter rather than the
+                # first line: a 4-second hook cut it before the years had
+                # moved (owner, 26 Oct)
+                s["_ticks"] = intro_clip_wide(opening["now"][0], past, OPENING_SECONDS,
                                               opening["script"], build_dir, out)
                 s["_opening"] = out
                 s["credit"] = [c for c in (opening["now"][1], then[1] if then else "") if c] \
@@ -1536,19 +1540,6 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             else f"{shots} shot(s)"
         print(f"🎞️  Clip {idx + 1}/{len(usable)} ({s['duration']:.1f}s, {kind})...")
         _scene_clip(s, s["_clip"], idx % 8)
-        if s.get("_opening"):
-            # the opening laid over the start of the scene's own clip
-            tmp = s["_clip"] + ".open.mp4"
-            try:
-                _run(["ffmpeg", "-y", "-i", s["_clip"], "-i", s["_opening"],
-                      "-filter_complex", "[1:v]setpts=PTS-STARTPTS[o];"
-                      "[0:v][o]overlay=0:0:eof_action=pass[v]",
-                      "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "veryfast",
-                      "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "copy", tmp])
-                os.replace(tmp, s["_clip"])
-            except Exception as e:
-                s.pop("_ticks", None)
-                print(f"⚠️ THEN / NOW opening not laid ({type(e).__name__}: {e}).")
 
     # ---- Phase 2: one reel per chapter, crossfaded inside ----
     chapters, current, current_idx = [], [], None
@@ -1612,6 +1603,19 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
         offs, total = _xfade_chapter([g["_clip"] for g in group],
                                      [g["duration"] + XFADE for g in group],
                                      reel, cut_index=cuts)
+        if pos == 0 and group[0].get("_opening"):
+            # the opening laid over the start of the first chapter's reel
+            tmp = reel + ".open.mp4"
+            try:
+                _run(["ffmpeg", "-y", "-i", reel, "-i", group[0]["_opening"],
+                      "-filter_complex", "[1:v]setpts=PTS-STARTPTS[o];"
+                      "[0:v][o]overlay=0:0:eof_action=pass[v]",
+                      "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "veryfast",
+                      "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "copy", tmp])
+                os.replace(tmp, reel)
+            except Exception as e:
+                group[0].pop("_ticks", None)
+                print(f"⚠️ THEN / NOW opening not laid ({type(e).__name__}: {e}).")
         cuts += max(0, len(group) - 1)
         heading = group[0].get("chapter_heading", f"Part {c_idx + 1}")
         mark_start = cursor if next_chapter_mark_start is None else next_chapter_mark_start
