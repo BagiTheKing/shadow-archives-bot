@@ -9,8 +9,8 @@ Settings come from the environment:
   NOW_QUERIES / THEN_QUERIES   searches, separated by |
   NOW_WIKI / THEN_WIKI         Wikipedia articles whose pictures (and Commons
                                category) are candidates too, separated by |
-  NOW_PICK / THEN_PICK         the candidate number from the contact sheet
-                               (default: the first one found)
+  NOW_PICK / THEN_PICK         words from the chosen picture's title (safest),
+                               or its number on this run's contact sheet
   THEN_YEAR, THEN_DATE         the year the counter lands on, the camcorder date
   NOW_LINE / THEN_LINE         the paradox, one line under each side
   OWNER_MEDIA_DIR              now.* / then.* there win over any search
@@ -130,7 +130,17 @@ def main(out):
         if mine:
             sides[side] = mine[0]
             continue
-        pick = int(os.getenv(f"{side.upper()}_PICK", "0") or 0)
+        # a number from the sheet, or words from the picture's title: search
+        # results come back in another order on the next run (26 Oct: #22
+        # was Dimona on the sheet, a glider on the render)
+        want = os.getenv(f"{side.upper()}_PICK", "0").strip() or "0"
+        if want.isdigit():
+            pick = int(want)
+        else:
+            pick = next((i for i, c in enumerate(cands)
+                         if want.lower() in (c.get("title") or "").lower()), None)
+            if pick is None:
+                raise SystemExit(f"❌ No {side} candidate titled like {want!r}")
         order = [pick] + [i for i in range(len(cands)) if i != pick]
         for i in order:
             if i < len(cands):

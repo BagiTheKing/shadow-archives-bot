@@ -17,7 +17,7 @@ on:
         required: false
         default: ''
       picks:
-        description: "now,then candidate numbers from the sheets (e.g. 3,0)"
+        description: "now,then: words from each chosen picture's title (or sheet numbers), e.g. addresses the 118th,Dimona Nuke Factory"
         required: false
         default: '0,0'
       then_year:
