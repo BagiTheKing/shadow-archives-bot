@@ -1501,8 +1501,14 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
                 # its full length, over the first chapter rather than the
                 # first line: a 4-second hook cut it before the years had
                 # moved (owner, 26 Oct)
+                import owner_media
+                ow = owner_media.opening_settings()
+                lines = tuple(ow.get("lines") or ()) or None
                 s["_ticks"] = intro_clip_wide(opening["now"][0], past, OPENING_SECONDS,
-                                              opening["script"], build_dir, out)
+                                              opening["script"], build_dir, out,
+                                              then_year=ow.get("then_year"),
+                                              then_date=ow.get("then_date"),
+                                              captions=lines)
                 s["_opening"] = out
                 s["credit"] = [c for c in (opening["now"][1], then[1] if then else "") if c] \
                     + list(s.get("credit") or [])

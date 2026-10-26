@@ -534,7 +534,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
                     Image.open(src).convert("RGB").save(path, "JPEG", quality=92)
                     _to_kb_size(path)
                     images.append(path)
-                    credits.append(owner_media.CREDIT)
+                    credits.append(owner_media.credit_of(src))
                 except Exception as e:
                     print(f"⚠️ Owner picture {src} unusable ({type(e).__name__}: {e}).")
             if images:
