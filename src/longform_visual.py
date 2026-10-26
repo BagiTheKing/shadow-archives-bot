@@ -430,6 +430,9 @@ def _story_pool(topic, source_titles):
                 continue
             if (c.get("year") or 0) > HISTORY_CUTOFF or OFF_TOPIC.search(c.get("title") or ""):
                 continue
+            import owner_media
+            if owner_media.excluded(c.get("title")):
+                continue
             seen.add(c["url"])
             out.append(c)
 
@@ -514,6 +517,7 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
     # designed fallback produces.
     real_pool = []
     era0 = next((sc.get("era_year") for sc in scenes if sc.get("era_year")), None)
+    import owner_media
     war_pool = _WarPool(topic, era0)
     story_pool = _story_pool(topic, source_titles)
     print(f"🗄️  {len(story_pool)} real picture(s) found for the story as a whole.")
@@ -592,13 +596,15 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
         if query:
             def _search(q):
                 found = [c for c in search_archives(q)
-                         if _era_appropriate(c, era) and c.get("url") not in used_urls]
+                         if _era_appropriate(c, era) and c.get("url") not in used_urls
+                         and not owner_media.excluded(c.get("title"))]
                 if not place:
                     return found
                 # the place named in the search, else in the photo's title:
                 # never a same-named landmark somewhere else
                 there = [c for c in search_archives(f"{q} {place}")
-                         if _era_appropriate(c, era) and c.get("url") not in used_urls]
+                         if _era_appropriate(c, era) and c.get("url") not in used_urls
+                         and not owner_media.excluded(c.get("title"))]
                 return there or [c for c in found
                                  if place.lower() in (c.get("title") or "").lower()]
             candidates = []

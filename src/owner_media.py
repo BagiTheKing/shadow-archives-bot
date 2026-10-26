@@ -98,3 +98,17 @@ def opening_settings():
             return json.load(f) or {}
     except (FileNotFoundError, ValueError):
         return {}
+
+
+def excluded(title):
+    """Whether a picture's title matches the folder's exclude.json, a list
+    of words that keep a picture out of this video (["Little Boy"])."""
+    d = _dir()
+    if not d or not title:
+        return False
+    try:
+        with open(os.path.join(d, "exclude.json"), encoding="utf-8") as f:
+            words = json.load(f) or []
+    except (FileNotFoundError, ValueError):
+        return False
+    return any(w.lower() in title.lower() for w in words)
