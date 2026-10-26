@@ -1613,8 +1613,12 @@ def generate_longform_video(scenes, build_dir="build", intro_epigraph=None,
             # the opening laid over the start of the first chapter's reel
             tmp = reel + ".open.mp4"
             try:
+                # its last 0.7 s dissolve into the chapter underneath, so the
+                # past it ends on hands over to the scene's own picture
                 _run(["ffmpeg", "-y", "-i", reel, "-i", group[0]["_opening"],
-                      "-filter_complex", "[1:v]setpts=PTS-STARTPTS[o];"
+                      "-filter_complex", "[1:v]format=yuva420p,"
+                      f"fade=t=out:st={OPENING_SECONDS - 0.7:.2f}:d=0.7:alpha=1,"
+                      "setpts=PTS-STARTPTS[o];"
                       "[0:v][o]overlay=0:0:eof_action=pass[v]",
                       "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "veryfast",
                       "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "copy", tmp])

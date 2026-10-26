@@ -1176,11 +1176,11 @@ def intro_clip(news_video, past_still, seconds, script, build_dir, out):
 # with the counter rolling on the seam, the landed year held, then the past
 # sliding over the whole frame. Slow enough to read (owner, 26 Oct: today
 # was gone before it was seen and the years were cut before they moved):
-# today alone 2.5 s, the years roll 2.4 s and hold 1.2 s, the past slides
-# over in 0.6 s and plays on to WIDE_SECONDS.
-TEAR_WIDE, ROLL_WIDE, HOLD_WIDE, SLIDE_WIDE = 2.5, 2.4, 1.2, 0.6
-SPLIT_IN = 0.4                      # the past sliding into its half
-WIDE_SECONDS = TEAR_WIDE + SPLIT_IN + ROLL_WIDE + HOLD_WIDE + SLIDE_WIDE + 1.4
+# today alone 2.5 s, both ease into their halves in 0.8 s, the years roll
+# 2.4 s and hold 1 s, the past eases over in 1 s and plays on 0.8 s.
+TEAR_WIDE, ROLL_WIDE, HOLD_WIDE, SLIDE_WIDE = 2.5, 2.4, 1.0, 1.0
+SPLIT_IN = 0.8                      # today and the past easing into their halves
+WIDE_SECONDS = TEAR_WIDE + SPLIT_IN + ROLL_WIDE + HOLD_WIDE + SLIDE_WIDE + 0.8
 
 
 def _past_layer_wide(label, date, w, h):
@@ -1191,7 +1191,8 @@ def _past_layer_wide(label, date, w, h):
     d = ImageDraw.Draw(layer)
     for y in range(0, h, 4):
         d.line((0, y, w, y), fill=(0, 0, 0, 55))
-    layer.alpha_composite(_tag(label), (40, 40))
+    if label:
+        layer.alpha_composite(_tag(label), (40, 40))
     if date:
         f = _font(44)
         x, y = w - 50 - int(f.getlength(date)), h - 110
@@ -1224,11 +1225,14 @@ def _caption(text, max_w):
 
 def intro_clip_wide(news_video, past, seconds, script, build_dir, out,
                     then_year=None, then_date=None, captions=None):
-    """THEN / NOW at 1920x1080, split left (today) and right (the past).
-    then_year / then_date override the story's first date on the THEN side;
-    captions = (today's line, the past's line) under each half.
-    Returns the counter's tick track, to mix from the clip's start."""
+    """THEN / NOW at 1920x1080 as two continuous layers and one moving edge
+    (owner, 26 Oct: no cuts — today slides left into its half, the past
+    slides in on the right, both centred, then the same past slides on to
+    fill the frame while today leaves on the left). Overlays fade, never pop.
+    then_year / then_date override the story's first date; captions =
+    (today's line, the past's line). Returns the counter's tick track."""
     import datetime as dt
+    from PIL import Image
     global NIXIE
     w, h, half = 1920, 1080, 960
     now = dt.date.today().year
@@ -1236,12 +1240,24 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out,
     if then_year:
         then, date = then_year, then_date
     then = then or script.get("era_year") or now
-    lay_full = os.path.join(build_dir, "lf_past_full.png")
-    lay_half = os.path.join(build_dir, "lf_past_half.png")
-    _past_layer_wide(f"THEN · {then}", date, w, h).save(lay_full)
-    _past_layer_wide(f"THEN · {then}", date, half, h).save(lay_half)
+
+    split_at, roll_at = TEAR_WIDE, TEAR_WIDE + SPLIT_IN
+    take_at = roll_at + ROLL_WIDE + HOLD_WIDE
+    take_end = take_at + SLIDE_WIDE
+    frames = max(1, round(seconds * FPS))
+
+    layer = os.path.join(build_dir, "lf_past_full.png")
+    _past_layer_wide("", date, w, h).save(layer)
+    thentag = os.path.join(build_dir, "lf_then_tag.png")
+    _tag(f"THEN · {then}").save(thentag)
     nowtag = os.path.join(build_dir, "lf_now.png")
     _tag(f"NOW · {now}").save(nowtag)
+    # the past's layer is shown from column m(t) of itself: a 3840-wide
+    # black|white strip cropped at 1920 - m(t) is that edge as an alpha mask
+    mask = os.path.join(build_dir, "lf_mask.png")
+    m_img = Image.new("L", (2 * w, h), 0)
+    m_img.paste(255, (w, 0, 2 * w, h))
+    m_img.save(mask)
     old = NIXIE
     NIXIE = 110
     try:
@@ -1250,80 +1266,83 @@ def intro_clip_wide(news_video, past, seconds, script, build_dir, out,
         cw = _nixie(then).size
     finally:
         NIXIE = old
-    roll_at = TEAR_WIDE + SPLIT_IN           # the counter starts once both halves show
     ticks = _ticks([roll_at + c for c in changes], os.path.join(build_dir, "lf_ticks.wav"),
                    roll=ROLL_WIDE)
-    slide_at = min(roll_at + ROLL_WIDE + HOLD_WIDE, max(roll_at + 0.5, seconds - SLIDE_WIDE))
-    frames = max(1, round(seconds * FPS))
+
+    def ease(start, length):
+        p = f"clip((t-{start:.3f})/{length:.3f},0,1)"
+        return f"({p}*{p}*(3-2*{p}))"
+    # b: where today ends and the past begins, 1920 -> 960 -> 0
+    b = f"(1920-960*{ease(split_at, SPLIT_IN)}-960*{ease(take_at, SLIDE_WIDE)})"
+    in_take = f"gte(t,{take_at:.3f})"
+    x_now = f"if({in_take},{b}-1440,({b}-1920)/2)"     # today's centre: 960 -> 480 -> off
+    x_then = f"if({in_take},{b}/2,{b}-480)"            # the past's centre: 1440 -> 960
+    m = f"if({in_take},{b}/2,480)"
+
+    def fade(label, out_label, fin=None, fout=None, d=0.4):
+        f = f"[{label}]format=rgba"
+        if fin is not None:
+            f += f",fade=t=in:st={fin:.3f}:d={d}:alpha=1"
+        if fout is not None:
+            f += f",fade=t=out:st={fout:.3f}:d={d}:alpha=1"
+        return f + f"[{out_label}]"
+
     grade = "hue=s=0.35,eq=contrast=1.12,"
-    graph = ";".join([
-        "[0:v]split=2[n0][n1]",
-        _moving("n0", w, h, "nf", 0),                       # today, full frame
-        _moving("n1", half, h, "nh", 1),                    # today, left half
-        "[nf]" + BRIGHT.rstrip(",") + "[nfb]",
-        "[nh]" + BRIGHT.rstrip(",") + "[nhb]",
-        "[1:v]split=2[p0][p1]",
-        _moving("p0", half, h, "ph0", 2),                   # the past, right half
-        _moving("p1", w, h, "pf0", 3, zoom=0.08),           # the past, full frame
-        f"[ph0]{grade}setsar=1[ph1]",
-        f"[pf0]{grade}setsar=1[pf1]",
-        "[ph1][5:v]overlay=0:0[ph]",
-        "[pf1][4:v]overlay=0:0[pf]",
-        # today full, then today on the left from the tear
-        f"[nfb][nhb]overlay=0:0:enable='gte(t,{TEAR_WIDE})'[a0]",
-        f"[a0][2:v]overlay=40:40:enable='lt(t,{slide_at:.3f})'[a1]",
-        # the past slides in from the right into the right half
-        f"[a1][ph]overlay=eval=frame:y=0:"
-        f"x='if(lt(t,{TEAR_WIDE}),{w},if(lt(t,{TEAR_WIDE + SPLIT_IN}),"
-        f"{w}-{half}*(t-{TEAR_WIDE})/{SPLIT_IN},{half}))'[a2]",
-        f"[a2]drawbox=x={half - 4}:y=0:w=8:h={h}:color=0xFF9628@0.95:t=fill:"
-        f"enable='between(t,{TEAR_WIDE},{slide_at:.3f})'[a3]",
-        f"[3:v]setpts=PTS-STARTPTS+{roll_at}/TB[cnt]",
-        # the counter on the seam, in the lower third, clear of the faces
-        f"[a3][cnt]overlay=x={(w - cw[0]) // 2}:y={int(h * 0.70) - cw[1] // 2}:"
-        f"eof_action=repeat:enable='between(t,{roll_at},{slide_at:.3f})'[a4]",
-        # then the past slides over the whole frame and plays
-        f"[a4][pf]overlay=eval=frame:y=0:"
-        f"x='if(lt(t,{slide_at:.3f}),{w},max(0,{w}-{w}*(t-{slide_at:.3f})/{SLIDE_WIDE}))'"
-        + ("[a5]" if captions else f",trim=end_frame={frames},format=yuv420p[v]"),
-    ])
-    extra = []
+    graph = [
+        f"color=c=black:s={w}x{h}:r={FPS}:d={seconds + 1:.2f}[bg]",
+        _moving("0:v", w, h, "nm", 0),
+        "[nm]" + BRIGHT.rstrip(",") + "[nowL]",
+        _moving("1:v", w, h, "pm", 3, zoom=0.08),
+        f"[pm]{grade}format=rgba[pg]",
+        "[pg][4:v]overlay=0:0,format=rgba[thL]",
+        f"[6:v]format=gray,crop={w}:{h}:x='{w}-({m})':y=0[mk]",
+        "[thL][mk]alphamerge[thA]",
+        f"[bg][nowL]overlay=eval=frame:x='{x_now}':y=0[a0]",
+        f"[a0][thA]overlay=eval=frame:x='{x_then}':y=0[a1]",
+        f"[a1]drawbox=x='{b}-4':y=0:w=8:h={h}:color=0xFF9628@0.95:t=fill:"
+        f"enable='between(t,{split_at:.3f},{take_end:.3f})'[a2]",
+        fade("2:v", "nt", fout=take_at - 0.2),
+        "[a2][nt]overlay=40:40[a3]",
+        fade("5:v", "tt", fin=roll_at - 0.3),
+        f"[a3][tt]overlay=eval=frame:x='{b}+40':y=40[a4]",
+        f"[3:v]tpad=stop_mode=clone:stop_duration={seconds:.2f},"
+        f"setpts=PTS-STARTPTS+{roll_at:.3f}/TB[cn0]",
+        fade("cn0", "cn", fin=roll_at - 0.1, fout=take_at - 0.35, d=0.3),
+        f"[a4][cn]overlay=x={(w - cw[0]) // 2}:y={int(h * 0.70) - cw[1] // 2}:"
+        f"enable='between(t,{roll_at - 0.1:.3f},{take_at + 0.1:.3f})'[a5]",
+    ]
+    extra, lab, n = [], "a5", 7
     if captions:
-        # today's line under today (full width, then its half), the past's
-        # under the past (its half, then the whole frame)
         cy = int(h * 0.83)
-        now_c, then_c = (_caption(t, half) if t else None for t in captions)
-        parts, lab, n = [], "a5", 6
-        def lay(img, x, start, end, tag):
-            nonlocal lab, n
-            if img is None:
-                return
-            pth = os.path.join(build_dir, f"lf_cap_{tag}.png")
+        for i, text in enumerate(captions):
+            if not text:
+                continue
+            img = _caption(text, half)
+            pth = os.path.join(build_dir, f"lf_cap_{i}.png")
             img.save(pth)
-            extra.extend(["-loop", "1", "-i", pth])
-            parts.append(f"[{lab}][{n}:v]overlay=x={x}:y={cy}:"
-                         f"enable='between(t,{start:.3f},{end:.3f})'[c{n}]")
+            extra += ["-loop", "1", "-framerate", str(FPS), "-i", pth]
+            if i == 0:       # rides today's centre, leaves before the takeover
+                graph.append(fade(f"{n}:v", f"cp{n}", fin=0.4, fout=take_at - 0.3))
+                x = f"{x_now}+{half}-{img.width // 2}"
+            else:            # rides the past's centre, stays
+                graph.append(fade(f"{n}:v", f"cp{n}", fin=roll_at))
+                x = f"{x_then}+{half}-{img.width // 2}"
+            graph.append(f"[{lab}][cp{n}]overlay=eval=frame:x='{x}':y={cy}[c{n}]")
             lab, n = f"c{n}", n + 1
-        if now_c:
-            lay(now_c, (w - now_c.width) // 2, 0.4, TEAR_WIDE, "now_full")
-            lay(now_c, (half - now_c.width) // 2, TEAR_WIDE + SPLIT_IN, slide_at, "now_half")
-        if then_c:
-            lay(then_c, half + (half - then_c.width) // 2, roll_at + 0.3, slide_at, "then_half")
-            lay(then_c, (w - then_c.width) // 2, slide_at + SLIDE_WIDE, seconds, "then_full")
-        graph += ";" + ";".join(parts) + \
-            f";[{lab}]trim=end_frame={frames},format=yuv420p[v]" if parts else \
-            f";[a5]trim=end_frame={frames},format=yuv420p[v]"
+    graph.append(f"[{lab}]trim=end_frame={frames},format=yuv420p[v]")
+
     now_in = (["-loop", "1", "-framerate", str(FPS), "-i", news_video]
               if not news_video.endswith(".mp4") else ["-stream_loop", "-1", "-i", news_video])
     past_in = (["-stream_loop", "-1", "-i", past] if past.endswith(".mp4")
                else ["-loop", "1", "-framerate", str(FPS), "-i", past])
     subprocess.run(["ffmpeg", "-y", *now_in, *past_in,
-                    "-loop", "1", "-i", nowtag,
+                    "-loop", "1", "-framerate", str(FPS), "-i", nowtag,
                     "-framerate", str(FPS), "-i", pattern,
-                    "-loop", "1", "-i", lay_full,
-                    "-loop", "1", "-i", lay_half,
+                    "-loop", "1", "-framerate", str(FPS), "-i", layer,
+                    "-loop", "1", "-framerate", str(FPS), "-i", thentag,
+                    "-loop", "1", "-framerate", str(FPS), "-i", mask,
                     *extra,
-                    "-filter_complex", graph, "-map", "[v]", "-an",
+                    "-filter_complex", ";".join(graph), "-map", "[v]", "-an",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                     "-r", str(FPS), "-frames:v", str(frames), out],
                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True)
