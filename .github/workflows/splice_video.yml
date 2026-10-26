@@ -47,7 +47,7 @@ jobs:
       - name: Source pictures for the thumbnail
         continue-on-error: true
         env:
-          OWNER_MEDIA_DIR: ${{ inputs.owner_media }}
+          OWNER_MEDIA_DIR: ${{ github.workspace }}/${{ inputs.owner_media }}
         run: |
           cd src && python -c "
           import owner_media, shutil

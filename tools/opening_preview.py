@@ -149,6 +149,10 @@ def main(out):
                     sides[side] = got
                     print(f"{side.upper()}: #{i} {cands[i].get('title', '')[:70]}")
                     break
+    for side, path in sides.items():
+        # the chosen pictures themselves, for thumbnails (tools/thumb_then_now.py)
+        if not path.endswith(".mp4"):
+            Image.open(path).convert("RGB").save(os.path.join(out, f"{side}_source.jpg"), quality=95)
     with open(os.path.join(out, "candidates.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     if "now" not in sides or "then" not in sides:

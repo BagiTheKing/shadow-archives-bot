@@ -27,7 +27,7 @@ def splice_opening(render, clip, out):
                     "-filter_complex",
                     f"[1:v]format=yuva420p,fade=t=out:st={d - DISSOLVE:.2f}:d={DISSOLVE}:alpha=1,"
                     "setpts=PTS-STARTPTS[o];[0:v][o]overlay=0:0:eof_action=pass,format=yuv420p[v]",
-                    "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "medium",
+                    "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "veryfast",
                     "-crf", "18", "-c:a", "copy", "-movflags", "+faststart", out], check=True)
     print(f"✅ Opening ({d:.1f}s) laid over {render} → {out}")
 
