@@ -21,13 +21,18 @@ def main(hold):
     items = yt.playlistItems().list(part="contentDetails", playlistId=uploads,
                                     maxResults=50).execute().get("items", [])
     ids = [i["contentDetails"]["videoId"] for i in items]
-    vids = yt.videos().list(part="snippet,status", id=",".join(ids)).execute()["items"]
+    vids = yt.videos().list(part="snippet,status,statistics,contentDetails",
+                            id=",".join(ids)).execute()["items"]
     now = dt.datetime.now(dt.timezone.utc)
-    print(f"Latest {len(vids)} uploads:")
+    print(f"Latest {len(vids)} uploads (views, length, category, AI disclosure):")
     for v in vids:
         st, sn = v["status"], v["snippet"]
         when = st.get("publishAt") or sn.get("publishedAt")
-        print(f"  {v['id']}  {st.get('privacyStatus'):8}  {when}  {sn['title'][:70]}")
+        views = v.get("statistics", {}).get("viewCount", "?")
+        length = v.get("contentDetails", {}).get("duration", "?")
+        print(f"  {v['id']}  {st.get('privacyStatus'):8}  {when}  {views:>6} views  "
+              f"{length:>9}  cat {sn.get('categoryId')}  "
+              f"synthetic={st.get('containsSyntheticMedia')}  {sn['title'][:70]}")
     scheduled = [v for v in vids if v["status"].get("privacyStatus") == "private"
                  and v["status"].get("publishAt")
                  and dt.datetime.fromisoformat(v["status"]["publishAt"].replace("Z", "+00:00")) > now]
