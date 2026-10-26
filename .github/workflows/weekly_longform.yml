@@ -26,8 +26,11 @@ on:
         type: string
         default: '-7'
 
+# Shared with the trending lane (weekly_timely.yml): two long-form runs never
+# overlap, so the second one sees the first one's upload and steps aside
+# (one long video every two days, longform_main LONGFORM_GAP_HOURS).
 concurrency:
-  group: weekly-longform
+  group: longform
   cancel-in-progress: false
 
 jobs:

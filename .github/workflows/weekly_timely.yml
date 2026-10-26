@@ -31,7 +31,12 @@ on:
     # quota resets (~07:00 UTC), before the Shorts (15:23) spend it, and never
     # on Wednesday, the encore lane's day. The 15:00 slot left the 2026-09-28
     # run with every model spent and half a story.
-    - cron: '40 7 * * 2,4,6'
+    # Every day since 2026-10-26 (owner): one long video every two days
+    # across both lanes. The run itself steps aside while the channel's last
+    # long video is under 44 hours old (longform_main, LONGFORM_GAP_HOURS),
+    # so a daily start gives exactly that pace and a failed day is made up
+    # the next morning instead of three days later.
+    - cron: '40 7 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:
@@ -64,8 +69,10 @@ on:
         type: string
         default: ''
 
+# Shared with the encore lane (weekly_longform.yml): two long-form runs never
+# overlap, so the second one sees the first one's upload and steps aside.
 concurrency:
-  group: weekly-timely
+  group: longform
   cancel-in-progress: false
 
 jobs:

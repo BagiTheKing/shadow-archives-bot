@@ -113,6 +113,13 @@ without the owner's say-so.
     thumbnails are listed in the run summary; only a broken video is stopped.
     Every failure a run has had becomes a test in tests/ (offline, run on
     each push).
+20. **One long video every two days**, whichever lane makes it (owner,
+    2026-10-26). The trending lane starts every morning and a scheduled run
+    steps aside while the channel's last long video is under 44 hours old;
+    the two lanes never run at once. Manual and dry runs are not held.
+    Trend videos keep the story title rule (searchable name and a stake,
+    under 60 characters); the news hook goes in the thumbnail and the
+    description, never the title.
 
 ## Process
 14. Check a change against this list before pushing. Test writing with a

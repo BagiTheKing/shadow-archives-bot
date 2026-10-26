@@ -85,6 +85,33 @@ def published_within(videos, hours: float = None):
     return [v for _, v in sorted(recent, key=lambda p: p[0], reverse=True)]
 
 
+# One long video every two days, across both long-form lanes (owner,
+# 2026-10-26: the long videos were getting no impressions while the channel
+# put one up nearly every day next to three or four Shorts). 44 hours, not
+# 48: GitHub starts scheduled runs hours late on this repo, and a run two
+# days on must not step aside because the last one started late.
+LONGFORM_GAP_HOURS = float(os.getenv("LONGFORM_GAP_HOURS", "44"))
+
+
+def last_longform(videos):
+    """(published time, video) of the newest long-form upload, or None."""
+    from channel_insights import _is_short
+    dated = [(t, v) for v in (videos or [])
+             if not _is_short(v.get("duration", ""))
+             for t in [_published_at(v)] if t]
+    return max(dated, key=lambda p: p[0]) if dated else None
+
+
+def longform_too_soon(videos, hours: float = None):
+    """The newest long-form upload when it is younger than the gap, else None."""
+    hours = LONGFORM_GAP_HOURS if hours is None else hours
+    last = last_longform(videos)
+    if not last:
+        return None
+    age = datetime.datetime.now(datetime.timezone.utc) - last[0]
+    return last if age < datetime.timedelta(hours=hours) else None
+
+
 def covered_topics(videos, longform_only: bool = False):
     """Pool topics the channel has already published.
 

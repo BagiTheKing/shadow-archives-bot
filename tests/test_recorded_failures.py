@@ -698,3 +698,29 @@ class ShortsPerDay(unittest.TestCase):
         import short_slots as S
         u = lambda h: dt.datetime(2026, 10, 20, h, tzinfo=dt.timezone.utc)
         self.assertEqual(S.next_slot([u(9)], u(10)), u(15))
+
+
+class LongformPace(unittest.TestCase):
+    """Long videos went up nearly every day (8-22 Oct) and earned 1-29 views
+    each: one every two days now, whichever lane makes it."""
+
+    def _ago(self, hours, duration):
+        import datetime as dt
+        t = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+        return {"title": f"{hours}h", "duration": duration,
+                "publishedAt": t.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+    def test_recent_long_video_holds_the_run(self):
+        import published_history as P
+        got = P.longform_too_soon([self._ago(2, "PT45S"), self._ago(20, "PT9M52S")])
+        self.assertEqual(got[1]["title"], "20h")
+
+    def test_shorts_do_not_count_and_old_videos_free_it(self):
+        import published_history as P
+        self.assertIsNone(P.longform_too_soon([self._ago(1, "PT58S"),
+                                               self._ago(47, "PT11M19S")]))
+        self.assertIsNone(P.longform_too_soon(None))
+
+    def test_an_hour_long_video_is_long(self):
+        import published_history as P
+        self.assertIsNotNone(P.longform_too_soon([self._ago(3, "PT1H2M")]))

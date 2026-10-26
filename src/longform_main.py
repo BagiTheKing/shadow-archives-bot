@@ -162,6 +162,13 @@ def check_visual_quality(workers_ai_generated: int, total_generated: int,
     share = workers_ai_generated / total_generated
     if share >= MIN_PREFERRED_FRAMES:
         return
+    if os.getenv("SKIP_UPLOAD") == "1":
+        # a dry run publishes nothing: halting it only threw away the hour
+        # of work the owner ran it to watch (Trending #78, 25 Oct)
+        print(f"⚠️ Only {workers_ai_generated}/{total_generated} generated frames "
+              f"came from Workers AI (floor {MIN_PREFERRED_FRAMES:.0%}) — dry run, "
+              "rendering anyway; a real upload would stop here.")
+        return
 
     print(f"\n❌ Halted: only {workers_ai_generated}/{total_generated} generated "
           f"frames came from Workers AI (floor is {MIN_PREFERRED_FRAMES:.0%}).")
@@ -558,6 +565,20 @@ def main():
     # traceback instead of the explanation it exists to print.
     history = load_published()
     print(f"🧾 History: {describe(history)}")
+
+    # The pace (published_history.LONGFORM_GAP_HOURS): a scheduled run steps
+    # aside while the channel's last long video is under two days old. Manual
+    # runs are the owner's call and dry runs publish nothing, so neither waits.
+    if (os.getenv("GITHUB_EVENT_NAME") == "schedule"
+            and os.getenv("SKIP_UPLOAD") != "1" and os.getenv("FORCE_PUBLISH") != "1"):
+        from published_history import LONGFORM_GAP_HOURS, longform_too_soon
+        recent = longform_too_soon(history)
+        if recent:
+            when, video = recent
+            print(f"⏸️  Last long video went up {when:%Y-%m-%d %H:%M} UTC "
+                  f"({video.get('title', '')[:70]}) — under {LONGFORM_GAP_HOURS:.0f} "
+                  "hours ago. One long video every two days: nothing made this run.")
+            return
 
     try:
         story_topic = os.getenv("STORY_TOPIC", "").strip()
