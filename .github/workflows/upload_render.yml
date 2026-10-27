@@ -1,0 +1,53 @@
+name: Upload Render
+
+# Manual. Publishes one finished render (e.g. a Splice Video artifact) with
+# the title, description, tags, thumbnail and first comment from the owner
+# folder's upload.json. Nothing is rendered again.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The run that holds the video artifact"
+        required: true
+      artifact:
+        description: "The artifact, e.g. spliced-40409257931"
+        required: true
+      owner_media:
+        description: "Owner folder with upload.json, e.g. owner_media/israel-nuclear"
+        required: true
+      privacy:
+        description: "public, unlisted or private"
+        required: true
+        default: public
+
+concurrency:
+  group: longform
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          path: in
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Upload
+        env:
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          PRIVACY_STATUS: ${{ inputs.privacy }}
+        run: python tools/upload_render.py in/final_longform.mp4 "${{ inputs.owner_media }}"
