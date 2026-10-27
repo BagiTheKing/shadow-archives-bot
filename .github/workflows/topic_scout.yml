@@ -12,8 +12,9 @@ name: Topic Scout
 # this cron is the late backup.
 
 on:
-  schedule:
-    - cron: '5 7 * * *'
+  # Schedule off (owner, 27 Oct): waiting 48 h on the Israel nuclear video.
+  # schedule:
+    # - cron: '5 7 * * *'
   workflow_dispatch:
     inputs:
       lanes:

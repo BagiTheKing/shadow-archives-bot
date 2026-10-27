@@ -1,12 +1,13 @@
 name: Daily YouTube Shorts Publisher
 
 on:
-  schedule:
+  # Schedule off (owner, 27 Oct): waiting 48 h on the Israel nuclear video.
+  # schedule:
     # Two a week, Mon and Fri (owner, 2026-10-09): the clips cut from each
     # long video bring ~85% of the Shorts views, the standalone Shorts ~40
     # views each; Mon and Fri carry no long-form upload, which keeps every
     # day under the 10,000-unit YouTube quota. Day numbers: 0=Sun ... 6=Sat.
-    - cron: '23 15 * * 0,1,5'
+    # - cron: '23 15 * * 0,1,5'
   workflow_dispatch:
     inputs:
       skip_upload:

@@ -5,7 +5,8 @@ name: Weekly Long-Form — Encore Lane
 # Lane 2 is weekly_timely.yml.
 
 on:
-  schedule:
+  # Schedule off (owner, 27 Oct): waiting 48 h on the Israel nuclear video.
+  # schedule:
     # Tuesdays 09:00 UTC. Moved off Sunday: OpenRouter's free tier is 50
     # requests per DAY across everything, and Sunday also publishes a Short.
     # Tuesday and Thursday are the only days with no other run.
@@ -14,7 +15,7 @@ on:
     # day does not matter. LONGFORM_TOPIC_OFFSET only feeds the fallback.
     # Wednesdays since 2026-09-28 (owner): Tuesday is a trend-lane day now,
     # and two story videos on one day share one free quota.
-    - cron: '0 9 * * 3'
+    # - cron: '0 9 * * 3'
   workflow_dispatch:
     inputs:
       skip_upload:

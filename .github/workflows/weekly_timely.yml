@@ -12,7 +12,8 @@ name: Long-Form — Trending Lane
 # publishes without anyone reading the script first.
 
 on:
-  schedule:
+  # Schedule off (owner, 27 Oct): waiting 48 h on the Israel nuclear video.
+  # schedule:
     # Every 2 days at 15:00 UTC (day-of-month step of 2 — the 1st, 3rd, 5th,
     # ...), owner's explicit request to move off a weekly cadence.
     #
@@ -36,7 +37,7 @@ on:
     # long video is under 44 hours old (longform_main, LONGFORM_GAP_HOURS),
     # so a daily start gives exactly that pace and a failed day is made up
     # the next morning instead of three days later.
-    - cron: '40 7 * * *'
+    # - cron: '40 7 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:
