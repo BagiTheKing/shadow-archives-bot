@@ -440,8 +440,8 @@
         "videos/yLX-UhLKFdg/2_map.jpg",
         "videos/yLX-UhLKFdg/3_person.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-26T18:39:40.636688+00:00",
       "views_at_start": 3,
       "results": [
@@ -456,9 +456,16 @@
           "views": 1,
           "days": 3.07,
           "per_day": 0.33
+        },
+        {
+          "file": "videos/yLX-UhLKFdg/3_person.jpg",
+          "views": 3,
+          "days": 3.97,
+          "per_day": 0.76
         }
       ],
-      "registered": "2026-10-20T09:59:26.102173+00:00"
+      "registered": "2026-10-20T09:59:26.102173+00:00",
+      "winner": "videos/yLX-UhLKFdg/3_person.jpg"
     },
     "Z-gKpv3eBIs": {
       "files": [
@@ -493,15 +500,21 @@
         "videos/_534Qt2ANi8/3_frame.jpg"
       ],
       "status": "testing",
-      "current": 1,
-      "since": "2026-10-26T18:39:40.636688+00:00",
-      "views_at_start": 3,
+      "current": 2,
+      "since": "2026-10-30T17:58:59.511097+00:00",
+      "views_at_start": 5,
       "results": [
         {
           "file": "videos/_534Qt2ANi8/1_person.jpg",
           "views": 3,
           "days": 4.06,
           "per_day": 0.74
+        },
+        {
+          "file": "videos/_534Qt2ANi8/2_map.jpg",
+          "views": 2,
+          "days": 3.97,
+          "per_day": 0.5
         }
       ],
       "registered": "2026-10-22T13:40:52.979613+00:00"
