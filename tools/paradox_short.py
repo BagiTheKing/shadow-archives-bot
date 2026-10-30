@@ -57,7 +57,21 @@ def font(size):
 # ---------------------------------------------------------------- pictures
 
 def fetch(url):
-    from archive_engine import _polite_get
+    """The picture at url. A Special:FilePath link (refused with 400 for
+    some names) is resolved through the Commons API to the file's own url."""
+    from urllib.parse import unquote
+    from archive_engine import COMMONS_API, _polite_get
+    if "Special:FilePath/" in url:
+        name = unquote(url.split("Special:FilePath/", 1)[1]).replace("_", " ")
+        r = _polite_get(COMMONS_API, params={"action": "query", "format": "json",
+                                             "titles": f"File:{name}", "prop": "imageinfo",
+                                             "iiprop": "url", "iiurlwidth": 2000}, timeout=30)
+        r.raise_for_status()
+        page = next(iter((r.json().get("query") or {}).get("pages", {}).values()), {})
+        info = (page.get("imageinfo") or [{}])[0]
+        url = info.get("thumburl") or info.get("url")
+        if not url:
+            raise SystemExit(f"❌ No Commons file named {name!r}")
     r = _polite_get(url)
     r.raise_for_status()
     return Image.open(io.BytesIO(r.content)).convert("RGB")
