@@ -1,0 +1,59 @@
+name: Paradox Short
+
+# Manual. Builds a NOW / THEN Short that ends on the full video
+# (tools/paradox_short.py) from an owner folder's short.json and pushes it to
+# preview-media for review. Nothing is published.
+on:
+  workflow_dispatch:
+    inputs:
+      owner_media:
+        description: "Owner folder with short.json, e.g. owner_media/israel-nuclear"
+        required: true
+      voice:
+        description: "Kokoro voice"
+        required: false
+        default: am_onyx
+
+permissions:
+  contents: write
+
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg espeak-ng
+          pip install -r requirements.txt
+      - name: Cache Kokoro model files
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+      - name: Fetch Kokoro model files (cache miss only)
+        run: |
+          mkdir -p models
+          [ -f models/kokoro-v1.0.onnx ] || curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          [ -f models/voices-v1.0.bin ] || curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+      - name: Build the Short
+        env:
+          KOKORO_VOICE: ${{ inputs.voice }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+        run: python tools/paradox_short.py "${{ inputs.owner_media }}" out
+      - name: Push to preview-media
+        if: always()
+        run: |
+          [ -d out ] || exit 0
+          cd out
+          rm -rf work
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Paradox Short (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media

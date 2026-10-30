@@ -1,0 +1,83 @@
+{
+ "then_year": 1960,
+ "music": "Beyond the Lows",
+ "images": {
+  "bengurion": {
+   "url": "https://commons.wikimedia.org/wiki/Special:FilePath/David_Ben-Gurion_(D597-087).jpg",
+   "credit": "David Ben-Gurion — Fritz Cohen — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  },
+  "kennedy": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Kennedy%26Gurion.jpg",
+   "credit": "Kennedy & Ben-Gurion, 1961 — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  "dimona": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/Dimona_Nuke_Factory_under_construction_in_1960_%281%29.jpg",
+   "credit": "Dimona under construction, 1960 — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.44,
+    0.6
+   ]
+  },
+  "vanunu": {
+   "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Mordechai_Vanunu_2009.jpg",
+   "credit": "Mordechai Vanunu, 2009 — Eileen Fleming — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Israel's prime minister warned that an Iranian bomb would mean a second Holocaust."
+  },
+  {
+   "show": "opening",
+   "say": "But sixty-six years ago, in the Negev desert, Israel was secretly building its own."
+  },
+  {
+   "show": "bengurion",
+   "tag": "1960",
+   "say": "Its prime minister told parliament the reactor was designed exclusively for peaceful purposes."
+  },
+  {
+   "show": "kennedy",
+   "tag": "1961",
+   "say": "President Kennedy pressed him to let American inspectors in."
+  },
+  {
+   "show": "dimona",
+   "tag": "1967",
+   "zoom": "tight",
+   "say": "By early 1967, Israel had finished its first bomb."
+  },
+  {
+   "show": "vanunu",
+   "tag": "1986",
+   "say": "In 1986, a technician named Mordechai Vanunu leaked photos from inside Dimona to a London newspaper."
+  },
+  {
+   "show": "now",
+   "tag": "2026",
+   "say": "Estimates now run past one hundred warheads. Israel has never admitted a single one."
+  },
+  {
+   "show": "end",
+   "say": "The whole story is in the full video."
+  }
+ ],
+ "end": {
+  "title": "THE FULL STORY",
+  "sub": "HOW ISRAEL BUILT THE BOMB IN SECRET",
+  "pointer": "FULL VIDEO ↓ LINKED BELOW"
+ }
+}
