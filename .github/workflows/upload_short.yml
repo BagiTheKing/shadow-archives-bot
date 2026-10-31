@@ -9,6 +9,10 @@ on:
       meta_file:
         description: "Title, description, comment and not_before (JSON in the repo)"
         required: true
+      file:
+        description: "The Short's file on preview-media (native.mp4, or short.mp4 from Paradox Short)"
+        required: false
+        default: native.mp4
 
 permissions:
   contents: write
@@ -27,7 +31,7 @@ jobs:
       - name: Fetch the approved Short
         run: |
           git fetch -q origin preview-media
-          git show origin/preview-media:native.mp4 > short.mp4
+          git show "origin/preview-media:${{ inputs.file || 'native.mp4' }}" > short.mp4
           ls -la short.mp4
       - name: Upload
         env:
