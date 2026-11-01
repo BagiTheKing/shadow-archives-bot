@@ -20,13 +20,24 @@ def main(out, query, recent=None):
     from archive_engine import HEADERS
     from native_short import _video_candidates
     os.makedirs(out, exist_ok=True)
-    cands = _video_candidates([query], recent=int(recent) if recent else None)[:5]
+    if query.startswith("http"):
+        # exact clips (links separated by spaces): a frame every 8 s, up to 40
+        cands = []
+        for u in query.split():
+            r = subprocess.run(["ffprobe", "-v", "error", "-user_agent", HEADERS["User-Agent"],
+                                "-show_entries", "format=duration", "-of", "csv=p=0", u],
+                               capture_output=True, text=True, timeout=90)
+            dur = float((r.stdout or "0").strip() or 0)
+            cands.append({"url": u, "title": u.rsplit("/", 1)[-1][:80], "duration": dur,
+                          "_step": 8.0, "_max": 40})
+    else:
+        cands = _video_candidates([query], recent=int(recent) if recent else None)[:5]
     index = []
     for k, c in enumerate(cands):
         dur = float(c.get("duration") or 0)
-        step = max(3.0, dur / 24)
+        step = c.get("_step") or max(3.0, dur / 24)
         tiles, t = [], 1.0
-        while t < dur and len(tiles) < 24:
+        while t < dur and len(tiles) < (c.get("_max") or 24):
             f = os.path.join(out, f"tmp_{k}.jpg")
             r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-user_agent",
                                 HEADERS["User-Agent"], "-ss", f"{t:.1f}", "-i", c["url"],
