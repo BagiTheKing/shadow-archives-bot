@@ -934,6 +934,9 @@ def is_static(path) -> bool:
         return False
 
 
+_SOURCES = {}            # url -> the whole file, once downloaded this run
+
+
 def fetch_commons_video(candidate: dict, output_path: str,
                         seconds: float = ARCHIVAL_CLIP_SECONDS, start=None) -> bool:
     """Cuts `seconds` of silent footage out of a Commons video. Streams
@@ -968,24 +971,29 @@ def fetch_commons_video(candidate: dict, output_path: str,
     except Exception as e:
         print(f"⚠️ Commons video stream failed ({candidate.get('title')}): {e}")
     if not ok:
-        tmp = output_path + ".src"
+        # downloaded once per run and kept: a pinned newsreel cut for eight
+        # scenes was fetched eight times
+        tmp = _SOURCES.get(candidate["url"])
         try:
-            with _polite_get(candidate["url"], stream=True, timeout=120,
-                             headers={**HEADERS, "Accept": "*/*"}) as resp:
-                resp.raise_for_status()
-                size = 0
-                with open(tmp, "wb") as f:
-                    for chunk in resp.iter_content(1 << 20):
-                        size += len(chunk)
-                        if size > 150 * 1024 * 1024:
-                            raise ValueError("source file too large")
-                        f.write(chunk)
+            if not tmp or not os.path.exists(tmp):
+                tmp = output_path + ".src"
+                with _polite_get(candidate["url"], stream=True, timeout=120,
+                                 headers={**HEADERS, "Accept": "*/*"}) as resp:
+                    resp.raise_for_status()
+                    size = 0
+                    with open(tmp, "wb") as f:
+                        for chunk in resp.iter_content(1 << 20):
+                            size += len(chunk)
+                            if size > 400 * 1024 * 1024:
+                                raise ValueError("source file too large")
+                            f.write(chunk)
+                _SOURCES[candidate["url"]] = tmp
             ok = cut(tmp)
         except Exception as e:
             print(f"⚠️ Commons video download failed ({candidate.get('title')}): {e}")
-        finally:
-            if os.path.exists(tmp):
+            if tmp and os.path.exists(tmp):
                 os.remove(tmp)
+            _SOURCES.pop(candidate["url"], None)
     if ok and is_static(output_path):
         print(f"   ↩️  {candidate.get('title')!r}: still photographs, not footage — skipped.")
         candidate["_static"] = True

@@ -1,0 +1,860 @@
+{
+ "topic": "Tanker War",
+ "lane": "timely",
+ "era_year": 1987,
+ "format": "order",
+ "title": "Tankers Are Burning in Hormuz Again. In 1987 It Pulled America Into War",
+ "description": "This week Iran's Revolutionary Guard reported three tankers on fire in the Strait of Hormuz. Almost forty years ago, the same waters saw the Tanker War: Iraq and Iran attacked hundreds of merchant ships, Kuwait put its tankers under the American flag, and the US Navy ended up fighting Iran at sea, then shot down Iran Air Flight 655.",
+ "tags": [
+  "Tanker War",
+  "Strait of Hormuz",
+  "Operation Earnest Will",
+  "Operation Praying Mantis",
+  "Iran Air Flight 655",
+  "USS Vincennes",
+  "USS Stark",
+  "Iran Iraq War",
+  "Persian Gulf 1987",
+  "history documentary"
+ ],
+ "thumbnail_text": "IT HAPPENED BEFORE",
+ "thumbnail_badge": "1987",
+ "comment_question": "Which moment made the war at sea impossible to stop: the Stark, the Bridgeton mine, or Praying Mantis?",
+ "places": [
+  "Strait of Hormuz",
+  "Kharg Island",
+  "Kuwait",
+  "Persian Gulf",
+  "Bandar Abbas"
+ ],
+ "chapters": [
+  {
+   "heading": "Fire in the Strait",
+   "pacing": {
+    "role": "open",
+    "words_per_image": 22,
+    "tts_rate": "+8%"
+   },
+   "punch_phrase": "nothing you read this week makes sense",
+   "punch_idx": 1,
+   "scenes": [
+    {
+     "narration": "This week, Iran's Revolutionary Guard reported three tankers on fire in the Strait of Hormuz.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/4/44/330-CFD-DN-SC-89-09436_%2817358204065%29.jpg",
+       "title": "330-CFD-DN-SC-89-09436 (17358204065).jpg",
+       "credit": "330-CFD-DN-SC-89-09436 (17358204065) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "oil tanker Persian Gulf",
+     "image_prompt": "an oil tanker burning at sea, black smoke, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "To most people, it looks like chaos. It isn't. It's a story with a first chapter, and if you miss it, nothing you read this week makes sense.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/330-CFD-DN-SC-88-03384_%2817170669240%29.jpg",
+       "title": "330-CFD-DN-SC-88-03384 (17170669240).jpg",
+       "credit": "330-CFD-DN-SC-88-03384 (17170669240) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Persian Gulf smoke",
+     "image_prompt": "smoke over the sea at dusk, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Because almost forty years ago, in these same waters, the same thing happened.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/18/Earnest_Will_convoy.jpg",
+       "title": "Earnest Will convoy.jpg",
+       "credit": "Earnest Will convoy — PH2 Tolliver — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Earnest Will convoy",
+     "image_prompt": "a convoy of tankers at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "And it ended with the United States fighting Iran at sea, and an American warship shooting down a passenger jet full of people.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 158,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Sahand burning",
+     "image_prompt": "a burning warship, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In the next seven minutes, here is the whole first chapter.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 38,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Earnest Will lookout",
+     "image_prompt": "a sailor with binoculars, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "Two Rivals, One Gulf",
+   "pacing": {
+    "role": "build",
+    "words_per_image": 30,
+    "tts_rate": "+6%"
+   },
+   "punch_phrase": "the one thing that paid for the war",
+   "punch_idx": 3,
+   "scenes": [
+    {
+     "narration": "In September 1980, Iraq's president, Saddam Hussein, invaded Iran.",
+     "pin": null,
+     "archive_query": "Saddam Hussein",
+     "image_prompt": "portrait, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "dossier": {
+      "decision": false,
+      "file_no": 1,
+      "name": "Saddam Hussein",
+      "role": "President of Iraq",
+      "shown": "Saddam Hussein",
+      "side": "right"
+     }
+    },
+    {
+     "narration": "Across the border stood Ruhollah Khomeini, the cleric who had taken power in Iran's revolution the year before.",
+     "pin": null,
+     "archive_query": "Ruhollah Khomeini",
+     "image_prompt": "portrait, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "dossier": {
+      "decision": false,
+      "file_no": 2,
+      "name": "Ruhollah Khomeini",
+      "role": "Supreme Leader of Iran",
+      "shown": "Ruhollah Khomeini",
+      "side": "left"
+     }
+    },
+    {
+     "narration": "The war on land sank into trenches. Around half a million people would die.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/Iran-Iraq_War%2C_color_photos_%E2%80%93_Defapress_%2831%29.jpg",
+       "title": "Iran-Iraq War, color photos – Defapress (31).jpg",
+       "credit": "Iran-Iraq War, color photos – Defapress (31) — AnonymousUnknown author — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/2/25/Iran-Iraq_War%2C_color_photos_%E2%80%93_Defapress_%2832%29.jpg",
+       "title": "Iran-Iraq War, color photos – Defapress (32).jpg",
+       "credit": "Iran-Iraq War, color photos – Defapress (32) — AnonymousUnknown author — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran-Iraq War trenches",
+     "image_prompt": "soldiers in desert trenches, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "So both sides went after the one thing that paid for the war: oil.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/e/e4/330-CFD-DN-SC-88-01034_%2816735712104%29.jpg",
+       "title": "330-CFD-DN-SC-88-01034 (16735712104).jpg",
+       "credit": "330-CFD-DN-SC-88-01034 (16735712104) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "oil platform Persian Gulf",
+     "image_prompt": "an offshore oil platform, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In 1984, Iraq's air force struck Iran's main oil terminal at Kharg Island, and the tankers loading there.",
+     "pin": null,
+     "archive_query": "Kharg Island",
+     "image_prompt": "oil terminal, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "map": {
+      "target": "Kharg Island",
+      "origin": "",
+      "action": "mark",
+      "light": [
+       "Iran",
+       "Iraq"
+      ],
+      "ll": [
+       50.3258,
+       29.2428
+      ]
+     }
+    },
+    {
+     "narration": "Iran answered by hitting the ships of the countries that lent Iraq money, above all Kuwait.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/bb/A_port_view_of_the_reflagged_Kuwaiti_supertanker_GAS_KING_underway_-_DPLA_-_19892de0776dc8635a5172d22fc562c0.jpeg",
+       "title": "A port view of the reflagged Kuwaiti supertanker GAS KING underway - DPLA - 19892de0776dc8635a5172d22fc562c0.jpeg",
+       "credit": "A port view of the reflagged Kuwaiti supertanker GAS KING underway - DPLA - 19892de0776dc8 — Department of Defense. American Forces Information — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Kuwaiti tanker",
+     "image_prompt": "a supertanker at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "That was the Tanker War. Iraq attacked merchant ships two hundred and eighty-three times. Iran, one hundred and sixty-eight.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/9/9e/330-CFD-DN-SC-88-01048_%2817172017359%29.jpg",
+       "title": "330-CFD-DN-SC-88-01048 (17172017359).jpg",
+       "credit": "330-CFD-DN-SC-88-01048 (17172017359) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "tanker smoke Persian Gulf",
+     "image_prompt": "smoke on the horizon at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "The Flag Trick",
+   "pacing": {
+    "role": "build",
+    "words_per_image": 30,
+    "tts_rate": "+6%"
+   },
+   "punch_phrase": "an attack on the United States",
+   "punch_idx": 1,
+   "scenes": [
+    {
+     "narration": "By January 1987, Kuwait's tankers were being hit again and again. So Kuwait had an idea.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/5/5c/USS_Hawes_%28FFG-53%29%2C_USS_William_H._Standley_%28CG-32%29_and_USS_Guadalcanal_%28LPH-7%29_escort_tanker_Gas_King_in_the_Persian_Gullf_on_21_October_1987_%286432283%29.jpg",
+       "title": "USS Hawes (FFG-53), USS William H. Standley (CG-32) and USS Guadalcanal (LPH-7) escort tanker Gas King in the Persian Gullf on 21 October 1987 (6432283).jpg",
+       "credit": "USS Hawes (FFG-53), USS William H. Standley (CG-32) and USS Guadalcanal (LPH-7) escort tan — PH2 Elliot, U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "tanker escort",
+     "image_prompt": "warships escorting a tanker, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "It asked Washington to put its tankers under the American flag. Then an attack on them would be an attack on the United States.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/a/a5/The_guided_missile_frigate_USS_THACH_%28FFG_43%29_follows_a_line_of_reflagged_Kuwaiti_tankers_while_participating_in_convoy_escort_operations_-_DPLA_-_67803f814f7c8243904400fb40fbe3b8.jpeg",
+       "title": "The guided missile frigate USS THACH (FFG 43) follows a line of reflagged Kuwaiti tankers while participating in convoy escort operations - DPLA - 67803f814f7c8243904400fb40fbe3b8.jpeg",
+       "credit": "The guided missile frigate USS THACH (FFG 43) follows a line of reflagged Kuwaiti tankers  — Department of Defense. American Forces Information — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "reflagged Kuwaiti tankers",
+     "image_prompt": "a line of tankers behind a frigate, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "map": {
+      "target": "Kuwait",
+      "origin": "",
+      "action": "mark",
+      "light": [
+       "Kuwait",
+       "Iran",
+       "Iraq"
+      ],
+      "ll": [
+       47.98,
+       29.37
+      ]
+     }
+    },
+    {
+     "narration": "In March, President Ronald Reagan agreed.",
+     "pin": null,
+     "archive_query": "Ronald Reagan",
+     "image_prompt": "portrait, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "dossier": {
+      "decision": true,
+      "file_no": 3,
+      "name": "Ronald Reagan",
+      "role": "President of the United States",
+      "shown": "Ronald Reagan",
+      "side": "right"
+     }
+    },
+    {
+     "narration": "Then the danger came from the side nobody expected.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/8/8d/USS_Stark_%28FFG-31%29_underway_in_the_Pacific_Ocean_on_13_July_1982.jpeg",
+       "title": "USS Stark (FFG-31) underway in the Pacific Ocean on 13 July 1982.jpeg",
+       "credit": "USS Stark (FFG-31) underway in the Pacific Ocean on 13 July 1982 — Todd Pacific Shipyards Corp. — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Stark",
+     "image_prompt": "a frigate at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "On the seventeenth of May, an Iraqi jet fired two missiles into the American frigate USS Stark.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/be/USS_Stark_%28FFG-31%29_listing_after_missile_hit_in_the_Persian_Gulf_on_18_May_1987.jpeg",
+       "title": "USS Stark (FFG-31) listing after missile hit in the Persian Gulf on 18 May 1987.jpeg",
+       "credit": "USS Stark (FFG-31) listing after missile hit in the Persian Gulf on 18 May 1987 — U.S. Navy — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/7/7f/USS_Stark_-_external_damage_by_exocet.jpg",
+       "title": "USS Stark - external damage by exocet.jpg",
+       "credit": "USS Stark - external damage by exocet — Service Depicted:  Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Stark missile damage",
+     "image_prompt": "a burning frigate listing, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Thirty-seven American sailors died.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/d/d1/USS_Stark_FFG-31_port_side_following_missile_strike.jpg",
+       "title": "USS Stark FFG-31 port side following missile strike.jpg",
+       "credit": "USS Stark FFG-31 port side following missile strike — U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Stark damage",
+     "image_prompt": "a damaged frigate, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Five days later, President Reagan stood before their families in Florida.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d0/President_Reagan%27s_Remarks_at_the_Memorial_service_for_the_USS_Stark%2C_May_22%2C_1987.webm/President_Reagan%27s_Remarks_at_the_Memorial_service_for_the_USS_Stark%2C_May_22%2C_1987.webm.480p.vp9.webm",
+       "title": "President Reagan's Remarks at the Memorial service for the USS Stark, May 22, 1987.webm",
+       "duration": 1703.14,
+       "start": 278,
+       "credit": "President Reagan's remarks at the USS Stark memorial service, 22 May 1987 — Ronald Reagan Presidential Library — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Stark memorial",
+     "image_prompt": "a memorial service in a hall, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Iraq apologized and called it an error. In Washington, the President's advisers met over the maps of the Gulf.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/President_Ronald_Reagan_Holds_a_National_Security_Planning_Group_Meeting_on_The_Uss_Stark_Attack_in_The_White_House_Situation_Room_%28From_Left_to_Right%29_General_Robert_Herres_Secreta_-_DPLA_-_0c5d06690c96a4a0089447fab11a21fe.jpg",
+       "title": "President Ronald Reagan Holds a National Security Planning Group Meeting on The Uss Stark Attack in The White House Situation Room (From Left to Right) General Robert Herres Secreta - DPLA - 0c5d06690c96a4a0089447fab11a21fe.jpg",
+       "credit": "President Ronald Reagan Holds a National Security Planning Group Meeting on The Uss Stark  — President (1981-1989 : Reagan). White House Photog — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/2/28/President_Ronald_Reagan_listening_to_General_Robert_Herres_during_a_National_Security_Planning_Group_NSPG_Meeting_regarding_Iraqi_attack_of_the_USS_Stark_in_situation_room_-_DPLA_-_55b88d32b5a660852851703094e1a509.jpg",
+       "title": "President Ronald Reagan listening to General Robert Herres during a National Security Planning Group NSPG Meeting regarding Iraqi attack of the USS Stark in situation room - DPLA - 55b88d32b5a660852851703094e1a509.jpg",
+       "credit": "President Ronald Reagan listening to General Robert Herres during a National Security Plan — President (1981-1989 : Reagan). White House Photog — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Reagan National Security Planning Group Stark",
+     "image_prompt": "a meeting around a map, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "The convoys would go ahead.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d0/President_Reagan%27s_Remarks_at_the_Memorial_service_for_the_USS_Stark%2C_May_22%2C_1987.webm/President_Reagan%27s_Remarks_at_the_Memorial_service_for_the_USS_Stark%2C_May_22%2C_1987.webm.480p.vp9.webm",
+       "title": "President Reagan's Remarks at the Memorial service for the USS Stark, May 22, 1987.webm",
+       "duration": 1703.14,
+       "start": 238,
+       "credit": "President Reagan's remarks at the USS Stark memorial service, 22 May 1987 — Ronald Reagan Presidential Library — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Reagan USS Stark memorial",
+     "image_prompt": "a memorial service, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "Earnest Will",
+   "pacing": {
+    "role": "build",
+    "words_per_image": 30,
+    "tts_rate": "+6%"
+   },
+   "punch_phrase": "The frigates could not",
+   "punch_idx": 2,
+   "scenes": [
+    {
+     "narration": "On the twenty-fourth of July 1987, the first convoy sailed: Kuwaiti tankers under the American flag, with American warships alongside.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/18/Earnest_Will_convoy.jpg",
+       "title": "Earnest Will convoy.jpg",
+       "credit": "Earnest Will convoy — PH2 Tolliver — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/fe/USS_Wisconsin_in_Operation_Earnest_Will_DN-ST-93-00917.jpg",
+       "title": "USS Wisconsin in Operation Earnest Will DN-ST-93-00917.jpg",
+       "credit": "USS Wisconsin in Operation Earnest Will DN-ST-93-00917 — PH1 T. Cosgrove, USN — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Earnest Will convoy",
+     "image_prompt": "a convoy at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "That same day, the biggest tanker, the Bridgeton, hit a mine.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Earnest_Will_Bridgeton.jpg",
+       "title": "Earnest Will Bridgeton.jpg",
+       "credit": "Earnest Will Bridgeton — PH3 Henry Cleveland — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Bridgeton tanker mine",
+     "image_prompt": "a supertanker, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "So the warships fell in behind it. The tanker's huge hull could take a mine. The frigates could not.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/fd/SS_Middleton_during_Operation_Earnest_Will_DN-SN-88-10144.jpg",
+       "title": "SS Middleton during Operation Earnest Will DN-SN-88-10144.jpg",
+       "credit": "SS Middleton during Operation Earnest Will DN-SN-88-10144 — PHCS Mitchell, USN — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "tanker convoy",
+     "image_prompt": "a warship following a tanker, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "The Navy sent minesweepers and helicopters to clear the sea lanes.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 254,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "minesweeping helicopter Persian Gulf",
+     "image_prompt": "a helicopter towing a mine sled over the sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In September, American helicopters caught an Iranian ship, the Iran Ajr, laying mines at night.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/e/e9/Port_quarter_view_of_Iranian_minelaying_ship_Iran_Ajr_after_American_capture_Operation_Prime_Chance_1986_DN-SC-87-12579.jpg",
+       "title": "Port quarter view of Iranian minelaying ship Iran Ajr after American capture Operation Prime Chance 1986 DN-SC-87-12579.jpg",
+       "credit": "Port quarter view of Iranian minelaying ship Iran Ajr after American capture Operation Pri — PH3 Henry Cleveland, USN — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran Ajr",
+     "image_prompt": "a small cargo ship at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "When sailors boarded it, the mines were still on its deck.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/DN-SC-87-12583_Contact_mines_partially_covered_by_a_tarpaulin_on_the_deck_of_the_captured_Iranian_mine-laying_ship_IRAN_AJR.jpg",
+       "title": "DN-SC-87-12583 Contact mines partially covered by a tarpaulin on the deck of the captured Iranian mine-laying ship IRAN AJR.jpg",
+       "credit": "DN-SC-87-12583 Contact mines partially covered by a tarpaulin on the deck of the captured  — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran Ajr mines",
+     "image_prompt": "naval mines on a ship's deck, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In October, an Iranian Silkworm missile hit the Sea Isle City, an American-flagged tanker in Kuwaiti waters. Its American captain was blinded.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/19/MV_Sea_Isle_City_1987.jpg",
+       "title": "MV Sea Isle City 1987.jpg",
+       "credit": "MV Sea Isle City 1987 — PH2 Tolliver (USN) — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Sea Isle City tanker",
+     "image_prompt": "a tanker at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Three days later, US warships shelled two Iranian oil platforms in reply. Each side was now answering the other.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/e/e4/John_Young_Nimble_Archer.jpg",
+       "title": "John Young Nimble Archer.jpg",
+       "credit": "John Young Nimble Archer — Camera Operator: PH3 HENRY CLEVELAND  Date Shot: 1 — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/3/38/Operation_Nimble_Archer_DN-SC-88-01042.jpg",
+       "title": "Operation Nimble Archer DN-SC-88-01042.jpg",
+       "credit": "Operation Nimble Archer DN-SC-88-01042 — PH3 Henry Cleveland, USN — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Nimble Archer oil platform",
+     "image_prompt": "an oil platform burning, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "Praying Mantis",
+   "pacing": {
+    "role": "pivot",
+    "words_per_image": 24,
+    "tts_rate": "+2%"
+   },
+   "punch_phrase": "the largest battle the American navy had fought at sea",
+   "punch_idx": 4,
+   "scenes": [
+    {
+     "narration": "On the fourteenth of April 1988, the frigate USS Samuel B. Roberts hit a mine.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/7/7d/An_elevated_starboard_bow_view_of_the_guided_missile_frigate_SAMUEL_B._ROBERTS_%28FFG-58%29_underway_during_sea_trials_prior_to_its_commissioning_-_DPLA_-_0fe266ed97afa7019f42141745dc1f22.jpeg",
+       "title": "An elevated starboard bow view of the guided missile frigate SAMUEL B. ROBERTS (FFG-58) underway during sea trials prior to its commissioning - DPLA - 0fe266ed97afa7019f42141745dc1f22.jpeg",
+       "credit": "An elevated starboard bow view of the guided missile frigate SAMUEL B. ROBERTS (FFG-58) un — Department of Defense. American Forces Information — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Samuel B. Roberts",
+     "image_prompt": "a frigate at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "The blast tore open its hull. Its crew fought for hours to keep it afloat, and saved it.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Ffg58minedamage.jpg",
+       "title": "Ffg58minedamage.jpg",
+       "credit": "Ffg58minedamage — PH2 RUDY D. PAHOYO — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/A_photographer_records_the_damage_to_the_hull_of_the_guided_missile_frigate_USS_SAMUEL_B._ROBERTS_%28FFG-58%29_sustained_when_the_ship_struck_a_mine_while_on_patrol_in_the_Persian_Gulf_-_DPLA_-_7ec4123e38fde008f49e5c9c3550fc1e.jpeg",
+       "title": "A photographer records the damage to the hull of the guided missile frigate USS SAMUEL B. ROBERTS (FFG-58) sustained when the ship struck a mine while on patrol in the Persian Gulf - DPLA - 7ec4123e38fde008f49e5c9c3550fc1e.jpeg",
+       "credit": "A photographer records the damage to the hull of the guided missile frigate USS SAMUEL B.  — Department of Defense. American Forces Information — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Samuel B Roberts mine damage",
+     "image_prompt": "a ship hull with a large hole in dry dock, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Four days later, the United States struck back. The operation was called Praying Mantis.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 30,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Operation Praying Mantis",
+     "image_prompt": "warships firing, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In a single day, American warships and aircraft destroyed two Iranian oil platforms.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 46,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Sassan oil platform burns",
+     "image_prompt": "an oil platform burning, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "They sank or crippled half of Iran's working navy. It was the largest battle the American navy had fought at sea since the Second World War.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Aerial_view_of_Iranian_frigate_Sahand_burning_after_air_attack_Operation_Praying_Mantis_DN-SN-89-03125.jpg",
+       "title": "Aerial view of Iranian frigate Sahand burning after air attack Operation Praying Mantis DN-SN-89-03125.jpg",
+       "credit": "Aerial view of Iranian frigate Sahand burning after air attack Operation Praying Mantis DN — US Navy, Unknown scene camera operator — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Bild-Prayingmantis5sahand.jpg",
+       "title": "Bild-Prayingmantis5sahand.jpg",
+       "credit": "Bild-Prayingmantis5sahand — Service Depicted: Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Sahand burning",
+     "image_prompt": "a burning frigate, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "The war at sea had turned. But the worst day was still ahead.",
+     "pin": [
+      {
+       "kind": "video",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a2/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm/Navy_News_This_Week_-_30_April_1988_-_Operation_Praying_Mantis.webm.480p.vp9.webm",
+       "title": "Navy News This Week - 30 April 1988 - Operation Praying Mantis.webm",
+       "duration": 283.821,
+       "start": 229,
+       "credit": "Navy News This Week - 30 April 1988 - Operation Praying Mantis — US Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Praying Mantis",
+     "image_prompt": "smoke at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "Flight 655",
+   "pacing": {
+    "role": "drive",
+    "words_per_image": 24,
+    "tts_rate": "+4%"
+   },
+   "punch_phrase": "sixty-six of them children",
+   "punch_idx": 5,
+   "scenes": [
+    {
+     "narration": "On the third of July 1988, the cruiser USS Vincennes was fighting Iranian gunboats inside Iran's own waters.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/USS_Vincennes_%28CG-49%29_underway_at_sea%2C_in_1988.jpg",
+       "title": "USS Vincennes (CG-49) underway at sea, in 1988.jpg",
+       "credit": "USS Vincennes (CG-49) underway at sea, in 1988 — U.S. Navy — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/USS_Vincennes_%28CG-49%29_launches_a_RIM-66_Standard_missile%2C_in_1988.jpg",
+       "title": "USS Vincennes (CG-49) launches a RIM-66 Standard missile, in 1988.jpg",
+       "credit": "USS Vincennes (CG-49) launches a RIM-66 Standard missile, in 1988 — U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Vincennes 1988",
+     "image_prompt": "a cruiser firing a missile, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "At Bandar Abbas, an Iran Air Airbus took off for Dubai. A flight of less than half an hour.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/2/20/Iran_Air_Airbus_A300B2-203_EP-IBU%2C_Lemwerder_Airfield_1987.jpg",
+       "title": "Iran Air Airbus A300B2-203 EP-IBU, Lemwerder Airfield 1987.jpg",
+       "credit": "Iran Air Airbus A300B2-203 EP-IBU, Lemwerder Airfield 1987 — Reiner Geerdts — CC BY-SA 4.0 (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran Air Airbus A300",
+     "image_prompt": "an airliner on a runway, 1987, Persian Gulf, period-accurate, documentary photograph style",
+     "map": {
+      "target": "Strait of Hormuz",
+      "origin": "",
+      "action": "mark",
+      "light": [
+       "Iran",
+       "United Arab Emirates",
+       "Oman"
+      ],
+      "ll": [
+       56.25,
+       26.57
+      ]
+     }
+    },
+    {
+     "narration": "In the cruiser's combat center, the crew believed the plane was an Iranian F-14 fighter diving to attack. It was climbing, in its airline corridor, sending a civilian signal.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/USS_Vincennes_%28CG-49%29_Aegis_large_screen_displays.jpg",
+       "title": "USS Vincennes (CG-49) Aegis large screen displays.jpg",
+       "credit": "USS Vincennes (CG-49) Aegis large screen displays — Service Depicted:  NavyCamera Operator: TIM MASTER — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Aegis combat information center",
+     "image_prompt": "radar screens in a dark control room, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Captain Will Rogers gave the order. Two missiles hit the airliner.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/CAPT_Will_C._Rogers_III_1988.jpg",
+       "title": "CAPT Will C. Rogers III 1988.jpg",
+       "credit": "CAPT Will C. Rogers III 1988 — Service Depicted:  NavyCamera Operator: PH3 RONALD — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Will Rogers Vincennes",
+     "image_prompt": "a naval captain, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "All two hundred and ninety people on board died, sixty-six of them children.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/f/ff/Wreckage_of_Iran_Air_Flight_655_01.jpg",
+       "title": "Wreckage of Iran Air Flight 655 01.jpg",
+       "credit": "Wreckage of Iran Air Flight 655 01 — Irna — Public domain (via Wikimedia Commons)"
+      },
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Wreckage_of_Iran_Air_Flight_655_03.jpg",
+       "title": "Wreckage of Iran Air Flight 655 03.jpg",
+       "credit": "Wreckage of Iran Air Flight 655 03 — Irna — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran Air Flight 655 wreckage",
+     "image_prompt": "aircraft wreckage on the ground, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "In Iran, the dead were mourned as victims of a crime. In the United States, the Navy called it a tragic accident. In 1990, Captain Rogers was awarded the Legion of Merit for his command.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/Iranians_mourn_those_who_died_on_Iran_Air_Flight_655%2C_Larestan%2C_Iran_%28cropped%29.jpg",
+       "title": "Iranians mourn those who died on Iran Air Flight 655, Larestan, Iran (cropped).jpg",
+       "credit": "Iranians mourn those who died on Iran Air Flight 655, Larestan, Iran (cropped) — IRNA — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Iran Air Flight 655 mourning",
+     "image_prompt": "mourners beside coffins, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Washington expressed regret, but never apologized. In 1996 it paid sixty-one point eight million dollars to the victims' families, without admitting responsibility.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/c/ca/Admiral_Crowe_and_Secretary_of_Defense_Frank_C._Carlucci_brief_reporters_on_Iran_Air_Flight_655_at_the_Pentagon%2C_July_1988.jpg",
+       "title": "Admiral Crowe and Secretary of Defense Frank C. Carlucci brief reporters on Iran Air Flight 655 at the Pentagon, July 1988.jpg",
+       "credit": "Admiral Crowe and Secretary of Defense Frank C. Carlucci brief reporters on Iran Air Fligh — Josn Oscar Sosa / Department of Defense — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Crowe Carlucci Iran Air 655",
+     "image_prompt": "officials at a press briefing, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "Two weeks after the shootdown, Iran accepted the United Nations ceasefire. On the twentieth of August 1988, the war ended. And this is where the war at sea ended.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/0/06/USS_Vincennes_returns_to_San_Diego_Oct_1988.jpg",
+       "title": "USS Vincennes returns to San Diego Oct 1988.jpg",
+       "credit": "USS Vincennes returns to San Diego Oct 1988 — Service Depicted:  NavyCamera Operator: PH3 RONALD — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Vincennes returns San Diego",
+     "image_prompt": "a cruiser returning to port, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  },
+  {
+   "heading": "The Same Waters",
+   "pacing": {
+    "role": "close",
+    "words_per_image": 26,
+    "tts_rate": "+6%"
+   },
+   "punch_phrase": "They are continuing one",
+   "punch_idx": 3,
+   "scenes": [
+    {
+     "narration": "Now look again at this week: tankers burning in the Strait of Hormuz, while talks go on in the background.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/330-CFD-DN-SC-88-03384_%2817170669240%29.jpg",
+       "title": "330-CFD-DN-SC-88-03384 (17170669240).jpg",
+       "credit": "330-CFD-DN-SC-88-03384 (17170669240) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "tanker fire",
+     "image_prompt": "smoke at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "To Iran, an American warship in the Gulf is the ship that shot down Flight 655.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/d/d6/USS_Vincennes_launching_SM-2MR_in_1987.jpg",
+       "title": "USS Vincennes launching SM-2MR in 1987.jpg",
+       "credit": "USS Vincennes launching SM-2MR in 1987 — Service Depicted:  Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "USS Vincennes",
+     "image_prompt": "a cruiser at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "To America, a mine in the Gulf is the Bridgeton and the Samuel B. Roberts.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/Ffg58minedamage2.jpg",
+       "title": "Ffg58minedamage2.jpg",
+       "credit": "Ffg58minedamage2 — PH1 Chuck Mussi — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Samuel B Roberts",
+     "image_prompt": "a damaged ship in dry dock, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "If you only see this week's headlines, it looks like a new crisis. It is the second chapter of an old one.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/DN-ST-89-01438_%2817280169672%29.jpg",
+       "title": "DN-ST-89-01438 (17280169672).jpg",
+       "credit": "DN-ST-89-01438 (17280169672) — National Museum of the U.S. Navy — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Persian Gulf sunset warship",
+     "image_prompt": "a warship at sunset, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    },
+    {
+     "narration": "That's why every new fire there feels like a threat to both sides at once. Nobody is starting a story. They are continuing one.",
+     "pin": [
+      {
+       "kind": "photo",
+       "url": "https://upload.wikimedia.org/wikipedia/commons/1/18/Earnest_Will_convoy.jpg",
+       "title": "Earnest Will convoy.jpg",
+       "credit": "Earnest Will convoy — PH2 Tolliver — Public domain (via Wikimedia Commons)"
+      }
+     ],
+     "archive_query": "Persian Gulf tanker",
+     "image_prompt": "tankers at sea, 1987, Persian Gulf, period-accurate, documentary photograph style"
+    }
+   ]
+  }
+ ],
+ "intro_epigraph": {
+  "sentences": [
+   "Every tanker that burns in the Gulf burns on top of another one."
+  ],
+  "keyword": "on top of another one"
+ },
+ "verdict_epigraph": {
+  "sentences": [
+   "Nobody in these waters remembers the war the same way."
+  ],
+  "keyword": "the same way"
+ },
+ "word_count": 809
+}
