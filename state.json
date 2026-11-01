@@ -473,8 +473,8 @@
         "videos/Z-gKpv3eBIs/2_person.jpg",
         "videos/Z-gKpv3eBIs/3_frame.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-28T18:19:47.134149+00:00",
       "views_at_start": 16,
       "results": [
@@ -489,9 +489,16 @@
           "views": 9,
           "days": 3.09,
           "per_day": 2.91
+        },
+        {
+          "file": "videos/Z-gKpv3eBIs/3_frame.jpg",
+          "views": 6,
+          "days": 3.98,
+          "per_day": 1.51
         }
       ],
-      "registered": "2026-10-21T11:09:01.211699+00:00"
+      "registered": "2026-10-21T11:09:01.211699+00:00",
+      "winner": "videos/Z-gKpv3eBIs/2_person.jpg"
     },
     "_534Qt2ANi8": {
       "files": [
