@@ -1,0 +1,7 @@
+{
+ "now_focus": [0.32, 0.45], "then_focus": [0.63, 0.5],
+ "now_tag": "2019", "then_tag": "1987",
+ "a": {"left": ["TANKERS HIT", "AGAIN"], "right": ["290", "DEAD LAST TIME"]},
+ "b": ["HOW DID IT END", "LAST TIME?"],
+ "c": {"left": ["SAME WATERS", "SAME FIRES"], "right": ["THE US", "WENT TO WAR"]}
+}

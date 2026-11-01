@@ -141,8 +141,12 @@ def main(out):
             # words from the title, alternatives separated by |, in order;
             # never a fall back to an unrelated picture (a Pompeo briefing
             # opened the Tanker War when the chosen clip was a slideshow)
+            kind = None
+            if want.startswith(("photo:", "video:")):       # the photo, not the clip of the same name
+                kind, want = want.split(":", 1)
             order = [i for w in want.split("|") for i, c in enumerate(cands)
-                     if w.strip().lower() in (c.get("title") or "").lower()]
+                     if w.strip().lower() in (c.get("title") or "").lower()
+                     and (kind is None or c["kind"] == kind)]
             order = list(dict.fromkeys(order))
             if not order:
                 raise SystemExit(f"❌ No {side} candidate titled like {want!r}")

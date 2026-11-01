@@ -62,10 +62,13 @@ NOW_FOCUS = (0.48, 0.30)
 THEN_FOCUS = (0.44, 0.60)
 
 
+NOW_ZOOM, THEN_ZOOM = 1.35, 2.0
+
+
 def base(now, then, seam_x=640, slant=120):
-    left = place(now, NOW_FOCUS, (300, 230), 1.35)
+    left = place(now, NOW_FOCUS, (300, 230), NOW_ZOOM)
     left = ImageEnhance.Contrast(ImageEnhance.Color(left).enhance(1.25)).enhance(1.15)
-    right = place(then, THEN_FOCUS, (930, 360), 2.0)
+    right = place(then, THEN_FOCUS, (930, 360), THEN_ZOOM)
     right = ImageOps.grayscale(right).convert("RGB")
     right = ImageEnhance.Contrast(right).enhance(1.6)
     right = ImageEnhance.Brightness(right).enhance(0.85)
@@ -106,37 +109,54 @@ def tag(img, xy, words, anchor="la"):
     d.text(xy, words, font=f, fill=WHITE, anchor=anchor)
 
 
-def variants(now, then, out):
+def variants(now, then, out, spec=None):
+    """Three thumbnails. spec (a story's thumbs.json) gives the subjects'
+    places and the words; without it, the Israel nuclear video's."""
+    global NOW_FOCUS, THEN_FOCUS, NOW_ZOOM, THEN_ZOOM
+    spec = spec or {
+        "now_focus": [0.48, 0.30], "then_focus": [0.44, 0.60],
+        "now_tag": "TODAY", "then_tag": "1960",
+        "a": {"left": ["NO BOMB", "FOR IRAN"], "right": ["100+", "FOR ISRAEL"]},
+        "b": ["WHO REALLY", "HAS THE BOMB?"],
+        "c": {"left": ["\u201cIRAN MUST", "NEVER...\u201d"], "right": ["BUILT IN", "SECRET"]}}
+    NOW_FOCUS, THEN_FOCUS = tuple(spec["now_focus"]), tuple(spec["then_focus"])
+    NOW_ZOOM, THEN_ZOOM = spec.get("now_zoom", 1.35), spec.get("then_zoom", 2.0)
     os.makedirs(out, exist_ok=True)
+    nt, tt = spec.get("now_tag", "TODAY"), spec.get("then_tag", "")
+
     # A: the two claims side by side
     a = base(now, then)
-    tag(a, (40, 34), "TODAY")
-    tag(a, (W - 40, 34), "1960", anchor="ra")
-    text(a, (40, H - 140), "NO BOMB", 118, WHITE, anchor="ls")
-    text(a, (40, H - 40), "FOR IRAN", 84, YELLOW, anchor="ls")
-    text(a, (W - 40, H - 140), "100+", 150, RED, anchor="rs")
-    text(a, (W - 40, H - 40), "FOR ISRAEL", 84, WHITE, anchor="rs")
+    tag(a, (40, 34), nt)
+    tag(a, (W - 40, 34), tt, anchor="ra")
+    l1, l2 = spec["a"]["left"]
+    r1, r2 = spec["a"]["right"]
+    text(a, (40, H - 140), l1, 118, WHITE, anchor="ls")
+    text(a, (40, H - 40), l2, 84, YELLOW, anchor="ls")
+    text(a, (W - 40, H - 140), r1, 150, RED, anchor="rs")
+    text(a, (W - 40, H - 40), r2, 84, WHITE, anchor="rs")
     a.convert("RGB").save(os.path.join(out, "thumb_a.jpg"), quality=92)
 
     # B: one question across the seam
     b = base(now, then)
-    tag(b, (40, 34), "TODAY")
-    tag(b, (W - 40, 34), "1960", anchor="ra")
-    text(b, (W // 2, H - 150), "WHO REALLY", 112, WHITE, anchor="ms")
-    text(b, (W // 2, H - 40), "HAS THE BOMB?", 112, YELLOW, anchor="ms")
+    tag(b, (40, 34), nt)
+    tag(b, (W - 40, 34), tt, anchor="ra")
+    text(b, (W // 2, H - 150), spec["b"][0], 112, WHITE, anchor="ms")
+    text(b, (W // 2, H - 40), spec["b"][1], 112, YELLOW, anchor="ms")
     b.convert("RGB").save(os.path.join(out, "thumb_b.jpg"), quality=92)
 
-    # C: what he says, what was built
+    # C: what is said now, what happened then
     c = base(now, then, seam_x=600)
-    text(c, (36, 120), "“IRAN MUST", 92, WHITE, anchor="ls")
-    text(c, (36, 222), "NEVER...”", 92, WHITE, anchor="ls")
-    text(c, (W - 36, H - 150), "BUILT IN", 92, WHITE, anchor="rs")
-    text(c, (W - 36, H - 44), "SECRET", 120, RED, anchor="rs")
-    tag(c, (W - 40, 34), "1960", anchor="ra")
+    text(c, (36, 120), spec["c"]["left"][0], 92, WHITE, anchor="ls")
+    text(c, (36, 222), spec["c"]["left"][1], 92, WHITE, anchor="ls")
+    text(c, (W - 36, H - 150), spec["c"]["right"][0], 92, WHITE, anchor="rs")
+    text(c, (W - 36, H - 44), spec["c"]["right"][1], 120, RED, anchor="rs")
+    tag(c, (W - 40, 34), tt, anchor="ra")
     c.convert("RGB").save(os.path.join(out, "thumb_c.jpg"), quality=92)
 
 
 if __name__ == "__main__":
+    import json
     now_p, then_p, out_dir = sys.argv[1:4]
-    variants(Image.open(now_p).convert("RGB"), Image.open(then_p).convert("RGB"), out_dir)
+    spec = json.load(open(sys.argv[4], encoding="utf-8")) if len(sys.argv) > 4 else None
+    variants(Image.open(now_p).convert("RGB"), Image.open(then_p).convert("RGB"), out_dir, spec)
     print(f"✅ Thumbnails in {out_dir}")
