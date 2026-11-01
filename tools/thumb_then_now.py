@@ -63,12 +63,13 @@ THEN_FOCUS = (0.44, 0.60)
 
 
 NOW_ZOOM, THEN_ZOOM = 1.35, 2.0
+NOW_AT, THEN_AT = (300, 230), (930, 360)     # where each subject lands in the frame
 
 
 def base(now, then, seam_x=640, slant=120):
-    left = place(now, NOW_FOCUS, (300, 230), NOW_ZOOM)
+    left = place(now, NOW_FOCUS, NOW_AT, NOW_ZOOM)
     left = ImageEnhance.Contrast(ImageEnhance.Color(left).enhance(1.25)).enhance(1.15)
-    right = place(then, THEN_FOCUS, (930, 360), THEN_ZOOM)
+    right = place(then, THEN_FOCUS, THEN_AT, THEN_ZOOM)
     right = ImageOps.grayscale(right).convert("RGB")
     right = ImageEnhance.Contrast(right).enhance(1.6)
     right = ImageEnhance.Brightness(right).enhance(0.85)
@@ -112,7 +113,7 @@ def tag(img, xy, words, anchor="la"):
 def variants(now, then, out, spec=None):
     """Three thumbnails. spec (a story's thumbs.json) gives the subjects'
     places and the words; without it, the Israel nuclear video's."""
-    global NOW_FOCUS, THEN_FOCUS, NOW_ZOOM, THEN_ZOOM
+    global NOW_FOCUS, THEN_FOCUS, NOW_ZOOM, THEN_ZOOM, NOW_AT, THEN_AT
     spec = spec or {
         "now_focus": [0.48, 0.30], "then_focus": [0.44, 0.60],
         "now_tag": "TODAY", "then_tag": "1960",
@@ -121,6 +122,7 @@ def variants(now, then, out, spec=None):
         "c": {"left": ["\u201cIRAN MUST", "NEVER...\u201d"], "right": ["BUILT IN", "SECRET"]}}
     NOW_FOCUS, THEN_FOCUS = tuple(spec["now_focus"]), tuple(spec["then_focus"])
     NOW_ZOOM, THEN_ZOOM = spec.get("now_zoom", 1.35), spec.get("then_zoom", 2.0)
+    NOW_AT, THEN_AT = tuple(spec.get("now_at", (300, 230))), tuple(spec.get("then_at", (930, 360)))
     os.makedirs(out, exist_ok=True)
     nt, tt = spec.get("now_tag", "TODAY"), spec.get("then_tag", "")
 

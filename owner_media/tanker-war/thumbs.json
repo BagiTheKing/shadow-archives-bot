@@ -1,7 +1,46 @@
 {
- "now_focus": [0.32, 0.45], "then_focus": [0.63, 0.5],
- "now_tag": "2019", "then_tag": "1987",
- "a": {"left": ["TANKERS HIT", "AGAIN"], "right": ["290", "DEAD LAST TIME"]},
- "b": ["HOW DID IT END", "LAST TIME?"],
- "c": {"left": ["SAME WATERS", "SAME FIRES"], "right": ["THE US", "WENT TO WAR"]}
+ "now_focus": [
+  0.21,
+  0.62
+ ],
+ "then_focus": [
+  0.66,
+  0.42
+ ],
+ "now_tag": "2019",
+ "then_tag": "1987",
+ "a": {
+  "left": [
+   "TANKERS HIT",
+   "AGAIN"
+  ],
+  "right": [
+   "290",
+   "ON ONE AIRLINER"
+  ]
+ },
+ "b": [
+  "HOW DID IT END",
+  "LAST TIME?"
+ ],
+ "c": {
+  "left": [
+   "SAME WATERS",
+   "SAME FIRES"
+  ],
+  "right": [
+   "THE US",
+   "WENT TO WAR"
+  ]
+ },
+ "now_zoom": 2.0,
+ "now_at": [
+  340,
+  455
+ ],
+ "then_zoom": 2.1,
+ "then_at": [
+  940,
+  330
+ ]
 }
