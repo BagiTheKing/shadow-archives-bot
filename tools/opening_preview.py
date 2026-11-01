@@ -136,12 +136,16 @@ def main(out):
         want = os.getenv(f"{side.upper()}_PICK", "0").strip() or "0"
         if want.isdigit():
             pick = int(want)
+            order = [pick] + [i for i in range(len(cands)) if i != pick]
         else:
-            pick = next((i for i, c in enumerate(cands)
-                         if want.lower() in (c.get("title") or "").lower()), None)
-            if pick is None:
+            # words from the title, alternatives separated by |, in order;
+            # never a fall back to an unrelated picture (a Pompeo briefing
+            # opened the Tanker War when the chosen clip was a slideshow)
+            order = [i for w in want.split("|") for i, c in enumerate(cands)
+                     if w.strip().lower() in (c.get("title") or "").lower()]
+            order = list(dict.fromkeys(order))
+            if not order:
                 raise SystemExit(f"❌ No {side} candidate titled like {want!r}")
-        order = [pick] + [i for i in range(len(cands)) if i != pick]
         for i in order:
             if i < len(cands):
                 got = fetch(cands[i], os.path.join(work, side), seconds)
@@ -156,6 +160,7 @@ def main(out):
     with open(os.path.join(out, "candidates.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     if "now" not in sides or "then" not in sides:
+        # none of the chosen pictures could be used
         raise SystemExit(f"❌ Nothing usable for: {[s for s in ('now', 'then') if s not in sides]}")
 
     year = int(os.getenv("THEN_YEAR") or 0) or None
