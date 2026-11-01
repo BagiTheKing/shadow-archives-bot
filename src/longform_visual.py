@@ -430,6 +430,9 @@ def _story_pool(topic, source_titles):
                 continue
             if (c.get("year") or 0) > HISTORY_CUTOFF or OFF_TOPIC.search(c.get("title") or ""):
                 continue
+            from archive_engine import meaningful
+            if not meaningful(c.get("title")):
+                continue
             import owner_media
             if owner_media.excluded(c.get("title")):
                 continue
@@ -482,6 +485,49 @@ def _missing_place(scene, places):
         if p and re.search(rf"\b{re.escape(p.lower())}\b", text) and p.lower() not in query:
             return p
     return None
+
+
+def _pinned(scene, idx, output_dir, used_urls):
+    """Fills the scene from its pin(s): a clip (Commons or the Internet
+    Archive) cut from its chosen second, or one photo per shot. True when
+    the scene has its pictures."""
+    pins = scene.get("pin")
+    if not pins or scene.get("map") or scene.get("chain") or scene.get("dossier"):
+        return False
+    pins = pins if isinstance(pins, list) else [pins]
+    seconds = float(scene.get("duration") or 6) + 1.0
+    for p in pins:
+        if p.get("kind") in ("video", "archive"):
+            video_path = os.path.join(output_dir, f"lf_archival_video_{idx:03d}.mp4")
+            poster = os.path.join(output_dir, f"lf_scene_{idx:03d}_0.jpg")
+            if p["kind"] == "archive":
+                ok = fetch_archival_video(p["identifier"], video_path)
+            else:
+                ok = fetch_commons_video({"url": p["url"], "title": p.get("title", ""),
+                                          "duration": p.get("duration") or 0},
+                                         video_path, seconds=seconds, start=p.get("start"))
+            if ok and extract_poster_frame(video_path, poster, KB_W, KB_H):
+                scene.update(video_path=video_path, image_path=poster, image_paths=[poster],
+                             credit=[p.get("credit") or p.get("title", "")], is_real=True)
+                used_urls.add(p.get("url") or p.get("identifier"))
+                print(f"📌 Scene {idx}: pinned footage {p.get('title', '')[:60]!r}")
+                return True
+            print(f"⚠️ Scene {idx}: pinned clip unavailable ({p.get('title', '')[:50]}).")
+    images, credits = [], []
+    for p in pins:
+        if p.get("kind") != "photo":
+            continue
+        path = os.path.join(output_dir, f"lf_scene_{idx:03d}_{len(images)}.jpg")
+        if download_archival_image({"url": p["url"], "title": p.get("title", "")},
+                                   path, KB_W, KB_H):
+            images.append(path)
+            credits.append(p.get("credit") or p.get("title", ""))
+            used_urls.add(p["url"])
+    if images:
+        scene.update(image_paths=images, image_path=images[0], credit=credits, is_real=True)
+        print(f"📌 Scene {idx}: {len(images)} pinned photo(s)")
+        return True
+    return False
 
 
 def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: str = None,
@@ -546,6 +592,15 @@ def generate_longform_visuals(scenes: list, output_dir: str = "build", topic: st
                 scene["image_paths"], scene["image_path"] = images, images[0]
                 scene["credit"] = credits
                 continue
+
+        # ---- Pinned media: an exact clip or photo chosen for this scene ----
+        # (the script's "pin", from tools/media_catalog.py's contact sheets)
+        got = _pinned(scene, idx, output_dir, used_urls)
+        if got:
+            archival_used += len(scene.get("image_paths") or [])
+            if scene.get("video_path"):
+                archival_video_used += 1
+            continue
 
         # ---- 0) Real archival FOOTAGE, before any still ----
         # Tried first on a spaced set of plain scenes (maps, chains and the

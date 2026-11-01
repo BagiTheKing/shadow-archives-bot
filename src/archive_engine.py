@@ -474,7 +474,20 @@ def search_archives(query: str, limit: int = 10) -> list:
         if len(results) < 3:
             results += search_openverse(query, 8)
     from media_sources import OFF_TOPIC
-    return [c for c in results if not OFF_TOPIC.search(c.get("title") or "")]
+    return [c for c in results if not OFF_TOPIC.search(c.get("title") or "")
+            and meaningful(c.get("title"))]
+
+
+_CODE = re.compile(r"\b[\w-]*\d[\w-]*\b|\.(jpe?g|png|tiff?|gif|webm|ogv)$", re.I)
+
+
+def meaningful(title):
+    """Whether a picture's title says what it shows: at least two real words
+    once numbers, codes and the extension are gone. "Rule 22", "Dimona01",
+    "D844-111 (40382681344)" say nothing, and stood in videos for scenes
+    they had nothing to do with (owner, 1 Nov)."""
+    words = re.findall(r"[^\W\d_]{3,}", _CODE.sub(" ", title or ""))
+    return len(words) >= 2
 
 
 def format_credit(candidate: dict) -> str:

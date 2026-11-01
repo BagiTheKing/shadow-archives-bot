@@ -755,3 +755,15 @@ class OwnerMediaAndCards(unittest.TestCase):
                 self.assertIsNone(owner_media.opening("then"))
             finally:
                 del os.environ["OWNER_MEDIA_DIR"]
+
+
+class MeaninglessPictures(unittest.TestCase):
+    """A picture titled "Rule 22" or "Dimona01" says nothing about a scene
+    (owner, 1 Nov): two real words are needed."""
+
+    def test_codes_and_numbers_are_not_titles(self):
+        import archive_engine as A
+        for t in ("Rule 22", "Dimona01", "D844-111 (40382681344)", "IMG_2041.jpg"):
+            self.assertFalse(A.meaningful(t), t)
+        for t in ("USS Stark 1987 damage", "Kennedy&Gurion", "Iranian frigate Sahand burning"):
+            self.assertTrue(A.meaningful(t), t)
