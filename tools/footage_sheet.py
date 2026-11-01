@@ -22,14 +22,22 @@ def main(out, query, recent=None):
     os.makedirs(out, exist_ok=True)
     if query.startswith("http"):
         # exact clips (links separated by spaces): a frame every 8 s, up to 40
+        # downloaded once: seeking a WebM over HTTP fails past the start
+        import requests
         cands = []
-        for u in query.split():
-            r = subprocess.run(["ffprobe", "-v", "error", "-user_agent", HEADERS["User-Agent"],
+        for n, link in enumerate(query.split()):
+            u = os.path.join(out, f"src_{n}.webm")
+            with requests.get(link, headers=HEADERS, stream=True, timeout=120) as resp:
+                resp.raise_for_status()
+                with open(u, "wb") as f:
+                    for chunk in resp.iter_content(1 << 20):
+                        f.write(chunk)
+            r = subprocess.run(["ffprobe", "-v", "error",
                                 "-show_entries", "format=duration", "-of", "csv=p=0", u],
                                capture_output=True, text=True, timeout=90)
             dur = float((r.stdout or "0").strip() or 0)
-            cands.append({"url": u, "title": u.rsplit("/", 1)[-1][:80], "duration": dur,
-                          "_step": 8.0, "_max": 40})
+            cands.append({"url": u, "title": link.rsplit("/", 1)[-1][:80], "duration": dur,
+                          "_step": max(8.0, dur / 40), "_max": 40, "_link": link})
     else:
         cands = _video_candidates([query], recent=int(recent) if recent else None)[:5]
     index = []
@@ -55,10 +63,13 @@ def main(out, query, recent=None):
         for i, im in enumerate(tiles):
             sheet.paste(im.resize((w, h)), ((i % 6) * w, (i // 6) * h))
         sheet.save(os.path.join(out, f"clip_{k}.jpg"), quality=85)
-        index.append({"k": k, "title": c.get("title"), "url": c["url"],
+        index.append({"k": k, "title": c.get("title"), "url": c.get("_link") or c["url"],
                       "duration": dur, "year": c.get("year")})
         print(k, c.get("title"), dur)
     json.dump(index, open(os.path.join(out, "clips.json"), "w"), indent=1)
+    for f in os.listdir(out):                  # the downloads stay off the branch
+        if f.startswith(("src_", "tmp_")):
+            os.remove(os.path.join(out, f))
 
 
 if __name__ == "__main__":
