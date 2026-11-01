@@ -1,0 +1,50 @@
+name: Media Catalog
+
+# Manual. Lists every free picture and clip for one story (Commons categories
+# and searches, the Internet Archive) on numbered contact sheets, pushed to
+# preview-media, so they can be pinned to scenes. Nothing is published.
+on:
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: "Commons categories, separated by |"
+        required: true
+      queries:
+        description: "Searches, separated by |"
+        required: false
+        default: ''
+      max_year:
+        description: "Drop anything dated after this year"
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Catalog
+        env:
+          CATEGORIES: ${{ inputs.categories }}
+          QUERIES: ${{ inputs.queries }}
+          MAX_YEAR: ${{ inputs.max_year }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+        run: python tools/media_catalog.py out
+      - name: Push to preview-media
+        run: |
+          cd out
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Media catalog (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
