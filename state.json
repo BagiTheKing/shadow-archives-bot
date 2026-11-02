@@ -506,8 +506,8 @@
         "videos/_534Qt2ANi8/2_map.jpg",
         "videos/_534Qt2ANi8/3_frame.jpg"
       ],
-      "status": "testing",
-      "current": 2,
+      "status": "done",
+      "current": null,
       "since": "2026-10-30T17:58:59.511097+00:00",
       "views_at_start": 5,
       "results": [
@@ -522,9 +522,16 @@
           "views": 2,
           "days": 3.97,
           "per_day": 0.5
+        },
+        {
+          "file": "videos/_534Qt2ANi8/3_frame.jpg",
+          "views": 1,
+          "days": 3.15,
+          "per_day": 0.32
         }
       ],
-      "registered": "2026-10-22T13:40:52.979613+00:00"
+      "registered": "2026-10-22T13:40:52.979613+00:00",
+      "winner": "videos/_534Qt2ANi8/1_person.jpg"
     }
   },
   "comments": {}
