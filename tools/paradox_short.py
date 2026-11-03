@@ -228,7 +228,7 @@ def opening_clip(now_png, then_png, split_at, take_at, seconds, then_year, work,
     return ticks
 
 
-def end_clip(now_png, then_png, seconds, end, then_year, work, out):
+def end_clip(now_png, then_png, seconds, end, then_year, work, out, now_tag=None):
     """The file closes: today down from the top, the past up from the
     bottom, an orange seam, THE FULL STORY on it, a bouncing pointer."""
     import datetime as dt
@@ -253,7 +253,7 @@ def end_clip(now_png, then_png, seconds, end, then_year, work, out):
     while f2.getlength(sub) > SW - 80 and f2.size > 30:
         f2 = font(f2.size - 2)
     d.text((SW // 2, half + 95), sub, font=f2, anchor="mm", fill=ORANGE + (255,))
-    for text, y in ((f"{now_year}", 150), (f"{then_year}", SH - 380)):
+    for text, y in ((now_tag or f"{now_year}", 150), (f"{then_year}", SH - 380)):
         ns._tag(text).save(os.path.join(work, "t.png"))
         t = Image.open(os.path.join(work, "t.png"))
         card.alpha_composite(t, (48, y))
@@ -350,7 +350,8 @@ def main(folder, out):
             ticks = opening_clip(now_png, then_png, split_at, take_at, seg, then_year, work, path,
                                  now_tag=spec.get("now_tag"))
         elif show == "end":
-            end_clip(now_png, then_png, seg, spec["end"], then_year, work, path)
+            end_clip(now_png, then_png, seg, spec["end"], then_year, work, path,
+                     now_tag=spec.get("now_tag"))
         elif show == "now":
             # back to today: the paradox closes where it opened
             lp = os.path.join(work, f"layer_{k:02d}.png")
