@@ -161,7 +161,8 @@ def still_clip(layer_png, seconds, out, tag_png=None, push=0.09):
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", out])
 
 
-def opening_clip(now_png, then_png, split_at, take_at, seconds, then_year, work, out):
+def opening_clip(now_png, then_png, split_at, take_at, seconds, then_year, work, out,
+                 now_tag=None):
     """Today full, today up into the top half and the past in from below,
     the counter on the seam, then the same past over the whole frame."""
     import datetime as dt
@@ -173,7 +174,8 @@ def opening_clip(now_png, then_png, split_at, take_at, seconds, then_year, work,
     m.paste(255, (0, SH, SW, 2 * SH))
     m.save(mask)
     nowtag, thentag = os.path.join(work, "tag_now.png"), os.path.join(work, "tag_then.png")
-    ns._tag(f"NOW · {now_year}").save(nowtag)
+    # a picture of today's story taken in another year says so: "NOW" alone
+    ns._tag(now_tag or f"NOW · {now_year}").save(nowtag)
     ns._tag(f"THEN · {then_year}").save(thentag)
     pattern, _, changes = ns._counter_frames(now_year, then_year, os.path.join(work, "nixie"),
                                              roll=ROLL)
@@ -296,6 +298,9 @@ def main(folder, out):
     with open(os.path.join(folder, "short.json"), encoding="utf-8") as f:
         spec = json.load(f)
     then_year = spec["then_year"]
+    global NOW_FOCUS, THEN_FOCUS
+    NOW_FOCUS = tuple(spec.get("now_focus", NOW_FOCUS))
+    THEN_FOCUS = tuple(spec.get("then_focus", THEN_FOCUS))
 
     # pictures
     now_src = Image.open(owner_media.opening("now")[0]).convert("RGB")
@@ -342,7 +347,8 @@ def main(folder, out):
         path = os.path.join(work, f"clip_{k:02d}.mp4")
         line = lines[first_after + k - 1] if k else None
         if show == "opening":
-            ticks = opening_clip(now_png, then_png, split_at, take_at, seg, then_year, work, path)
+            ticks = opening_clip(now_png, then_png, split_at, take_at, seg, then_year, work, path,
+                                 now_tag=spec.get("now_tag"))
         elif show == "end":
             end_clip(now_png, then_png, seg, spec["end"], then_year, work, path)
         elif show == "now":

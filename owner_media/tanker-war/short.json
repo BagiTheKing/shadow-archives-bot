@@ -1,0 +1,104 @@
+{
+ "then_year": 1987,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.47,
+  0.55
+ ],
+ "then_focus": [
+  0.55,
+  0.45
+ ],
+ "images": {
+  "convoy": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/a5/The_guided_missile_frigate_USS_THACH_%28FFG_43%29_follows_a_line_of_reflagged_Kuwaiti_tankers_while_participating_in_convoy_escort_operations_-_DPLA_-_67803f814f7c8243904400fb40fbe3b8.jpeg",
+   "credit": "USS Thach follows a line of reflagged Kuwaiti tankers, 1987 — Department of Defense — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "mines": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/DN-SC-87-12584_Contact_mines_partially_covered_by_a_tarpaulin_on_the_deck_of_the_captured_Iranian_mine-laying_ship_Iran_AJR.jpg",
+   "credit": "Contact mines on the deck of the captured Iranian ship Iran Ajr, 1987 — US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.55
+   ]
+  },
+  "sahand": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Aerial_view_of_Iranian_frigate_Sahand_burning_after_air_attack_Operation_Praying_Mantis_DN-SN-89-03125.jpg",
+   "credit": "Iranian frigate Sahand burning, Operation Praying Mantis, 1988 — US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "vincennes": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/USS_Vincennes_%28CG-49%29_launches_a_RIM-66_Standard_missile%2C_in_1988.jpg",
+   "credit": "USS Vincennes launches a Standard missile, 1988 — US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "mourning": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/98/Iranians_mourn_those_who_died_on_Iran_Air_Flight_655%2C_Larestan%2C_Iran_%28cropped%29.jpg",
+   "credit": "Iranians mourn those who died on Iran Air Flight 655, Larestan — IRNA — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Iran's Revolutionary Guard reported three tankers on fire in the Strait of Hormuz."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1987, in these same waters, tankers dragged America into a war with Iran."
+  },
+  {
+   "show": "convoy",
+   "tag": "1987",
+   "say": "Kuwait put its tankers under the American flag, and US warships escorted them through the Gulf."
+  },
+  {
+   "show": "mines",
+   "tag": "1987",
+   "say": "Mines hit the very first convoy. American helicopters caught an Iranian ship laying more."
+  },
+  {
+   "show": "sahand",
+   "tag": "APRIL 1988",
+   "say": "In April 1988, the US Navy sank or crippled half of Iran's working navy in a single day."
+  },
+  {
+   "show": "vincennes",
+   "tag": "JULY 1988",
+   "say": "Three months later, the cruiser USS Vincennes shot down an Iranian airliner."
+  },
+  {
+   "show": "mourning",
+   "tag": "JULY 1988",
+   "say": "All two hundred and ninety people on board were killed."
+  },
+  {
+   "show": "now",
+   "tag": "SAME STRAIT",
+   "say": "Now the tankers are burning again, in the same waters."
+  },
+  {
+   "show": "end",
+   "say": "The whole story is in the full video."
+  }
+ ],
+ "end": {
+  "title": "THE FULL STORY",
+  "sub": "HOW TANKERS DRAGGED AMERICA INTO WAR",
+  "pointer": "FULL VIDEO ↓ LINKED BELOW"
+ }
+}
