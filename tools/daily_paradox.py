@@ -77,6 +77,23 @@ class Skip(Exception):
 MIN_PICTURES = 6                    # a story with fewer real photos is skipped
 
 
+def _years_in(c):
+    """Every year a picture says it is from: its date, and the years in its
+    title (including dates written 20041101)."""
+    t = c.get("title") or ""
+    ys = [int(y) for y in re.findall(r"(?<!\d)(1[6-9]\d\d|20[0-4]\d)(?!\d)", t)]
+    ys += [int(m) for m in re.findall(r"(?<!\d)((?:19|20)\d\d)(?:0[1-9]|1[0-2])(?:[0-3]\d)(?!\d)", t)]
+    if c.get("year"):
+        ys.append(int(c["year"]))
+    return ys
+
+
+def era_ok(c, lo, hi):
+    """A picture of the past from the past: nothing dated outside lo..hi
+    (a 2004 photo of the Sorbonne for 1968, de Gaulle in 1942 for 1968)."""
+    return all(lo <= y <= hi for y in _years_in(c))
+
+
 def _words(text):
     return [w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
             if w not in STOP and len(w) > 2]
@@ -129,9 +146,10 @@ def pick(pool, call, heads, titles, avoid=()):
         'Answer: {"picks": [{"headline": "<copied from the list>", '
         '"news": "<what happened this week, in one plain sentence, only what the '
         'headline says>", "event": "<the event\'s name>", "article": "<its exact '
-        'English Wikipedia article title>", "year": <the year it starts>, '
-        '"now_article": "<the English Wikipedia article whose main photo shows '
-        'the news: the leader, the ship, the place>", "why": "<one sentence>"}]}')
+        'English Wikipedia article title>", "year": <the year it starts>, "end_year": <the year it ends>, '
+        '"now_article": "<a DIFFERENT English Wikipedia article, about today: the '
+        'leader in this week\'s news, the ship, the city; its main photo opens the '
+        'Short as NOW, so never the historical event\'s article>", "why": "<one sentence>"}]}')
     data = call(pool, system, user, 6000, expect={"picks": list})
     out = []
     for p in (data or {}).get("picks") or []:
@@ -139,8 +157,12 @@ def pick(pool, call, heads, titles, avoid=()):
             year = int(p.get("year"))
         except (TypeError, ValueError):
             continue
+        try:
+            end = max(year, min(int(p.get("end_year") or year), year + 15))
+        except (TypeError, ValueError):
+            end = year
         if year < CUTOFF and p.get("article") and p.get("headline") and p.get("now_article"):
-            out.append(dict(p, year=year))
+            out.append(dict(p, year=year, end_year=end))
     return out
 
 
@@ -228,8 +250,10 @@ def write(pool, call, p, facts):
 
 def picture_pool(p, facts):
     pool, seen = [], set()
+    lo, hi = p["year"] - 5, p.get("end_year", p["year"]) + 5
+    story = set(_words(p["event"] + " " + p["article"] + " " + facts["title"])) | {str(p["year"])}
 
-    def add(cands):
+    def add(cands, searched=False):
         for c in cands or []:
             if not c or not c.get("url") or c["url"] in seen:
                 continue
@@ -237,6 +261,12 @@ def picture_pool(p, facts):
             if JUNK.search(t) or not ae.meaningful(t):
                 continue
             if (c.get("width") or 9999) < 640:
+                continue
+            if not era_ok(c, lo, hi):
+                continue
+            # a search finds anything with the same words: a 1919 Seattle
+            # strike for "general strike" in France, 1968
+            if searched and not (story & set(_words(t))):
                 continue
             seen.add(c["url"])
             pool.append(c)
@@ -249,7 +279,7 @@ def picture_pool(p, facts):
     # the people in the story: the photo at the top of each one's article
     for person in (facts["sheet"].get("people") or [])[:8]:
         add([ae.article_lead_image(person.get("name", ""))])
-    add(ae.search_commons(p["event"], limit=15))
+    add(ae.search_commons(p["event"], limit=15), searched=True)
     return pool, add
 
 
@@ -258,8 +288,6 @@ def choose(cands, want, used, latest):
     best, score = None, -1.0
     for i, c in enumerate(cands):
         if c["url"] in used:
-            continue
-        if c.get("year") and latest and c["year"] > latest + 3:
             continue
         hit = len(words & set(_words(c.get("title"))))
         s = hit - i * 0.001               # the article's own order breaks ties
@@ -282,7 +310,7 @@ def pictures(p, spec, facts, found):
         c, s = choose(pool, want, used | ({then["url"]} if then else set()), latest)
         if s < 1:
             # nothing in the article's pictures names it: search Commons for it
-            add(ae.search_commons(l["picture"], limit=12))
+            add(ae.search_commons(l["picture"], limit=12), searched=True)
             c, s = choose(pool, want, used | ({then["url"]} if then else set()), latest)
         if not c:
             raise Skip(f"no picture for {l['say'][:60]!r}")
@@ -295,14 +323,22 @@ def pictures(p, spec, facts, found):
         then = next((c for c in pool if c["url"] not in used), None)
     if not then:
         raise Skip("no picture of the past for the opening")
-    # NOW: the photo at the top of the news subject's article
-    now = ae.article_lead_image(p["now_article"])
-    if not now or JUNK.search(now.get("title") or ""):
-        hits = [c for c in ae.search_commons(p["now_article"], limit=12)
-                if not JUNK.search(c.get("title") or "")]
-        now = hits[0] if hits else None
+    # NOW: a photo of today's story, never one of the past (the 1968 crowd
+    # was labelled NOW): another article than the past's, and nothing dated
+    # more than a few years ago
+    taken = used | {then["url"]}
+
+    def recent(c):
+        return c and c.get("url") not in taken and not JUNK.search(c.get("title") or "") \
+            and era_ok(c, YEAR - 6, YEAR)
+    now = None
+    if p["now_article"].strip().lower() not in (p["article"].lower(), facts["title"].lower()):
+        lead = ae.article_lead_image(p["now_article"])
+        now = lead if recent(lead) else None
+        if not now:
+            now = next((c for c in ae.search_commons(p["now_article"], limit=15) if recent(c)), None)
     if not now:
-        raise Skip(f"no NOW picture for {p['now_article']!r}")
+        raise Skip(f"no recent NOW picture for {p['now_article']!r}")
     print(f"   now: {now.get('title', '')[:70]}\n   then: {then.get('title', '')[:70]}")
     sources = {"now": {"url": now["url"], "credit": ae.format_credit(now)},
                "then": {"url": then["url"], "credit": ae.format_credit(then)}}
