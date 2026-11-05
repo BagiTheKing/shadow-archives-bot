@@ -43,7 +43,7 @@ CUTOFF = int(os.getenv("HISTORY_CUTOFF_YEAR", "2010"))
 WORDS = (95, 125)                  # the two hits: 108 and 116 spoken words
 JUNK = re.compile(r"\bflag\b|\blogo\b|\bseal of\b|coat of arms|\bribbon\b|insignia|"
                   r"\bmedal\b|\bemblem\b|\bsignature\b|\bicon\b|\bmap\b|locator|"
-                  r"\bstamp\b|\bchart\b|\bdiagram\b", re.I)
+                  r"\bstamp\b|\bchart\b|\bdiagram\b|simulat|\bexercise\b|\bdrill\b|re-?enact|replica", re.I)
 STOP = set("""a an the and or but of in on at to for from by with as is was were be been
 this that these those it its his her their they them he she we you our who which what
 when where why how not no all one two three after before into over under than then
@@ -312,29 +312,64 @@ def choose(cands, want, used, latest):
     return best, score
 
 
-def pictures(p, spec, facts, found):
+def assign(llm, call, cands, lines, event):
+    """The model picks each line's picture from the numbered list, as the two
+    hand-made Shorts were pictured; matching title words alone once showed
+    Japan's prime minister for a line about George W. Bush."""
+    listing = "\n".join(f"{i}. {c.get('title', '')}" + (f" ({c['year']})" if c.get("year") else "")
+                         for i, c in enumerate(cands))
+    asks = "\n".join(f"L{k}: {l['say']}  [wanted: {l['picture']}]" for k, l in enumerate(lines))
+    system = "You are a picture editor for a history Short. You answer with JSON only."
+    user = (f"THE STORY: {event}\n\nTHE LINES:\n{asks}\n\nTHE PICTURES (Wikimedia Commons file "
+            f"names):\n{listing}\n\n"
+            "Give each line the picture that shows exactly what it says: the person it "
+            "names (that same person, never someone else), the place, the ship, the moment. "
+            "Also choose \"then\": the picture that best shows the whole event, for the "
+            "opening. Each number once. -1 when nothing in the list fits a line: a wrong "
+            "picture is worse than none. Never a photo taken long after the event, a "
+            "museum display, a drill or a re-enactment.\n"
+            'Answer: {"then": <number>, "lines": [<number for L0>, <number for L1>, ...]}')
+    data = call(llm, system, user, 4000, expect={"lines": list}) or {}
+    picks = data.get("lines") or []
+
+    def num(v):
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            return -1
+        return v if 0 <= v < len(cands) else -1
+    return num(data.get("then")), [num(v) for v in picks] + [-1] * (len(lines) - len(picks))
+
+
+def pictures(p, spec, facts, found, llm, call):
     pool, add = found
     lines = spec["lines"]
     years = [int(y) for l in lines for y in re.findall(r"\b(1[5-9]\d\d|20[01]\d)\b",
                                                         l.get("tag", "") + " " + l.get("say", ""))]
     latest = max(years + [p["year"]])
+    story_lines = lines[2:-2]
+    # every line's own search too, so the list holds what each line names
+    for l in story_lines:
+        add(ae.search_commons(l["picture"], limit=10), searched=True)
+    cands = pool[:120]
+    print(f"🖼️  {len(cands)} candidate pictures")
+    t_i, picks = assign(llm, call, cands, story_lines, f"{p['event']} ({p['year']})")
     used, images = set(), {}
-    # THEN: the opening's past, the event as a whole
-    then, _ = choose(pool, p["event"] + " " + lines[1]["say"], used, latest)
-    for k, l in enumerate(lines[2:-2]):
-        want = l["picture"] + " " + l["say"]
-        c, s = choose(pool, want, used | ({then["url"]} if then else set()), latest)
-        if s < 1:
-            # nothing in the article's pictures names it: search Commons for it
-            add(ae.search_commons(l["picture"], limit=12), searched=True)
-            c, s = choose(pool, want, used | ({then["url"]} if then else set()), latest)
+    for k, (l, i) in enumerate(zip(story_lines, picks)):
+        c = cands[i] if i >= 0 and cands[i]["url"] not in used else None
+        if not c:
+            # the model found nothing: the words of the line, only if they match
+            c, sc = choose(pool, l["picture"] + " " + l["say"], used, latest)
+            if sc < 1:
+                c = None
         if not c:
             raise Skip(f"no picture for {l['say'][:60]!r}")
         used.add(c["url"])
         key = f"p{k}"
         images[key] = {"url": c["url"], "credit": ae.format_credit(c), "title": c.get("title")}
         l["show"] = key
-        print(f"   {key}: {c.get('title', '')[:70]}  ←  {l['picture']}")
+        print(f"   {key}: {c.get('title', '')[:70]}  ←  {l['say'][:50]}")
+    then = cands[t_i] if t_i >= 0 and cands[t_i]["url"] not in used else None
     if not then:
         then = next((c for c in pool if c["url"] not in used), None)
     if not then:
@@ -412,7 +447,7 @@ def main(out):
                 print("   ↩️  No draft passed the checks: next pair.")
                 continue
             try:
-                images, sources = pictures(p, spec, facts, found)
+                images, sources = pictures(p, spec, facts, found, pool, _call)
             except Skip as e:
                 print(f"   ↩️  {e}: next pair.")
                 continue
