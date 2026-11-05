@@ -158,7 +158,9 @@ def pick(pool, call, heads, titles, avoid=()):
         '"now_article": "<the English Wikipedia article of the PERSON at the centre '
         'of this week\'s news (the president, prime minister or leader the headline '
         'is about, or the country\'s current head of government): their photo opens '
-        'the Short as NOW. A person, never a country, a city or the historical event>", "why": "<one sentence>"}]}')
+        'the Short as NOW. A person, never a country, a city or the historical event>", "link": "<the country, people, place or organisation that is in BOTH the '
+        'headline and the historical event: Iran, Israel, the Strait of Hormuz>", '
+        '"why": "<one sentence>"}]}')
     data = call(pool, system, user, 6000, expect={"picks": list})
     out = []
     for p in (data or {}).get("picks") or []:
@@ -389,6 +391,15 @@ def main(out):
             facts = sf.research_short(p["article"])
             if not facts:
                 print("   ↩️  No usable article: next pair.")
+                continue
+            # the parallel is real only if what links them is in both: the
+            # news and the history article (Ukraine's robot soldiers were
+            # once paired with the 2006 Lebanon War on "drones")
+            link = [w for w in _words(p.get("link", "")) if len(w) >= 4]
+            news_text = (p["headline"] + " " + p["news"]).lower()
+            if not link or not any(w in news_text and w in facts["text"].lower() for w in link):
+                print(f"   ↩️  The link {p.get('link')!r} is not in both the news and "
+                      "the article: next pair.")
                 continue
             # the pictures first: a story without real photos is not written
             found = picture_pool(p, facts)
