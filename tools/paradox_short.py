@@ -39,6 +39,7 @@ GAP = 0.25                    # between lines
 LEAD = 0.3                    # before the first word
 XF = 0.45                     # the dissolve between pictures
 SPLIT_IN, ROLL, SLIDE = 0.8, 2.4, 0.9
+NOW_MAX = 2.5                 # the first picture alone, at most (owner, 5 Nov: "2.5 s, up to 3")
 CARD_HOLD = 2.8               # after the last word, the full story's card
 ORANGE = (255, 150, 40)
 NOW_FOCUS, THEN_FOCUS = (0.48, 0.30), (0.44, 0.60)
@@ -156,6 +157,27 @@ def still_clip(layer_png, seconds, out, tag_png=None, push=0.09):
         last = "v1"
     else:
         last = "v0"
+    run(["ffmpeg", "-y", *ins, "-filter_complex", vf + f";[{last}]format=yuv420p[v]",
+         "-map", "[v]", "-frames:v", str(n), "-r", str(FPS),
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", out])
+
+
+def video_clip(src, seconds, out, tag_png=None, height=1250, x=0.5):
+    """Real footage on a tall frame: the clip itself across the middle, cut to
+    `height` px tall around x (0-1 across the picture), over a blurred,
+    darkened copy of itself; held on its last frame if it runs short."""
+    n = max(1, round(seconds * FPS))
+    vf = (f"[0:v]fps={FPS},tpad=stop_mode=clone:stop_duration={seconds:.2f},split[a][b];"
+          f"[a]scale={SW}:{SH}:force_original_aspect_ratio=increase,crop={SW}:{SH},"
+          f"boxblur=30:5,eq=brightness=-0.22[bg];"
+          f"[b]scale=-2:{height},crop={SW}:{height}:x='(iw-{SW})*{x}':y=0[fg];"
+          f"[bg][fg]overlay=0:{(SH - height) // 2}[v0]")
+    ins = ["-i", src]
+    last = "v0"
+    if tag_png:
+        ins += ["-loop", "1", "-framerate", str(FPS), "-i", tag_png]
+        vf += ";[v0][1:v]overlay=48:150[v1]"
+        last = "v1"
     run(["ffmpeg", "-y", *ins, "-filter_complex", vf + f";[{last}]format=yuv420p[v]",
          "-map", "[v]", "-frames:v", str(n), "-r", str(FPS),
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", out])
@@ -314,20 +336,28 @@ def main(folder, out):
     grade_then(band(then_src, THEN_FOCUS, zoom=1.3)).save(then_png)
     raw = {}
     for key, img in spec["images"].items():
+        if img.get("video"):
+            continue                       # footage is cut once its length is known
         raw[key] = fetch(img["url"])
         print(f"🖼️  {key}: {raw[key].size}")
 
-    # the voice
-    from audio_engine import generate_audio_pipeline
+    # the voice: the owner's recording of Claude reading the lines (short.json
+    # "voice": "voice.m4a"), else Kokoro
     lines = spec["lines"]
-    scenes = generate_audio_pipeline({"scenes": [{"narration": l["say"]} for l in lines]},
-                                     work)["scenes"]
+    if spec.get("voice"):
+        import voice_track
+        scenes = voice_track.lines_from_recording(os.path.join(folder, spec["voice"]),
+                                                  [l["say"] for l in lines], work)
+    else:
+        from audio_engine import generate_audio_pipeline
+        scenes = generate_audio_pipeline({"scenes": [{"narration": l["say"]} for l in lines]},
+                                         work)["scenes"]
     starts, t = [], LEAD
     for i, s in enumerate(scenes):
         starts.append(t)
         t += s["duration"] + GAP
     # the opening needs room: split on "But", the years roll and hold
-    split_at = starts[1] - 0.15
+    split_at = min(starts[1] - 0.15, NOW_MAX)
     need = split_at + SPLIT_IN + ROLL + 0.9 + SLIDE + 0.2
     first_after = 2
     if starts[first_after] < need:
@@ -363,6 +393,19 @@ def main(folder, out):
             tag = os.path.join(work, f"tag_{k:02d}.png")
             ns._tag(line.get("tag") or "NOW").save(tag)
             still_clip(lp, seg, path, tag)
+        elif spec["images"][show].get("video"):
+            img = spec["images"][show]
+            tag = None
+            if line.get("tag"):
+                tag = os.path.join(work, f"tag_{k:02d}.png")
+                ns._tag(line["tag"]).save(tag)
+            src = os.path.join(work, f"src_{k:02d}.mp4")
+            import archive_engine as ae
+            if not ae.fetch_commons_video({"url": img["video"], "title": show,
+                                           "duration": img.get("duration") or 0},
+                                          src, seconds=seg + 0.5, start=img.get("start")):
+                raise SystemExit(f"❌ The clip for {show!r} could not be cut")
+            video_clip(src, seg, path, tag, img.get("height", 1250), img.get("x", 0.5))
         else:
             img = spec["images"][show]
             layer = layer_for(raw[show], img.get("focus", (0.5, 0.4)), line.get("zoom"))
