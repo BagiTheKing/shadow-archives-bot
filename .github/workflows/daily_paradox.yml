@@ -39,8 +39,16 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: |
-          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg espeak-ng
+      - name: Install ffmpeg, espeak-ng and the Python packages
+        # a hung package mirror once held a run for 20 minutes: give up and
+        # try once more instead
+        timeout-minutes: 12
+        run: |
+          for i in 1 2; do
+            timeout 300 sudo apt-get update -q && timeout 300 sudo apt-get install -y -q ffmpeg espeak-ng && break
+            echo "apt took too long; trying again"
+          done
+          command -v ffmpeg
           pip install -r requirements.txt
       - name: Cache Kokoro model files
         uses: actions/cache@v4
