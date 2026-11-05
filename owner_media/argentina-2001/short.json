@@ -1,0 +1,110 @@
+{
+ "then_year": 2001,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "images": {
+  "pots": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/28/Cacerolazo_Argentina_2001-2002.jpg",
+   "credit": "Cacerolazo, Buenos Aires, 2001–2002 — Pepe Robles — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "siege": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/86/De_la_R%C3%BAa_anuncia_estado_de_sitio.jpg",
+   "credit": "De la Rúa announces a state of siege, 2001 — Victor Buggé — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.45,
+    0.35
+   ]
+  },
+  "riots": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Saqueos_2001_en_microcentro_y_Plaza_de_Mayo_el_20_de_diciembre_de_2001.jpg",
+   "credit": "Looting and riots, Plaza de Mayo, 20 December 2001 — EquipoDiciembre2001 — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "resigns": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/De_la_Rua_renuncia.JPG",
+   "credit": "De la Rúa resigns, 2001 — Unknown authorUnknown author — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.4
+   ]
+  },
+  "saa": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/eb/Adolfo_Rodr%C3%ADguez_Sa%C3%A1_con_banda_presidencial_%28cropped%29.jpg",
+   "credit": "Adolfo Rodríguez Saá with the presidential sash, 2001 — Unknown authorUnknown author — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  "duhalde": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/91/Eduardo_duhalde_presidente.jpg",
+   "credit": "Eduardo Duhalde, president, 2002 — Sin datos — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Paraguay's president resigned in a scandal over a failed bank."
+  },
+  {
+   "show": "opening",
+   "say": "But in 2001, next door in Argentina, a bank freeze toppled a president in under three weeks."
+  },
+  {
+   "show": "pots",
+   "tag": "DEC 2001",
+   "say": "Argentina limited cash withdrawals to 250 pesos a week. People called it the corralito."
+  },
+  {
+   "show": "siege",
+   "tag": "19 DEC 2001",
+   "say": "Crowds banged pots in the streets. The president declared a state of siege."
+  },
+  {
+   "show": "riots",
+   "tag": "20 DEC 2001",
+   "say": "Riots filled the Plaza de Mayo. Thirty-nine people were killed across the country."
+  },
+  {
+   "show": "resigns",
+   "tag": "20 DEC 2001",
+   "say": "That night, Fernando de la Rúa resigned and fled the palace by helicopter."
+  },
+  {
+   "show": "saa",
+   "tag": "23 DEC 2001",
+   "say": "His successor declared the biggest debt default the world had seen, and lasted a week."
+  },
+  {
+   "show": "duhalde",
+   "tag": "JAN 2002",
+   "say": "Argentina went through five presidents in under two weeks."
+  },
+  {
+   "show": "now",
+   "tag": "PARAGUAY · 2026",
+   "say": "Now, next door, another president has fallen over a bank."
+  },
+  {
+   "show": "end",
+   "say": "Should a president pay for a bank's collapse?"
+  }
+ ],
+ "end": {
+  "title": "WHO PAYS?",
+  "sub": "ARGENTINA, 2001",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
