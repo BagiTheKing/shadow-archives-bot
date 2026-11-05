@@ -124,7 +124,7 @@ def pick(pool, call, heads, titles, avoid=()):
         'English Wikipedia article title>", "year": <the year it starts>, '
         '"now_article": "<the English Wikipedia article whose main photo shows '
         'the news: the leader, the ship, the place>", "why": "<one sentence>"}]}')
-    data = call(pool, system, user, 1500, expect={"picks": list})
+    data = call(pool, system, user, 6000, expect={"picks": list})
     out = []
     for p in (data or {}).get("picks") or []:
         try:
@@ -206,7 +206,7 @@ def write(pool, call, p, facts):
     for attempt in range(4):
         user = base + (("\nYOUR LAST ANSWER WAS REJECTED:\n- " + "\n- ".join(problems)
                         + "\nFix every point and answer again.\n") if problems else "")
-        spec = call(pool, system, user, 3000, expect={"lines": ("list", 7), "end": dict, "title": str})
+        spec = call(pool, system, user, 8000, expect={"lines": ("list", 7), "end": dict, "title": str})
         if not spec:
             continue
         problems = _problems(spec, facts, news)
@@ -309,9 +309,17 @@ def main(out):
     if not heads:
         raise SystemExit("❌ No headlines this week")
     titles = recent()
+    import time
     tried = []
-    for _ in range(2):
-        for p in pick(pool, _call, heads, titles, avoid=tried):
+    for attempt in range(3):
+        if attempt:
+            # Gemini answers 503 when it is overloaded: it passes in minutes
+            print("   ⏳ Waiting 2 minutes before asking again...")
+            time.sleep(120)
+        picks = pick(pool, _call, heads, titles, avoid=tried)
+        if not picks:
+            print("   ↩️  No pair came back.")
+        for p in picks:
             tried.append(p["event"])
             print(f"📰 {p['headline'][:90]}\n🕰️  {p['event']} ({p['year']}): {p.get('why', '')[:120]}")
             facts = sf.research_short(p["article"])
