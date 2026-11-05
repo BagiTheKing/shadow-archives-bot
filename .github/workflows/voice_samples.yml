@@ -1,0 +1,45 @@
+name: Voice Samples
+
+# Manual. The same lines in several voices (tools/voice_samples.py), pushed to
+# preview-media for the owner to choose by ear. Nothing is published.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install
+        timeout-minutes: 12
+        run: |
+          for i in 1 2; do
+            timeout 300 sudo apt-get update -q && timeout 300 sudo apt-get install -y -q ffmpeg espeak-ng && break
+          done
+          pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+      - run: |
+          mkdir -p models
+          [ -f models/kokoro-v1.0.onnx ] || curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          [ -f models/voices-v1.0.bin ] || curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+      - run: python tools/voice_samples.py out
+      - name: Push to preview-media
+        run: |
+          cd out
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Voice samples (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
