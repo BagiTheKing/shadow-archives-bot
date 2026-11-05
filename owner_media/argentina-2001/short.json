@@ -82,59 +82,76 @@
     0.5,
     0.45
    ]
+  },
+  "march2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/50/Buenos_Aires_-_Manifestaci%C3%B3n_contra_el_Corralito_-_20020206-01.JPG",
+   "credit": "Protest against the corralito, Buenos Aires, 2002 — Taken by the uploader, w:es:Usuario:Barcex — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
   }
  },
  "lines": [
   {
    "show": "opening",
-   "say": "This week, Paraguay's president resigned in a scandal over a failed bank."
+   "say": "This week, Paraguay's president resigned. A bank had collapsed under his watch, and the scandal reached all the way to his office."
   },
   {
    "show": "opening",
-   "say": "But in 2001, next door in Argentina, a bank freeze toppled a president in under three weeks."
+   "say": "Argentina has seen this before."
   },
   {
    "show": "pots",
    "tag": "DEC 2001",
-   "say": "Argentina limited cash withdrawals to 250 pesos a week. People called it the corralito.",
-   "also": "march"
+   "say": "In December 2001, its banks were running out of dollars. So the government did something drastic: it froze people's savings."
+  },
+  {
+   "show": "march",
+   "tag": "DEC 2001",
+   "say": "You could take out 250 pesos a week, nothing more. Argentines called it the corralito, the little corral."
+  },
+  {
+   "show": "march2",
+   "tag": "DEC 2001",
+   "say": "The anger poured into the streets. People banged pots and pans outside their windows, then marched."
   },
   {
    "show": "siege",
    "tag": "19 DEC 2001",
-   "say": "Crowds banged pots in the streets. The president declared a state of siege."
+   "say": "The president answered with a state of siege."
   },
   {
    "show": "riots",
    "tag": "20 DEC 2001",
-   "say": "Riots filled the Plaza de Mayo. Thirty-nine people were killed across the country.",
+   "say": "It only made things worse. Riots tore through the Plaza de Mayo, and across the country, thirty-nine people were killed.",
    "also": "obelisco"
   },
   {
    "show": "resigns",
    "tag": "20 DEC 2001",
-   "say": "That night, Fernando de la Rúa resigned and fled the palace by helicopter.",
+   "say": "That evening, Fernando de la Rúa resigned, and left the presidential palace by helicopter.",
    "also": "office"
   },
   {
    "show": "saa",
    "tag": "23 DEC 2001",
-   "say": "His successor declared the biggest debt default the world had seen, and lasted a week."
+   "say": "His successor announced the largest debt default the world had ever seen. He was gone within a week."
   },
   {
    "show": "duhalde",
    "tag": "JAN 2002",
-   "say": "Argentina went through five presidents in under two weeks.",
+   "say": "In under two weeks, Argentina went through five presidents.",
    "also": "duhalde2"
   },
   {
    "show": "now",
    "tag": "PARAGUAY · 2026",
-   "say": "Now, next door, another president has fallen over a bank."
+   "say": "Now, just across the border, a bank has brought down another one."
   },
   {
    "show": "end",
-   "say": "Should a president pay for a bank's collapse?"
+   "say": "So here's the question. When a bank collapses, should the president be the one who pays?"
   }
  ],
  "end": {
@@ -142,6 +159,5 @@
   "sub": "ARGENTINA, 2001",
   "pointer": "TELL US IN THE COMMENTS",
   "arrow": "right"
- },
- "voice": "voice.m4a"
+ }
 }
