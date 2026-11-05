@@ -70,6 +70,13 @@ THE FORMAT (two of these did 1,100 and 1,900 views; follow it exactly):
 """
 
 
+class Skip(Exception):
+    """This pair cannot make a good Short: the next one is tried."""
+
+
+MIN_PICTURES = 6                    # a story with fewer real photos is skipped
+
+
 def _words(text):
     return [w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
             if w not in STOP and len(w) > 2]
@@ -114,8 +121,9 @@ def pick(pool, call, heads, titles, avoid=()):
         f"settled historical event before {CUTOFF} that is its direct parallel: the "
         "same place, the same countries or the same kind of act, so that someone who "
         "sees the headline understands it better after the Short. Not a loose theme. "
-        "The event needs its own English Wikipedia article and should have real "
-        "photographs (roughly after 1860). Prefer events most viewers have never "
+        "The event needs its own English Wikipedia article and must be well "
+        "photographed (roughly after 1860, and covered by news photographers or "
+        "the military: a Short needs six or more real photos). Prefer events most viewers have never "
         "heard of over the famous ones, and wars, coups, crises and disasters over "
         "elections and summits.\n"
         'Answer: {"picks": [{"headline": "<copied from the list>", '
@@ -238,6 +246,10 @@ def picture_pool(p, facts):
         cat = ae.commons_category_of(art)
         if cat:
             add(ae.category_images(cat))
+    # the people in the story: the photo at the top of each one's article
+    for person in (facts["sheet"].get("people") or [])[:8]:
+        add([ae.article_lead_image(person.get("name", ""))])
+    add(ae.search_commons(p["event"], limit=15))
     return pool, add
 
 
@@ -256,9 +268,8 @@ def choose(cands, want, used, latest):
     return best, score
 
 
-def pictures(p, spec, facts):
-    pool, add = picture_pool(p, facts)
-    print(f"🖼️  {len(pool)} pictures from the article and its category")
+def pictures(p, spec, facts, found):
+    pool, add = found
     lines = spec["lines"]
     years = [int(y) for l in lines for y in re.findall(r"\b(1[5-9]\d\d|20[01]\d)\b",
                                                         l.get("tag", "") + " " + l.get("say", ""))]
@@ -274,7 +285,7 @@ def pictures(p, spec, facts):
             add(ae.search_commons(l["picture"], limit=12))
             c, s = choose(pool, want, used | ({then["url"]} if then else set()), latest)
         if not c:
-            raise SystemExit(f"❌ No picture for {l['say'][:60]!r}")
+            raise Skip(f"no picture for {l['say'][:60]!r}")
         used.add(c["url"])
         key = f"p{k}"
         images[key] = {"url": c["url"], "credit": ae.format_credit(c), "title": c.get("title")}
@@ -283,7 +294,7 @@ def pictures(p, spec, facts):
     if not then:
         then = next((c for c in pool if c["url"] not in used), None)
     if not then:
-        raise SystemExit("❌ No picture of the past for the opening")
+        raise Skip("no picture of the past for the opening")
     # NOW: the photo at the top of the news subject's article
     now = ae.article_lead_image(p["now_article"])
     if not now or JUNK.search(now.get("title") or ""):
@@ -291,7 +302,7 @@ def pictures(p, spec, facts):
                 if not JUNK.search(c.get("title") or "")]
         now = hits[0] if hits else None
     if not now:
-        raise SystemExit(f"❌ No NOW picture for {p['now_article']!r}")
+        raise Skip(f"no NOW picture for {p['now_article']!r}")
     print(f"   now: {now.get('title', '')[:70]}\n   then: {then.get('title', '')[:70]}")
     sources = {"now": {"url": now["url"], "credit": ae.format_credit(now)},
                "then": {"url": then["url"], "credit": ae.format_credit(then)}}
@@ -326,11 +337,21 @@ def main(out):
             if not facts:
                 print("   ↩️  No usable article: next pair.")
                 continue
+            # the pictures first: a story without real photos is not written
+            found = picture_pool(p, facts)
+            print(f"🖼️  {len(found[0])} pictures for the story")
+            if len(found[0]) < MIN_PICTURES:
+                print(f"   ↩️  Fewer than {MIN_PICTURES} real pictures: next pair.")
+                continue
             spec = write(pool, _call, p, facts)
             if not spec:
                 print("   ↩️  No draft passed the checks: next pair.")
                 continue
-            images, sources = pictures(p, spec, facts)
+            try:
+                images, sources = pictures(p, spec, facts, found)
+            except Skip as e:
+                print(f"   ↩️  {e}: next pair.")
+                continue
             return save(out, p, spec, facts, images, sources)
     raise SystemExit("❌ No story passed today")
 
