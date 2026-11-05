@@ -12,12 +12,12 @@
    ]
   },
   "siege": {
-   "url": "https://upload.wikimedia.org/wikipedia/commons/8/86/De_la_R%C3%BAa_anuncia_estado_de_sitio.jpg",
-   "credit": "De la Rúa announces a state of siege, 2001 — Victor Buggé — CC BY 2.0 (via Wikimedia Commons)",
-   "focus": [
-    0.45,
-    0.35
-   ]
+   "video": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/4f/De.la.rua.ogv/De.la.rua.ogv.360p.mpeg4.mov",
+   "start": 118,
+   "duration": 231.56,
+   "x": 0.55,
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/4f/De.la.rua.ogv",
+   "credit": "De la Rúa's national address declaring a state of siege, December 2001 — Televisión Pública Argentina. Canal 7. Cadena Nacional — CC BY-SA 2.5 ar (via Wikimedia Commons)"
   },
   "riots": {
    "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Saqueos_2001_en_microcentro_y_Plaza_de_Mayo_el_20_de_diciembre_de_2001.jpg",
@@ -50,6 +50,38 @@
     0.5,
     0.3
    ]
+  },
+  "march": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Buenos_Aires_-_Manifestaci%C3%B3n_contra_el_Corralito_-_20020206-05.JPG",
+   "credit": "Protest against the corralito, Buenos Aires, 2002 — Taken by the uploader, w:es:Usuario:Barcex — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "obelisco": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Obelisco_20Dic01.jpg",
+   "credit": "The Obelisco, 20 December 2001 — Doncentu — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "office": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1d/De_la_R%C3%BAa_retira_sus_objetos_del_despacho.jpg",
+   "credit": "De la Rúa clears his office, 2001 — Victor Buggé — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.4,
+    0.4
+   ]
+  },
+  "duhalde2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/Asunci%C3%B3n_de_Eduardo_Duhalde.jpg",
+   "credit": "Eduardo Duhalde sworn in, 2002 — Victor Hugo Bugge — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
   }
  },
  "lines": [
@@ -64,7 +96,8 @@
   {
    "show": "pots",
    "tag": "DEC 2001",
-   "say": "Argentina limited cash withdrawals to 250 pesos a week. People called it the corralito."
+   "say": "Argentina limited cash withdrawals to 250 pesos a week. People called it the corralito.",
+   "also": "march"
   },
   {
    "show": "siege",
@@ -74,12 +107,14 @@
   {
    "show": "riots",
    "tag": "20 DEC 2001",
-   "say": "Riots filled the Plaza de Mayo. Thirty-nine people were killed across the country."
+   "say": "Riots filled the Plaza de Mayo. Thirty-nine people were killed across the country.",
+   "also": "obelisco"
   },
   {
    "show": "resigns",
    "tag": "20 DEC 2001",
-   "say": "That night, Fernando de la Rúa resigned and fled the palace by helicopter."
+   "say": "That night, Fernando de la Rúa resigned and fled the palace by helicopter.",
+   "also": "office"
   },
   {
    "show": "saa",
@@ -89,7 +124,8 @@
   {
    "show": "duhalde",
    "tag": "JAN 2002",
-   "say": "Argentina went through five presidents in under two weeks."
+   "say": "Argentina went through five presidents in under two weeks.",
+   "also": "duhalde2"
   },
   {
    "show": "now",

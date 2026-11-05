@@ -415,7 +415,23 @@ def main(folder, out):
             if line.get("tag"):
                 tag = os.path.join(work, f"tag_{k:02d}.png")
                 ns._tag(line["tag"]).save(tag)
-            still_clip(lp, seg, path, tag)
+            also = line.get("also")
+            if also and also in raw:
+                # a second picture halfway through the line: a new shot every
+                # 2-3 s instead of one still for the whole line
+                a2 = spec["images"][also]
+                lp2 = os.path.join(work, f"layer_{k:02d}b.png")
+                layer_for(raw[also], a2.get("focus", (0.5, 0.4)), line.get("zoom")).save(lp2)
+                half = round(seg / 2 * FPS) / FPS
+                p1, p2 = path + ".a.mp4", path + ".b.mp4"
+                still_clip(lp, half, p1, tag)
+                still_clip(lp2, seg - half, p2, tag, push=0.07)
+                lst = path + ".txt"
+                with open(lst, "w") as f:
+                    f.write(f"file '{os.path.abspath(p1)}'\nfile '{os.path.abspath(p2)}'\n")
+                run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", path])
+            else:
+                still_clip(lp, seg, path, tag)
         clips.append(path)
         print(f"🎞️  {show}: {bounds[k]:.1f}-{bounds[k + 1]:.1f}s")
 
