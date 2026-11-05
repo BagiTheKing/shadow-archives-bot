@@ -12,9 +12,12 @@ name: Daily Paradox Short
 #
 # Monday to Friday at 08:47 UTC: after the free Gemini quota resets, and early
 # enough for the review to land the same day.
+# Schedule off (owner, 5 Nov): the Shorts are written in the review session
+# instead (story, lines and pictures chosen there, rendered by Paradox Short),
+# which spends no Gemini quota. Kept for manual runs.
 on:
-  schedule:
-    - cron: '47 8 * * 1-5'
+  # schedule:
+  #   - cron: '47 8 * * 1-5'
   workflow_dispatch:
     inputs:
       voice:
