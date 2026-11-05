@@ -247,6 +247,8 @@ def end_clip(now_png, then_png, seconds, end, then_year, work, out, now_tag=None
     d.rectangle((0, half - 190, SW, half + 190), fill=(6, 8, 14, 225))
     d.rectangle((0, half - 4, SW, half + 4), fill=ORANGE + (255,))
     f1 = font(132)
+    while f1.getlength(end["title"]) > SW - 70 and f1.size > 70:
+        f1 = font(f1.size - 4)
     d.text((SW // 2, half - 80), end["title"], font=f1, anchor="mm", fill=(255, 255, 255, 255))
     f2 = font(50)
     sub = end["sub"]
