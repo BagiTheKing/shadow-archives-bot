@@ -155,9 +155,10 @@ def pick(pool, call, heads, titles, avoid=()):
         '"news": "<what happened this week, in one plain sentence, only what the '
         'headline says>", "event": "<the event\'s name>", "article": "<its exact '
         'English Wikipedia article title>", "year": <the year it starts>, "end_year": <the year it ends>, '
-        '"now_article": "<a DIFFERENT English Wikipedia article, about today: the '
-        'leader in this week\'s news, the ship, the city; its main photo opens the '
-        'Short as NOW, so never the historical event\'s article>", "why": "<one sentence>"}]}')
+        '"now_article": "<the English Wikipedia article of the PERSON at the centre '
+        'of this week\'s news (the president, prime minister or leader the headline '
+        'is about, or the country\'s current head of government): their photo opens '
+        'the Short as NOW. A person, never a country, a city or the historical event>", "why": "<one sentence>"}]}')
     data = call(pool, system, user, 6000, expect={"picks": list})
     out = []
     for p in (data or {}).get("picks") or []:
@@ -257,7 +258,7 @@ def write(pool, call, p, facts):
 # ---------------------------------------------------------------- 4. the pictures
 
 def picture_pool(p, facts):
-    pool, seen = [], set()
+    pool, seen, names = [], set(), set()
     lo, hi = p["year"] - 5, p.get("end_year", p["year"]) + 5
     story = set(_words(p["event"] + " " + p["article"] + " " + facts["title"])) | {str(p["year"])}
 
@@ -272,6 +273,11 @@ def picture_pool(p, facts):
                 continue
             if not era_ok(c, lo, hi):
                 continue
+            # one file reached twice (the article's copy and the category's)
+            name = re.sub(r"[^a-z0-9]", "", t.lower())[:60]
+            if name in names:
+                continue
+            names.add(name)
             # a search finds anything with the same words: a 1919 Seattle
             # strike for "general strike" in France, 1968
             if searched and not (story & set(_words(t))):
@@ -336,9 +342,12 @@ def pictures(p, spec, facts, found):
     # more than a few years ago
     taken = used | {then["url"]}
 
+    who = set(_words(p["now_article"]))
+
     def recent(c):
+        # recent, and of that person: "France" once gave a photo of a scroll
         return c and c.get("url") not in taken and not JUNK.search(c.get("title") or "") \
-            and era_ok(c, YEAR - 6, YEAR)
+            and era_ok(c, YEAR - 6, YEAR) and bool(who & set(_words(c.get("title"))))
     now = None
     if p["now_article"].strip().lower() not in (p["article"].lower(), facts["title"].lower()):
         lead = ae.article_lead_image(p["now_article"])
