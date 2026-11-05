@@ -33,12 +33,19 @@ jobs:
           git fetch -q origin preview-media
           git show "origin/preview-media:${{ inputs.file || 'native.mp4' }}" > short.mp4
           ls -la short.mp4
+          # "preview-media:short_meta.json": the meta the Daily Paradox Short
+          # wrote beside the video, not a file in the repo
+          META="${{ inputs.meta_file }}"
+          case "$META" in
+            preview-media:*) git show "origin/$META" > short_meta.json; META=short_meta.json ;;
+          esac
+          echo "META=$META" >> "$GITHUB_ENV"
       - name: Upload
         env:
           YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           PRIVACY_STATUS: public
-        run: python tools/upload_short.py short.mp4 "${{ inputs.meta_file }}"
+        run: python tools/upload_short.py short.mp4 "$META"
       - name: Hold the first comment until it is public
         continue-on-error: true
         run: |

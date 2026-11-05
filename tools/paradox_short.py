@@ -264,8 +264,10 @@ def end_clip(now_png, then_png, seconds, end, then_year, work, out, now_tag=None
     f3 = font(64)
     d.text((SW // 2, 60), end["pointer"], font=f3, anchor="mm", fill=(255, 255, 255, 255),
            stroke_width=7, stroke_fill=(0, 0, 0, 255))
-    # an arrow down and to the left, where Shorts show the related video
-    d.polygon([(250, 130), (330, 130), (290, 205)], fill=ORANGE + (255,))
+    # an arrow down and to the left, where Shorts show the related video, or
+    # down and to the right, towards the comments button ("arrow": "right")
+    ax = 830 if end.get("arrow") == "right" else 290
+    d.polygon([(ax - 40, 130), (ax + 40, 130), (ax, 205)], fill=ORANGE + (255,))
     pp = os.path.join(work, "end_ptr.png")
     ptr.save(pp)
 
