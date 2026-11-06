@@ -79,8 +79,16 @@
    "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/President_Nixon_and_staff_members_with_President_Charles_DeGaulle_of_France_-_NARA_-_194610.jpg",
    "credit": "Charles de Gaulle, 1969 — Unknown authorUnknown author or not provided — Public domain (via Wikimedia Commons)",
    "focus": [
+    0.86,
+    0.42
+   ]
+  },
+  "resign": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/52/Mai_1968._Nanterre._Le_GLC%2C_le_GLM%2C_l%27UNEF._compatissent_%C3%A0_la_d%C3%A9mission_du_g%C3%A9n%C3%A9ral_de_Gaulle._affiche%2C_non_identifi%C3%A9.jpg",
+   "credit": "Student poster on de Gaulle's resignation, Nanterre — CC0 (via Wikimedia Commons)",
+   "focus": [
     0.5,
-    0.4
+    0.5
    ]
   }
  },
@@ -125,7 +133,8 @@
   {
    "show": "nixon",
    "tag": "1969",
-   "say": "He won the election in a landslide. A year later, he resigned."
+   "say": "He won the election in a landslide. A year later, he resigned.",
+   "also": "resign"
   },
   {
    "show": "now",
