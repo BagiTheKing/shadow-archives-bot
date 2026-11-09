@@ -147,6 +147,16 @@ Library target ~40 entries.
 
 ## Current state
 
+- 9 Nov 2026 (evening): Option 3 built and tested end to end (run 1, post=false:
+  Paraguay/Argentina Short rendered fine, frames OK). Daily Library Short is
+  scheduled (08:47 UTC Mon-Fri) and posts by itself. The 5 library entries are
+  all on the 45-day cooldown (hand-posted 5-9 Nov, seeded in library/log.json),
+  so it will skip until new entries exist: NEXT = add ~5 entries for actors big
+  now (Iran/Hormuz variants, US, China, Korea, Gaza...). The hand-made 09:41
+  task is the backup; switch it off after the daily job posts 2-3 good Shorts.
+- Channel (9 Nov): 56 subscribers, 90-day Shorts views 18.6K: monetisation
+  (1,000 subs + 3M/10M Shorts views) is far off; do not promise dates.
+
 - 9 Nov 2026: Budapest 1994 Short posted (https://youtube.com/shorts/oclXehb1ujM).
 - Daily hand-made Shorts were run by a scheduled task in the original session
   (trigger "Daily Short (hand-made)"); it is being retired as this handbook's

@@ -7,8 +7,8 @@ name: Daily Library Short
 # Monday to Friday 08:47 UTC (after the free Gemini quota resets); the
 # hand-made session task at 09:41 only steps in if this posted nothing.
 on:
-  # schedule:
-  #   - cron: '47 8 * * 1-5'
+  schedule:
+    - cron: '47 8 * * 1-5'
   workflow_dispatch:
     inputs:
       post:
