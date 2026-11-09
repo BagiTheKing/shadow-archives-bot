@@ -16,7 +16,7 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, "..", "library")
 WORDS = (85, 150)                     # spoken words in all
-COOLDOWN_DAYS = 45                    # the same entry is not posted twice inside this
+COOLDOWN_DAYS = 90                    # the same entry is not posted twice inside this (owner, 9 Nov: a repeat got ~no reach)
 NUMBER_WORDS = ("two three four five six seven eight nine ten eleven twelve twenty thirty "
                 "forty fifty sixty seventy eighty ninety hundred thousand million billion "
                 "dozens hundreds thousands millions billions half double triple").split()

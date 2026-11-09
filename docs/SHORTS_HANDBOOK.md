@@ -84,6 +84,14 @@ split-screen top half), no text off screen, picture order matches the words.
 Workflows run on `main`: commit owner_media and code to `main` (and to your
 session branch), then dispatch.
 
+## Repeats (owner, 9 Nov)
+
+Never repost a Short. The Paraguay/Argentina Short (140 views, 63% stayed,
+99% Shorts feed, 0 subscribers) shows YouTube holds back a Short people like
+if it is not fresh. A library entry is reused only after 90 days
+(`COOLDOWN_DAYS`) and with a different today half. At 5 Shorts a week that
+needs ~65 entries to run daily without gaps: the library must keep growing.
+
 ## Picture rules learned the hard way
 
 - The parallel must share country/actors with the news ("Paraguay bank
@@ -119,7 +127,7 @@ a hand-made Short. History lines say nothing about this week.
 **Daily job** `daily_library.yml` (08:47 UTC Mon-Fri; inputs post=true|false):
 `tools/daily_library.py` takes headlines (`daily_paradox.headlines()`), code
 matches actors to entries (`src/library_short.py`, entries posted in the last
-45 days are skipped), Gemini writes line1/line2/now/question/title/etc. (it
+90 days are skipped), Gemini writes line1/line2/now/question/title/etc. (it
 may answer fit=false) and code checks it (`today_problems`: starts "This
 week,"/"Today,", names and numbers must be in the headline, word counts, title
 format), NOW = lead photo of the named person, must be recent and of that
@@ -150,7 +158,7 @@ Library target ~40 entries.
 - 9 Nov 2026 (evening): Option 3 built and tested end to end (run 1, post=false:
   Paraguay/Argentina Short rendered fine, frames OK). Daily Library Short is
   scheduled (08:47 UTC Mon-Fri) and posts by itself. The 5 library entries are
-  all on the 45-day cooldown (hand-posted 5-9 Nov, seeded in library/log.json),
+  all on the 90-day cooldown (hand-posted 5-9 Nov, seeded in library/log.json),
   so it will skip until new entries exist: NEXT = add ~5 entries for actors big
   now (Iran/Hormuz variants, US, China, Korea, Gaza...). The hand-made 09:41
   task is the backup; switch it off after the daily job posts 2-3 good Shorts.
