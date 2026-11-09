@@ -1,0 +1,149 @@
+{
+ "then_year": 1962,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.5,
+  0.3
+ ],
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "images": {
+  "vienna": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/e1/John_F._Kennedy%2C_Nikita_Khruchchev_1961.jpg",
+   "credit": "Kennedy and Khrushchev meet in Vienna, June 1961 — Stanley Tretick — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.45,
+    0.35
+   ]
+  },
+  "u2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Cuba_Missiles_Crisis_U-2_photo.jpg",
+   "credit": "U-2 photograph of a missile site under construction in Cuba, 14 October 1962 — Unknown Lockheed U-2 pilot — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "site": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/20/MRBM_Launch_Site_1%2C_25_October_1962.jpg",
+   "credit": "Medium-range missile launch site, San Cristobal, Cuba, 25 October 1962 — United States Department of Defense photograph in the John F — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "sign": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/18/President_Kennedy_signs_Cuba_quarantine_proclamation%2C_23_October_1962.jpg",
+   "credit": "President Kennedy signs the Cuba quarantine proclamation, 23 October 1962 — Cecil Stoughton — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "carrier": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/95/A4D-2N_launches_from_USS_Enterprise_%28CVAN-65%29_1962.jpeg",
+   "credit": "USS Enterprise during the Cuban Missile Crisis, 1962 — U.S. Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "air": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/30/Armed_A-1Hs_VA-65_on_USS_Enterprise_%28CVAN-65%29_during_Cuban_Missile_Crisis.JPG",
+   "credit": "Armed A-1H Skyraiders on USS Enterprise during the Cuban Missile Crisis, 1962 — USN — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "un": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Adlai_Stevenson_shows_missiles_to_UN_Security_Council_with_David_Parker_standing.jpg",
+   "credit": "Adlai Stevenson shows photographs of missiles to the UN Security Council, 25 October 1962 — US Government, Unknown photographer — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "excomm": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/EXCOMM_meeting%2C_Cuban_Missile_Crisis%2C_29_October_1962.jpg",
+   "credit": "Kennedy and his advisers meet during the Cuban Missile Crisis, 29 October 1962 — Cecil Stoughton, White House — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.45,
+    0.5
+   ]
+  },
+  "dismantle": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Cubacrisis_01_Nov_1962.jpg",
+   "credit": "Aerial view of the San Cristobal missile site, 1 November 1962 — USAF — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Washington warned Havana over Russian warships heading for Cuba."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1962, ships bound for Cuba brought the world to the edge of nuclear war."
+  },
+  {
+   "show": "vienna",
+   "tag": "JUNE 1961",
+   "say": "In June 1961, a young President Kennedy met the Soviet leader, Nikita Khrushchev, in Vienna. It went badly."
+  },
+  {
+   "show": "u2",
+   "tag": "14 OCT 1962",
+   "say": "On October 14th, 1962, an American spy plane photographed Soviet missile sites being built in Cuba, ninety miles from Florida.",
+   "also": "site"
+  },
+  {
+   "show": "sign",
+   "tag": "23 OCT 1962",
+   "say": "Kennedy told the nation the missiles were there, and signed a naval quarantine of Cuba."
+  },
+  {
+   "show": "carrier",
+   "tag": "OCT 1962",
+   "say": "American warships moved in, and Soviet ships were still sailing towards the line.",
+   "also": "air"
+  },
+  {
+   "show": "un",
+   "tag": "25 OCT 1962",
+   "say": "At the United Nations, Adlai Stevenson showed the world the photographs."
+  },
+  {
+   "show": "excomm",
+   "tag": "28 OCT 1962",
+   "say": "After thirteen days, Khrushchev agreed to take the missiles out. In secret, America agreed to remove its own from Turkey."
+  },
+  {
+   "show": "dismantle",
+   "tag": "NOV 1962",
+   "say": "By November, the missile sites were being taken apart."
+  },
+  {
+   "show": "now",
+   "tag": "CUBA · 2026",
+   "say": "Now Cuba is a flashpoint again, and the ships are back."
+  },
+  {
+   "show": "end",
+   "say": "Who would blink first today?"
+  }
+ ],
+ "end": {
+  "title": "WHO BLINKED?",
+  "sub": "CUBA, 1962",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}

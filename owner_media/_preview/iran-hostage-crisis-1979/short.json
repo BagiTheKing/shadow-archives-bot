@@ -1,0 +1,145 @@
+{
+ "then_year": 1979,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.5,
+  0.3
+ ],
+ "then_focus": [
+  0.5,
+  0.35
+ ],
+ "images": {
+  "return": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/06/Imam_Khomeini_in_Mehrabad.jpg",
+   "credit": "Ayatollah Khomeini returns to Iran, 1 February 1979 — Also uploaded by en:User:Sa.vakilian in en.wiki and by fa:Us — GFDL (via Wikimedia Commons)",
+   "focus": [
+    0.55,
+    0.5
+   ]
+  },
+  "embassy": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Iran_hostage_crisis_-_November_1979.jpg",
+   "credit": "Iranian students at the US embassy, Tehran, November 1979 — Government of Islamic Republic — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "gate": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/09/Iran_hostage_crisis_-_Iraninan_students_comes_up_U.S._embassy_in_Tehran.jpg",
+   "credit": "Iranian students climb the US embassy gates, Tehran, November 1979 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "dc": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/24/Iran_Hostage_Crisis_student_demonstration_1979.png",
+   "credit": "Demonstration over the hostage crisis, Washington, D.C., 1979 — Trikosko, Marion S., photographer. — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "heli": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/35/RH-53Ds_fly_over_USS_Nimitz_April_1980.JPEG",
+   "credit": "RH-53D helicopters over USS Nimitz, April 1980 — US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "wreck": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Iranian_authorities_visiting_wreckage_of_U.S._aircraft_in_Tabas_desert_%281%29.jpg",
+   "credit": "Iranian officials visit the wreckage of the US rescue mission, Tabas desert, 1980 — Unknown — CC BY 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "free": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/0b/DF-ST-82-06722.jpg",
+   "credit": "The 52 freed hostages board Freedom One, January 1981 — MAJ DENNIS A. GUYITT — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "home": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/6f/Iran_hostages_return.jpg",
+   "credit": "The freed hostages return to the United States, 1981 — Don Koralewski — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "reagan": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/President_Ronald_Reagan_at_a_White_House_Ceremony_and_Reception_for_Freed_American_Hostages_Held_in_Iran_-_DPLA_-_4d01e84231e2b58289bfaa43673258a3.jpg",
+   "credit": "President Reagan at a White House ceremony for the freed hostages, 1981 — President (1981-1989 : Reagan). White House Photographic Off — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.45
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Iran and the United States traded warnings over talks about Iran's nuclear programme."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1979, a standoff with Iran lasted four hundred and forty-four days."
+  },
+  {
+   "show": "return",
+   "tag": "1 FEB 1979",
+   "say": "In February 1979, Ayatollah Khomeini flew home to Iran after fourteen years in exile. The Shah had already fled."
+  },
+  {
+   "show": "embassy",
+   "tag": "4 NOV 1979",
+   "say": "On November 4th, 1979, students stormed the American embassy in Tehran and took its staff hostage.",
+   "also": "gate"
+  },
+  {
+   "show": "dc",
+   "tag": "NOV 1979",
+   "say": "Back home, America was furious. Fifty-two Americans would be held for four hundred and forty-four days."
+  },
+  {
+   "show": "heli",
+   "tag": "APRIL 1980",
+   "say": "In April 1980, President Carter sent commandos to rescue them. The mission failed in the Iranian desert, and eight Americans died.",
+   "also": "wreck"
+  },
+  {
+   "show": "free",
+   "tag": "20 JAN 1981",
+   "say": "Ronald Reagan won that November. Iran freed every hostage minutes after he was sworn in.",
+   "also": "home"
+  },
+  {
+   "show": "reagan",
+   "tag": "1981",
+   "say": "The two countries have had no diplomatic relations since."
+  },
+  {
+   "show": "now",
+   "tag": "TEHRAN · 2026",
+   "say": "Now the two sides are back at the table, and the old mistrust is still there."
+  },
+  {
+   "show": "end",
+   "say": "After forty-seven years, can Washington and Tehran ever trust each other?"
+  }
+ ],
+ "end": {
+  "title": "TALK OR FIGHT?",
+  "sub": "IRAN, 1979",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
