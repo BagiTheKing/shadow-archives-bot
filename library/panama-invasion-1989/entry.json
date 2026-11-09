@@ -1,0 +1,191 @@
+{
+ "slug": "panama-invasion-1989",
+ "event": "The US invasion of Panama, 1989",
+ "then_year": 1989,
+ "actors": [
+  "Venezuela",
+  "Venezuelan",
+  "Maduro",
+  "Caracas",
+  "Panama",
+  "Noriega",
+  "drug cartel",
+  "narco",
+  "drug trafficking",
+  "Caribbean",
+  "regime change",
+  "US strikes"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.45
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Operation_Just_Cause_Rangers_2d_plt_La_Comandancia_secure_small.jpg",
+  "credit": "US soldiers secure La Comandancia, Panama City, December 1989 — Maio at en.wikipedia — Public domain (via Wikimedia Commons)"
+ },
+ "now_people": [
+  {
+   "article": "Donald Trump",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Nicolás Maduro",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Marco Rubio",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "INVADE OR TALK?",
+   "sub": "PANAMA, 1989"
+  },
+  {
+   "title": "WHO DECIDES?",
+   "sub": "PANAMA, 1989"
+  }
+ ],
+ "examples": {
+  "line1": "This week, Washington warned Venezuela's leaders it could use force to stop the drug trade.",
+  "line2": "But in 1989, America sent troops into Panama to seize a leader charged with drug trafficking.",
+  "now_tag": "CARACAS · 2026",
+  "now": "Now the same threat hangs over Venezuela.",
+  "question": "Should one country be able to remove another country's leader by force?"
+ },
+ "facts": "Manuel Noriega ruled Panama as its military strongman. In 1988 a US court charged him with drug trafficking. On 20 December 1989 President George H. W. Bush ordered the invasion, Operation Just Cause. Fighting burned parts of Panama City and the death toll is still disputed. Noriega surrendered on 3 January 1990 and was flown to Florida. A US court convicted him of drug trafficking in 1992.",
+ "images": {
+  "noriega": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/46/MNoriega_1988.jpg",
+   "credit": "General Manuel Noriega, 1988 — Unknown author — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  },
+  "dignity": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/Dignity_Battalion_cheering.jpg",
+   "credit": "Members of Noriega's Dignity Battalions, Panama, 1989 — PH1 (Sw) J. Elliott, US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "dignity2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Dignity_Battalion_on_parade.jpg",
+   "credit": "Dignity Battalion on parade, Panama, 1989 — PH1 (Sw) J. Elliott, US Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "bush": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/ce/George_H._W._Bush_on_telephone.jpg",
+   "credit": "President George H. W. Bush on the telephone, 1989 — White House Photo Office — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.45,
+    0.4
+   ]
+  },
+  "jump": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/27/US_Parachutists_during_Operation_Just_Cause_b.jpg",
+   "credit": "US paratroopers jump into Panama during Operation Just Cause — File:US Parachutists during Operation Just Cause.jpg: Master — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "jump2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/a6/US_Parachutists_during_Operation_Just_Cause.jpg",
+   "credit": "US paratroopers jump into Panama during Operation Just Cause — Master Sgt. Ken Hammond — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "fire": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Panama_clashes_1989.JPEG",
+   "credit": "Fires after the outbreak of fighting, Panama City, December 1989 — SPEC. MORLAND — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "street": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1d/PanamaJustCause1991.jpg",
+   "credit": "Marines in a light armoured vehicle, Panama, 1989 — DoD photo by PH1 Elliott — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "custody": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/eb/Manuel_Noriega_with_agents_from_the_U.S._DEA.jpg",
+   "credit": "Manuel Noriega escorted onto a US aircraft by DEA agents, January 1990 — unknown, United States Air Force — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "mug": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/d2/Manuel_Noriega_1990_U.S._Marshal_mugshot.jpg",
+   "credit": "Manuel Noriega, US Marshals photograph, 1990 — U.S. Marshals Service, Miami, Florida — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "noriega",
+   "tag": "1988",
+   "say": "Manuel Noriega ruled Panama as its military strongman. In 1988, a US court charged him with drug trafficking."
+  },
+  {
+   "show": "dignity",
+   "tag": "1989",
+   "say": "By the end of 1989, he had militias of his own, the Dignity Battalions.",
+   "also": "dignity2"
+  },
+  {
+   "show": "bush",
+   "tag": "20 DEC 1989",
+   "say": "On December 20th, President George H. W. Bush ordered the invasion."
+  },
+  {
+   "show": "jump",
+   "tag": "20 DEC 1989",
+   "say": "Paratroopers dropped into Panama in the middle of the night.",
+   "also": "jump2"
+  },
+  {
+   "show": "fire",
+   "tag": "DEC 1989",
+   "say": "Fighting burned parts of Panama City. The number of dead is still disputed.",
+   "also": "street"
+  },
+  {
+   "show": "custody",
+   "tag": "3 JAN 1990",
+   "say": "On January 3rd, Noriega surrendered and was flown to Florida to face trial."
+  },
+  {
+   "show": "mug",
+   "tag": "1992",
+   "say": "A US court convicted him of drug trafficking."
+  }
+ ]
+}
