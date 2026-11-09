@@ -98,31 +98,42 @@ session branch), then dispatch.
 - Footage beats stills when it is the real moment (De la Rúa's state-of-siege
   address; Clinton in Kyiv, 12 Jan 1994).
 
-## Option 3 — the plan being built (owner, 9 Nov)
+## Option 3 — built 9 Nov 2026
 
-Goal: fully automated daily Shorts at the same quality, cheap.
+Fully automatic daily Shorts, cheap: Claude builds the history once, the free
+Gemini writes only today's half.
 
-1. **History library** (built by Claude, weekly): `library/<slug>/` = the
-   history half of a Short, done once: `entry.json` with `actors` (countries,
-   people, places that appear in headlines: "Iran", "Hormuz", "Strait of
-   Hormuz", "IRGC"), `then_year`, the 5-7 picture lines (facts checked), the
-   pictures/footage chosen by eye, `then` picture, end question ideas, `now_people`
-   (Wikipedia article titles of leaders whose photo can be NOW). ~40 entries
-   across the actors that dominate the news. Existing owner_media folders are
-   the first entries.
-2. **Daily job** (GitHub, Gemini, free): read today's headlines
-   (src/trend_source.py), take the biggest story, match it to a library entry
-   by actors (code first, Gemini to choose between matches). Gemini writes only
-   the today half: line 1 (the news, only what the headline says), line 2 (the
-   turn), the now line, the end question, title, description — checked by code
-   (headline words, length, no invented numbers). NOW picture: the lead photo
-   of the `now_people` article, checked recent. Render, frame checks, **post
-   automatically**. No match → post nothing and log why (the weekly session
-   adds an entry). The news must be today's: the history is stable, the today
-   half is always written fresh.
-3. **Weekly Claude session** (cheap model, fresh context): review the week's
-   Shorts and stats, fix problems, add library entries for the stories that
-   are big right now and likely next week.
+**Library** `library/<slug>/entry.json` (first 5 = converted owner_media):
+`event`, `then_year`, `actors` (words that appear in headlines; whole-word,
+case-insensitive; keep them specific, a generic word matches every story),
+`then` (opening picture), `now_people` (Wikipedia article titles whose lead
+photo can be NOW, with `focus`), `images` + `lines` (the picture lines, same
+format as short.json: show/tag/say/also; footage allowed), `facts` (one
+sentence summary the today half may draw numbers from), `examples` (a good
+line1/line2/now/question, for style), `end_ideas` (`{title, sub}`),
+`then_focus`, `music`. `python -m unittest tests.test_library_short` validates
+every entry (images referenced exist, credits present, >= 4 picture lines).
+New entries: pictures by eye from Media Catalog sheets, facts checked, as for
+a hand-made Short. History lines say nothing about this week.
+
+**Daily job** `daily_library.yml` (08:47 UTC Mon-Fri; inputs post=true|false):
+`tools/daily_library.py` takes headlines (`daily_paradox.headlines()`), code
+matches actors to entries (`src/library_short.py`, entries posted in the last
+45 days are skipped), Gemini writes line1/line2/now/question/title/etc. (it
+may answer fit=false) and code checks it (`today_problems`: starts "This
+week,"/"Today,", names and numbers must be in the headline, word counts, title
+format), NOW = lead photo of the named person, must be recent and of that
+person. Then Paradox Short render, `tools/check_short.py` (size, 35-65 s,
+sound, black frames), `upload_short.py` (public), `library/log.json` result
+(posted / skipped + reason / not_posted) committed to main. No match = no
+post. Cost: usually 1 Gemini call a day.
+
+**Weekly review** (scheduled task "Weekly library review", Sundays 14:07 UTC,
+fresh session): read `library/log.json`, the week's stats (Hold Scheduled
+Uploads) and the Shorts themselves (frames); fix bad entries/code; add 3-5
+entries for actors big in the news now (WebSearch for what is big; Media
+Catalog for pictures); run the tests; commit to main; update Current state.
+Library target ~40 entries.
 
 ## Running this from a session
 
