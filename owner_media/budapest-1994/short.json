@@ -1,0 +1,123 @@
+{
+ "then_year": 1994,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.74,
+  0.35
+ ],
+ "then_focus": [
+  0.5,
+  0.4
+ ],
+ "images": {
+  "silo": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/55/Ukrainian_and_U.S._officials_at_UR-100N_silo%2C_Pervomaysk%2C_1994.png",
+   "credit": "Ukrainian and US officials at a UR-100N silo, Pervomaysk, 1994 — U.S. government employee, photo from Defense Threat Reductio — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "kyiv": {
+   "video": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/7e/Press_Conference_with_President_Clinton_and_President_Kravchuk.webm/Press_Conference_with_President_Clinton_and_President_Kravchuk.webm.480p.vp9.webm",
+   "start": 1902,
+   "duration": 2404.643,
+   "x": 0.5,
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Press_Conference_with_President_Clinton_and_President_Kravchuk.webm",
+   "credit": "Joint press conference of Presidents Clinton and Kravchuk, Kyiv, 12 January 1994 — White House Television, William J. Clinton Presidential Library — Public domain (via Wikimedia Commons)"
+  },
+  "signatures": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/95/Budapest-memorandum-signatures.png",
+   "credit": "The Budapest Memorandum's signatures, 5 December 1994 — Armduino — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.55,
+    0.5
+   ]
+  },
+  "kuchma": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/Leonid_Kuchma_1994_%28cropped%29.jpg",
+   "credit": "Leonid Kuchma, 1994 — Gamweb — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  },
+  "blast": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/65/Ukraine_-_WMD_Dismantlement_-_August%2C_1996_-_Inspection_team_visit_to_former_Soviet_Union_%28FSU%29_Weapons_of_Mass_Destruction_%28WMD%29_production_facilities%2C_construction_crews%2C_ICBM_SIL_-_DPLA_-_59ff9a85371df9571bd1ca49d4459c61.JPG",
+   "credit": "A former Soviet missile site being demolished, Ukraine, 1996 — Department of Defense. Defense Threat Reduction Agency. 10/1 — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "dismantle": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Ukraine_-_ICBM_SILO_-_Dismantlement_Project%2C_June_1995_-_Inspection_team_visit_to_unidentified_ICBM_launch_site%2C_Photos_of_demolished_ICBM_SILOs%2C_inspection_team_photo_-_DPLA_-_20ce8a437378e25bfc6d649d23400a59.JPG",
+   "credit": "ICBM silo dismantlement, Ukraine, June 1995 — Department of Defense. Defense Threat Reduction Agency. 10/1 — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "sunflowers": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Defense.gov_News_Photo_960604-N-8492C-001.jpg",
+   "credit": "Sunflowers planted on a former missile field, Pervomaisk, 4 June 1996 — Petty Officer 1st Class Todd P. Cichonowicz, U.S. Navy — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.45
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Russia and Ukraine sit down in Abu Dhabi to negotiate one thing above all: Ukraine's security after the war."
+  },
+  {
+   "show": "opening",
+   "say": "Ukraine has been promised security before."
+  },
+  {
+   "show": "silo",
+   "tag": "1991",
+   "say": "When the Soviet Union fell, Ukraine woke up with the third-largest nuclear arsenal on Earth, about nineteen hundred warheads."
+  },
+  {
+   "show": "kyiv",
+   "tag": "JAN 1994",
+   "say": "Washington wanted them gone. In January 1994, President Clinton flew to Kyiv to press Ukraine to give them up."
+  },
+  {
+   "show": "signatures",
+   "tag": "5 DEC 1994",
+   "say": "In Budapest, the United States, Britain and Russia signed a promise: respect Ukraine's borders, and never use force against it.",
+   "also": "kuchma"
+  },
+  {
+   "show": "blast",
+   "tag": "1996",
+   "say": "In return, Ukraine handed over every warhead. The last one left for Russia in June 1996.",
+   "also": "dismantle"
+  },
+  {
+   "show": "sunflowers",
+   "tag": "JUNE 1996",
+   "say": "On an old missile field, the defence ministers planted sunflowers."
+  },
+  {
+   "show": "now",
+   "tag": "ABU DHABI · 2026",
+   "say": "Twenty years later, Russia took Crimea. Now Ukraine wants a guarantee that holds."
+  },
+  {
+   "show": "end",
+   "say": "Would you trust a promise like that again?"
+  }
+ ],
+ "end": {
+  "title": "TRUST IT AGAIN?",
+  "sub": "BUDAPEST, 1994",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
