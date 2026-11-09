@@ -1,10 +1,32 @@
 [
  {
-  "date": "2026-11-09",
-  "status": "not_posted",
-  "reason": "built but not posted (check, render or upload failed, or post=false)",
+  "date": "2026-11-05",
+  "status": "posted",
+  "slug": "israel-nuclear",
+  "reason": "posted by hand before Option 3"
+ },
+ {
+  "date": "2026-11-06",
+  "status": "posted",
+  "slug": "tanker-war",
+  "reason": "posted by hand before Option 3"
+ },
+ {
+  "date": "2026-11-07",
+  "status": "posted",
   "slug": "argentina-2001",
-  "headline": "How a bank collapse left millions in limbo and toppled Paraguay's president",
-  "title": "Paraguay's Bank Collapse Echoes Argentina 2001 #shorts"
+  "reason": "posted by hand before Option 3"
+ },
+ {
+  "date": "2026-11-08",
+  "status": "posted",
+  "slug": "france-1968",
+  "reason": "posted by hand before Option 3"
+ },
+ {
+  "date": "2026-11-09",
+  "status": "posted",
+  "slug": "budapest-1994",
+  "reason": "posted by hand before Option 3"
  }
 ]
