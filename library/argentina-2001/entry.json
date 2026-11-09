@@ -1,0 +1,195 @@
+{
+ "slug": "argentina-2001",
+ "event": "Argentina's collapse, December 2001",
+ "then_year": 2001,
+ "actors": [
+  "Paraguay",
+  "Paraguayan",
+  "Argentina",
+  "Argentine",
+  "Buenos Aires",
+  "Milei",
+  "Peña",
+  "Asunción",
+  "bank collapse",
+  "bank run",
+  "Uruguay",
+  "Bolivia"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.45
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Crisis_20_diciembre_2001.jpg",
+  "credit": "Buenos Aires, 20 December 2001 — PRFOTOBAIRES from Arte y Fotografía — CC BY 2.5 (via Wikimedia Commons)"
+ },
+ "now_people": [
+  {
+   "article": "Santiago Peña",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Javier Milei",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "WHO PAYS?",
+   "sub": "ARGENTINA, 2001"
+  }
+ ],
+ "examples": {
+  "line1": "This week, Paraguay's president resigned. A bank had collapsed under his watch, and the scandal reached all the way to his office.",
+  "line2": "Argentina has seen this before.",
+  "now_tag": "PARAGUAY · 2026",
+  "now": "Now, just across the border, a bank has brought down another one.",
+  "question": "When a bank collapses, should the president be the one who pays?"
+ },
+ "facts": "Dec 2001: Argentina froze savings (corralito), riots, 39 dead, De la Rúa resigned, five presidents in two weeks.",
+ "images": {
+  "pots": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/28/Cacerolazo_Argentina_2001-2002.jpg",
+   "credit": "Cacerolazo, Buenos Aires, 2001–2002 — Pepe Robles — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "siege": {
+   "video": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/4f/De.la.rua.ogv/De.la.rua.ogv.360p.mpeg4.mov",
+   "start": 118,
+   "duration": 231.56,
+   "x": 0.55,
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/4f/De.la.rua.ogv",
+   "credit": "De la Rúa's national address declaring a state of siege, December 2001 — Televisión Pública Argentina. Canal 7. Cadena Nacional — CC BY-SA 2.5 ar (via Wikimedia Commons)"
+  },
+  "riots": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Saqueos_2001_en_microcentro_y_Plaza_de_Mayo_el_20_de_diciembre_de_2001.jpg",
+   "credit": "Looting and riots, Plaza de Mayo, 20 December 2001 — EquipoDiciembre2001 — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "resigns": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/c7/De_la_Rua_renuncia.JPG",
+   "credit": "De la Rúa resigns, 2001 — Unknown authorUnknown author — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.4
+   ]
+  },
+  "saa": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/eb/Adolfo_Rodr%C3%ADguez_Sa%C3%A1_con_banda_presidencial_%28cropped%29.jpg",
+   "credit": "Adolfo Rodríguez Saá with the presidential sash, 2001 — Unknown authorUnknown author — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  "duhalde": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/91/Eduardo_duhalde_presidente.jpg",
+   "credit": "Eduardo Duhalde, president, 2002 — Sin datos — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  "march": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Buenos_Aires_-_Manifestaci%C3%B3n_contra_el_Corralito_-_20020206-05.JPG",
+   "credit": "Protest against the corralito, Buenos Aires, 2002 — Taken by the uploader, w:es:Usuario:Barcex — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "obelisco": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/26/Obelisco_20Dic01.jpg",
+   "credit": "The Obelisco, 20 December 2001 — Doncentu — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "office": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1d/De_la_R%C3%BAa_retira_sus_objetos_del_despacho.jpg",
+   "credit": "De la Rúa clears his office, 2001 — Victor Buggé — CC BY 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.4,
+    0.4
+   ]
+  },
+  "duhalde2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/Asunci%C3%B3n_de_Eduardo_Duhalde.jpg",
+   "credit": "Eduardo Duhalde sworn in, 2002 — Victor Hugo Bugge — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "march2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/50/Buenos_Aires_-_Manifestaci%C3%B3n_contra_el_Corralito_-_20020206-01.JPG",
+   "credit": "Protest against the corralito, Buenos Aires, 2002 — Taken by the uploader, w:es:Usuario:Barcex — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "pots",
+   "tag": "DEC 2001",
+   "say": "In December 2001, its banks were running out of dollars. So the government did something drastic: it froze people's savings."
+  },
+  {
+   "show": "march",
+   "tag": "DEC 2001",
+   "say": "You could take out 250 pesos a week, nothing more. Argentines called it the corralito, the little corral."
+  },
+  {
+   "show": "march2",
+   "tag": "DEC 2001",
+   "say": "The anger poured into the streets. People banged pots and pans outside their windows, then marched."
+  },
+  {
+   "show": "siege",
+   "tag": "19 DEC 2001",
+   "say": "The president answered with a state of siege."
+  },
+  {
+   "show": "riots",
+   "tag": "20 DEC 2001",
+   "say": "It only made things worse. Riots tore through the Plaza de Mayo, and across the country, thirty-nine people were killed.",
+   "also": "obelisco"
+  },
+  {
+   "show": "resigns",
+   "tag": "20 DEC 2001",
+   "say": "That evening, Fernando de la Rúa resigned, and left the presidential palace by helicopter.",
+   "also": "office"
+  },
+  {
+   "show": "saa",
+   "tag": "23 DEC 2001",
+   "say": "His successor announced the largest debt default the world had ever seen. He was gone within a week."
+  },
+  {
+   "show": "duhalde",
+   "tag": "JAN 2002",
+   "say": "In under two weeks, Argentina went through five presidents.",
+   "also": "duhalde2"
+  }
+ ],
+ "added": "2026-11-09",
+ "source": "owner_media/argentina-2001"
+}

@@ -1,0 +1,178 @@
+{
+ "slug": "france-1968",
+ "event": "May 1968 in France",
+ "then_year": 1968,
+ "actors": [
+  "France",
+  "French",
+  "Paris",
+  "Macron",
+  "de Gaulle",
+  "Sorbonne",
+  "French students",
+  "Élysée",
+  "French strike",
+  "French protests"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.45
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/e/e5/1200x680_24mai68.jpg",
+  "credit": "Paris, 24 May 1968 — Unknown authorUnknown author — CC BY 4.0 (via Wikimedia Commons)"
+ },
+ "now_people": [
+  {
+   "article": "Emmanuel Macron",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "STREET OR BALLOT?",
+   "sub": "MAY 1968"
+  }
+ ],
+ "examples": {
+  "line1": "This week, French high school students walked out, and the whole country followed them into the streets.",
+  "line2": "But in 1968, it started the same way, and it nearly toppled Charles de Gaulle.",
+  "now_tag": "FRANCE · 2026",
+  "now": "Now the students are back, and France has a president with six months left.",
+  "question": "So what wins in France: the street, or the ballot box?"
+ },
+ "facts": "May 1968: students and ten million strikers paralysed France; de Gaulle vanished, returned, dissolved parliament and won a landslide; resigned in 1969.",
+ "images": {
+  "sorbonne": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/cf/Frankrijk._Sorbonne_bezet_door_studenten%2C_Bestanddeelnr_921-3971.jpg",
+   "credit": "The Sorbonne occupied by students, 1968 — Eric Koch for Anefo — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "sorbonne2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/80/Frankrijk._Sorbonne_bezet_door_studenten%2C_Bestanddeelnr_921-3975.jpg",
+   "credit": "\"Libérez l'expression\", the Sorbonne, 1968 — Eric Koch for Anefo — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "barricade": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/60/11-12.06.68_Mai_68._Nuit_d%27%C3%A9meutes._Manif._Barricades.D%C3%A9g%C3%A2ts_%281968%29_-_53Fi1025.jpg",
+   "credit": "Barricades after a night of riots, 1968 — André Cros — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "barricade2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/6a/11-12.06.68_Mai_68._Nuit_d%27%C3%A9meutes._Manif._Barricades.D%C3%A9g%C3%A2ts_%281968%29_-_53Fi1034.jpg",
+   "credit": "A night of riots, 1968 — André Cros — CC BY-SA 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "strike": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/9e/Mai_1968._Tenez_bon_camarades%2C_notre_arme_c%27est_la_gr%C3%A8ve_affiche%2C_non_identifi%C3%A9.jpg",
+   "credit": "\"Tenez bon camarades, notre arme c'est la grève\", poster, May 1968 — Unknown authorUnknown author — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "strike2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Mai_1968._Renault-Flins_pilier_de_gr%C3%A8ve_tient%2C_aff._r%C3%A9volution_naire_de_mai_1968%2C_Atelier_de_l%27Ecole_des_Beaux_arts_affiche%2C_non_identifi%C3%A9.jpg",
+   "credit": "\"Renault-Flins pilier de grève tient\", poster, May 1968 — Unknown authorUnknown author — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "degaulle": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Bundesarchiv_B_145_Bild-F026341-0021%2C_Paris%2C_Pr%C3%A4sident_de_Gaulle_empf%C3%A4ngt_L%C3%BCbke_%28cropped%29.jpg",
+   "credit": "Charles de Gaulle, Paris, 1968 — Jens Gathmann — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  },
+  "march": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/43/Photographie_30_mai_-_Archives_nationales-_98AJ-4DE-NC.jpg",
+   "credit": "The march for de Gaulle, Paris, 30 May 1968 — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "speech": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Discours_du_g%C3%A9n%C3%A9ral_de_Gaulle-_30_mai_1968-_Archives_nationales_-_AG-5%281%29-1447.jpg",
+   "credit": "De Gaulle's speech of 30 May 1968, Archives nationales — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "nixon": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/President_Nixon_and_staff_members_with_President_Charles_DeGaulle_of_France_-_NARA_-_194610.jpg",
+   "credit": "Charles de Gaulle, 1969 — Unknown authorUnknown author or not provided — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.86,
+    0.42
+   ]
+  },
+  "resign": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/52/Mai_1968._Nanterre._Le_GLC%2C_le_GLM%2C_l%27UNEF._compatissent_%C3%A0_la_d%C3%A9mission_du_g%C3%A9n%C3%A9ral_de_Gaulle._affiche%2C_non_identifi%C3%A9.jpg",
+   "credit": "Student poster on de Gaulle's resignation, Nanterre — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "sorbonne",
+   "tag": "MAY 1968",
+   "say": "Police raided the Sorbonne to clear out protesting students. Paris erupted.",
+   "also": "sorbonne2"
+  },
+  {
+   "show": "barricade",
+   "tag": "1968",
+   "say": "Students tore up the paving stones and built barricades.",
+   "also": "barricade2"
+  },
+  {
+   "show": "strike",
+   "tag": "MAY 1968",
+   "say": "Then the workers joined them. Ten million went on strike. France stopped.",
+   "also": "strike2"
+  },
+  {
+   "show": "degaulle",
+   "tag": "29 MAY 1968",
+   "say": "On May 29th, de Gaulle vanished. He had flown in secret to the French army in West Germany."
+  },
+  {
+   "show": "march",
+   "tag": "30 MAY 1968",
+   "say": "The next day he came back, dissolved parliament, and hundreds of thousands marched for him.",
+   "also": "speech"
+  },
+  {
+   "show": "nixon",
+   "tag": "1969",
+   "say": "He won the election in a landslide. A year later, he resigned.",
+   "also": "resign"
+  }
+ ],
+ "added": "2026-11-09",
+ "source": "owner_media/france-1968"
+}

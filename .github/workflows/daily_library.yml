@@ -1,0 +1,109 @@
+name: Daily Library Short
+
+# Option 3 (docs/SHORTS_HANDBOOK.md): today's biggest headline is matched to a
+# library entry (library/<slug>/entry.json); the free model writes only the
+# today half; rendered, checked and POSTED with no review. Nothing matches or
+# a check fails: nothing is posted and library/log.json says why.
+# Monday to Friday 08:47 UTC (after the free Gemini quota resets); the
+# hand-made session task at 09:41 only steps in if this posted nothing.
+on:
+  # schedule:
+  #   - cron: '47 8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      post:
+        description: "Post to YouTube (false = build and check only)"
+        required: false
+        default: 'true'
+      voice:
+        description: "Kokoro voice"
+        required: false
+        default: am_onyx
+
+concurrency:
+  group: daily-library
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install ffmpeg, espeak-ng and the Python packages
+        timeout-minutes: 12
+        run: |
+          for i in 1 2; do
+            timeout 300 sudo apt-get update -q && timeout 300 sudo apt-get install -y -q ffmpeg espeak-ng && break
+            echo "apt took too long; trying again"
+          done
+          command -v ffmpeg
+          pip install -r requirements.txt
+      - name: Cache Kokoro model files
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-model-files
+      - name: Fetch Kokoro model files (cache miss only)
+        run: |
+          mkdir -p models
+          [ -f models/kokoro-v1.0.onnx ] || curl -sSL -o models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          [ -f models/voices-v1.0.bin ] || curl -sSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+      - name: Match the headline, write the today half
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+        run: python tools/daily_library.py out
+      - name: Build the Short
+        if: hashFiles('out/short_meta.json') != ''
+        env:
+          KOKORO_VOICE: ${{ inputs.voice || 'am_onyx' }}
+          WIKIMEDIA_TOKEN: ${{ secrets.WIKIMEDIA_TOKEN }}
+        run: python tools/paradox_short.py out/story out
+      - name: Check the Short
+        if: hashFiles('out/short.mp4') != ''
+        run: python tools/check_short.py out/short.mp4 out/frames.jpg
+      - name: Post
+        id: post
+        if: hashFiles('out/short.mp4') != '' && (inputs.post || 'true') == 'true'
+        env:
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          PRIVACY_STATUS: public
+        run: |
+          python tools/upload_short.py out/short.mp4 out/short_meta.json | tee out/upload.log
+          grep -o 'https://youtube.com/shorts/[A-Za-z0-9_-]*' out/upload.log | tail -1 > out/url.txt
+      - name: Log the day
+        if: always()
+        run: |
+          python tools/library_log.py out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add library/log.json
+          git diff --cached --quiet && exit 0
+          git commit -qm "Daily library Short: log"
+          git pull -q --rebase origin main && git push -q origin HEAD:main
+      - name: Push to preview-media
+        if: always()
+        run: |
+          [ -d out ] || exit 0
+          cd out
+          rm -rf work story/*.jpg
+          git init -q -b preview-media
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Daily Library Short (run ${{ github.run_number }})"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" preview-media
