@@ -1,0 +1,119 @@
+{
+ "then_year": 1972,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.5,
+  0.3
+ ],
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "images": {
+  "land": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/Nixons_exit_AFO_in_China_1972.jpg",
+   "credit": "The Nixons disembark from Air Force One in China, February 1972 — Ollie Atkins, White House Photographer — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "land2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Arrival_of_Air_Force_One_in_Peking%2C_02-21-1972.jpeg",
+   "credit": "Arrival of Air Force One in Peking, 21 February 1972 — Byron E. Schumaker; White House Photographer (1935 - ). Biog — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "toast": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/c3/Nixon_and_Zhou_toast.jpg",
+   "credit": "President Nixon and Premier Zhou Enlai toast, February 1972 — White House Photographer — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "mao": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/President_Richard_Nixon_and_Mao_Zedong.jpg",
+   "credit": "President Nixon shakes hands with Chairman Mao Zedong, February 1972 — Series: Nixon White House Photographs, 1/20/1969 - 8/9/1974  — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.3
+   ]
+  },
+  "mao2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/6b/Mao_Zedong%2C_Zhang_Yufeng_et_Richard_Nixon.jpg",
+   "credit": "Mao Zedong and Richard Nixon, February 1972 — White House Photo Office (1969 – 1974) — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.3
+   ]
+  },
+  "wall": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/32/President_and_Mrs._Nixon_visit_the_Great_Wall_of_China.jpg",
+   "credit": "President and Mrs. Nixon visit the Great Wall of China, February 1972 — Byron Schumaker — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.55
+   ]
+  },
+  "wall2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/62/Nixon_visit_the_Great_Wall_of_China.jpg",
+   "credit": "The Nixons visit the Great Wall of China, February 1972 — Byron Schumaker — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, President Trump and Xi Jinping spoke by phone about trade and Taiwan."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1972, a visit to Beijing changed the world's balance of power."
+  },
+  {
+   "show": "land",
+   "tag": "21 FEB 1972",
+   "say": "In February 1972, President Nixon flew to Beijing. No American president had ever set foot in Communist China.",
+   "also": "land2"
+  },
+  {
+   "show": "mao",
+   "tag": "21 FEB 1972",
+   "say": "On the day he arrived, he shook hands with Chairman Mao.",
+   "also": "mao2"
+  },
+  {
+   "show": "toast",
+   "tag": "FEB 1972",
+   "say": "At a banquet, he raised a glass with Premier Zhou Enlai, after more than twenty years of silence between the two countries."
+  },
+  {
+   "show": "wall",
+   "tag": "FEB 1972",
+   "say": "He and his wife Pat walked on the Great Wall.",
+   "also": "wall2"
+  },
+  {
+   "show": "now",
+   "tag": "BEIJING · 2026",
+   "say": "Now the same two powers are bargaining again, and Taiwan is still on the table."
+  },
+  {
+   "show": "end",
+   "say": "Is China a partner or a rival?"
+  }
+ ],
+ "end": {
+  "title": "FRIENDS OR RIVALS?",
+  "sub": "BEIJING, 1972",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
