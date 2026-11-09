@@ -209,7 +209,9 @@ def opening_clip(now_png, then_png, split_at, take_at, seconds, then_year, work,
         return f"({p}*{p}*(3-2*{p}))"
     b = f"({SH}-960*{ease(split_at, SPLIT_IN)}-960*{ease(take_at, SLIDE)})"
     in_take = f"gte(t,{take_at:.3f})"
-    y_now = f"if({in_take},{b}-1440,({b}-1920)/2)"
+    # today rises a quarter of the way, not half: its upper part (where a
+    # face is) stays in the top half during the split, not the chest
+    y_now = f"if({in_take},{b}-1200,({b}-1920)/4)"
     y_then = f"if({in_take},{b}/2,{b}-480)"
     m_e = f"if({in_take},{b}/2,480)"
 
