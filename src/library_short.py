@@ -58,6 +58,8 @@ def validate(e):
         if not l.get("say") or not l.get("tag"):
             out.append(f"{e.get('slug')}: a picture line needs say and tag")
     for k, v in (e.get("images") or {}).items():
+        if str(v.get("url", "")).lower().endswith((".tif", ".tiff")):
+            out.append(f"{e.get('slug')}: image {k} is a TIFF (too big)")
         if not (v.get("url") or v.get("video")) or not v.get("credit"):
             out.append(f"{e.get('slug')}: image {k} needs url and credit")
     if len(e.get("lines") or []) < 4:

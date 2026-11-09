@@ -25,6 +25,8 @@ def resolve(pic, cat):
     c = cat[pic["id"]]
     url = (c.get("play") if c.get("kind") == "video" else None) or c["url"]
     url = url.split("?")[0]
+    if url.lower().endswith((".tif", ".tiff")):
+        raise SystemExit(f"{pic['id']}: a TIFF is too big for the renderer; choose a jpg/png")
     artist = strip_html(c.get("artist"))[:60] or "Unknown author"
     credit = f"{pic['desc']} — {artist} — {c.get('license') or 'Public domain'} (via Wikimedia Commons)"
     out = {"url": url, "credit": credit}

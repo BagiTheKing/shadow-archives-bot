@@ -19,14 +19,6 @@
     0.4
    ]
   },
-  "land2": {
-   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Arrival_of_Air_Force_One_in_Peking%2C_02-21-1972.jpeg",
-   "credit": "Arrival of Air Force One in Peking, 21 February 1972 — Byron E. Schumaker; White House Photographer (1935 - ). Biog — Public domain (via Wikimedia Commons)",
-   "focus": [
-    0.5,
-    0.5
-   ]
-  },
   "toast": {
    "url": "https://upload.wikimedia.org/wikipedia/commons/c/c3/Nixon_and_Zhou_toast.jpg",
    "credit": "President Nixon and Premier Zhou Enlai toast, February 1972 — White House Photographer — Public domain (via Wikimedia Commons)",
@@ -80,8 +72,7 @@
   {
    "show": "land",
    "tag": "21 FEB 1972",
-   "say": "In February 1972, President Nixon flew to Beijing. No American president had ever set foot in Communist China.",
-   "also": "land2"
+   "say": "In February 1972, President Nixon flew to Beijing. No American president had ever set foot in Communist China."
   },
   {
    "show": "mao",

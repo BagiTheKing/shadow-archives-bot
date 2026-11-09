@@ -1,10 +1,14 @@
 {
  "now": {
-  "url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Arrival_of_Air_Force_One_%28Spirit_of_76%29_in_Peking_%28China%29_-_DPLA_-_f30d5161400465331c126a2f80726f96.tiff",
-  "credit": "Air Force One arrives in Beijing, February 1972 — President (1969-1974 : Nixon). White House Photo Office. 196 — Public domain (via Wikimedia Commons)"
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Arrival_of_Air_Force_One_in_Peking%2C_02-21-1972.jpeg",
+  "credit": "Arrival of Air Force One in Peking, 21 February 1972 — Byron E. Schumaker; White House Photographer (1935 - ). Biog — Public domain (via Wikimedia Commons)"
  },
  "then": {
-  "url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Arrival_of_Air_Force_One_%28Spirit_of_76%29_in_Peking_%28China%29_-_DPLA_-_f30d5161400465331c126a2f80726f96.tiff",
-  "credit": "Air Force One arrives in Beijing, February 1972 — President (1969-1974 : Nixon). White House Photo Office. 196 — Public domain (via Wikimedia Commons)"
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Arrival_of_Air_Force_One_in_Peking%2C_02-21-1972.jpeg",
+  "credit": "Arrival of Air Force One in Peking, 21 February 1972 — Byron E. Schumaker; White House Photographer (1935 - ). Biog — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
  }
 }
