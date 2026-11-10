@@ -74,7 +74,9 @@ jobs:
         run: python tools/paradox_short.py out/story out
       - name: Check the Short
         if: hashFiles('out/short.mp4') != ''
-        run: python tools/check_short.py out/short.mp4 out/frames.jpg
+        run: |
+          pip install -q faster-whisper
+          python tools/check_short.py out/short.mp4 out/frames.jpg
       - name: Post
         id: post
         if: hashFiles('out/short.mp4') != '' && (inputs.post || 'true') == 'true'
