@@ -155,6 +155,15 @@ Library target ~40 entries.
 
 ## Current state
 
+- 10 Nov 2026: library has 9 entries (5 converted + cuban-missile-crisis-1962,
+  iran-hostage-crisis-1979, panama-invasion-1989, nixon-in-china-1972; all four
+  new ones previewed by render, pictures OK). The 08:47 schedule did NOT fire on
+  its first day (GitHub often skips a new workflow's first cron): the hand-made
+  task posted https://youtube.com/shorts/OVEbZe9CY6Q (Trump/Xi/Putin, Nixon
+  1972). If the schedule misses again, dispatch daily_library.yml by hand.
+  Tools: tools/library_add.py (catalog -> entry), tools/library_preview.py
+  (render an entry). Renderer drops pictures over 40 MB: no TIFFs.
+
 - 9 Nov 2026 (evening): Option 3 built and tested end to end (run 1, post=false:
   Paraguay/Argentina Short rendered fine, frames OK). Daily Library Short is
   scheduled (08:47 UTC Mon-Fri) and posts by itself. The 5 library entries are
