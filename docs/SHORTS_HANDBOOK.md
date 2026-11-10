@@ -92,6 +92,13 @@ if it is not fresh. A library entry is reused only after 90 days
 (`COOLDOWN_DAYS`) and with a different today half. At 5 Shorts a week that
 needs ~65 entries to run daily without gaps: the library must keep growing.
 
+## YouTube auto-dub (owner, 10 Nov)
+
+A Short can play in another language for the owner: YouTube auto-dubs for
+viewers whose language differs. The file itself is English (Kokoro am_onyx,
+checked by tools/check_short.py's language gate in the daily job). Not a bug:
+do not re-render or delete because of it.
+
 ## Picture rules learned the hard way
 
 - The parallel must share country/actors with the news ("Paraguay bank
