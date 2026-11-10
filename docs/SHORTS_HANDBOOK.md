@@ -162,6 +162,15 @@ Library target ~40 entries.
 
 ## Current state
 
+- 10 Nov 2026 (evening): FIRST AUTONOMOUS POST of the daily library job:
+  https://youtube.com/shorts/KHIpV87s-Bw (Iran hostage entry + Trump NOW photo,
+  frames reviewed, good). The cron fired ~16:37 UTC, not 08:47 (GitHub delays
+  schedules by hours), so 10 Nov got two Shorts (hand-made one first). The
+  hand-made backup task now runs 18:41 UTC and does nothing if the log shows a
+  post today. Switch it off after 2-3 good autonomous posts (1 so far).
+  Library: 9 entries; Yalta 1945 catalog was started for Russia/Europe
+  security headlines (needs re-run: the daily run overwrote preview-media).
+
 - 10 Nov 2026: library has 9 entries (5 converted + cuban-missile-crisis-1962,
   iran-hostage-crisis-1979, panama-invasion-1989, nixon-in-china-1972; all four
   new ones previewed by render, pictures OK). The 08:47 schedule did NOT fire on
