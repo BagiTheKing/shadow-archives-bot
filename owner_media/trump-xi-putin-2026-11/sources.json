@@ -1,0 +1,14 @@
+{
+ "now": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Xi_Jinping_-_2026_%2855063342986%29_%28cropped%29.jpg",
+  "credit": "Xi Jinping, January 2026 — Finnish Government — CC BY 4.0 (via Wikimedia Commons)"
+ },
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Arrival_of_Air_Force_One_in_Peking%2C_02-21-1972.jpeg",
+  "credit": "Arrival of Air Force One in Peking, 21 February 1972 — Byron E. Schumaker; White House Photographer (1935 - ). Biog — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ }
+}
