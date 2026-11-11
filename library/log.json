@@ -50,5 +50,10 @@
   "date": "2026-11-11",
   "status": "skipped",
   "reason": "the run failed before choosing"
+ },
+ {
+  "date": "2026-11-11",
+  "status": "skipped",
+  "reason": "no match passed the checks"
  }
 ]
