@@ -55,5 +55,14 @@
   "date": "2026-11-11",
   "status": "skipped",
   "reason": "no match passed the checks"
+ },
+ {
+  "date": "2026-11-11",
+  "status": "posted",
+  "slug": "molotov-ribbentrop-pact-1939",
+  "headline": "Russian diplomat says Moscow could conclude non-aggression pacts with NATO member states",
+  "title": "Russia Offers NATO Non-Aggression Pacts. In 1939 It Signed One With Hitler #shorts",
+  "url": "https://youtube.com/shorts/cSifEBt0vQU",
+  "reason": "hand-made backup (daily job: apt hang, then no fresh library match)"
  }
 ]

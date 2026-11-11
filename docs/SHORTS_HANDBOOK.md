@@ -162,6 +162,16 @@ Library target ~40 entries.
 
 ## Current state
 
+- 11 Nov 2026: the library is the bottleneck: 10 entries, 8 of them posted in
+  the last week and on the 90-day cooldown, so the auto job found no fresh
+  match and posted nothing (also its cron run died on a hung apt mirror;
+  install step fixed). Hand-made backup posted
+  https://youtube.com/shorts/cSifEBt0vQU (Russia/NATO pacts, Molotov-Ribbentrop
+  entry, added to the library). PRIORITY: add entries every day (aim 40+):
+  Media Catalog -> tools/library_add.py -> tools/library_preview.py. Needed
+  next: Yalta 1945, Iran/Iraq (Osirak 1981), Ukraine/Georgia 2008, Korea,
+  Israel/Lebanon 1982, Gulf War 1991, Suez 1956, Berlin 1961.
+
 - 10 Nov 2026 (evening): FIRST AUTONOMOUS POST of the daily library job:
   https://youtube.com/shorts/KHIpV87s-Bw (Iran hostage entry + Trump NOW photo,
   frames reviewed, good). The cron fired ~16:37 UTC, not 08:47 (GitHub delays
