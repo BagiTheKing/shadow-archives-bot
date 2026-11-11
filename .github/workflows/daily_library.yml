@@ -38,12 +38,17 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - name: Install ffmpeg, espeak-ng and the Python packages
-        timeout-minutes: 12
+        # the apt mirror hung for 10 minutes on 11 Nov and killed the run:
+        # skip apt when ffmpeg is already there, give each try 3 minutes,
+        # and only fail if ffmpeg is still missing
+        timeout-minutes: 15
         run: |
-          for i in 1 2; do
-            timeout 300 sudo apt-get update -q && timeout 300 sudo apt-get install -y -q ffmpeg espeak-ng && break
-            echo "apt took too long; trying again"
-          done
+          if ! command -v ffmpeg >/dev/null; then
+            for i in 1 2 3; do
+              timeout 180 sudo apt-get update -q && timeout 240 sudo apt-get install -y -q ffmpeg espeak-ng && break
+              echo "apt took too long; trying again"
+            done
+          fi
           command -v ffmpeg
           pip install -r requirements.txt
       - name: Cache Kokoro model files
