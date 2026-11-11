@@ -1,0 +1,145 @@
+{
+ "then_year": 1939,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.5,
+  0.2
+ ],
+ "then_focus": [
+  0.5,
+  0.4
+ ],
+ "images": {
+  "airport": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/53/Joachim_von_Ribbentrop_at_Moscow_Aeroport_%281939-08%29.jpg",
+   "credit": "Joachim von Ribbentrop at Moscow airport, August 1939 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "stalin": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/38/Bundesarchiv_Bild_183-H27337%2C_Moskau%2C_Stalin_und_Ribbentrop_im_Kreml.jpg",
+   "credit": "Stalin and Ribbentrop in the Kremlin, August 1939 — Template:Helmut Laux — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "sign": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/4c/MolotovRibbentropStalin.jpg",
+   "credit": "Molotov signs the German-Soviet non-aggression pact, Stalin looking on, 23 August 1939 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.45,
+    0.5
+   ]
+  },
+  "map": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Molotov-Ribbentrop_Pact_showing_the_new_German-Soviet_border_Sept_28_1939.png",
+   "credit": "The German-Soviet border after the pact, September 1939 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "invade": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Polishborder17091939.jpg",
+   "credit": "Soviet soldiers invade Poland, September 1939 — AnonymousUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "invade2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/The_German-soviet_Invasion_of_Poland%2C_1939_HU106367.jpg",
+   "credit": "Red Army armoured car in Poland, September 1939 — Planet News photographer — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "parade": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Armia_Czerwona%2C_Wehrmacht_22.09.1939_wsp%C3%B3lna_parada.jpg",
+   "credit": "German and Soviet officers at the joint parade in Brest, 22 September 1939 — Gutjahr — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "parade2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/Desfile_conjunto_nazi-sovi%C3%A9tico_en_Brest-Livosk%2C_Polonia%2C_22_de_septiembre_de_1939_-_36115519374_Nazi-Soviet_parade_Brest-Livosk_Poland_1939-09-22.jpg",
+   "credit": "German and Soviet soldiers in Brest-Litovsk, September 1939 — Contando Estrelas — CC BY-SA 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "shake": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/9b/%D0%9C%D0%BE%D0%BB%D0%BE%D1%82%D0%BE%D0%B2_%D0%B8_%D0%A0%D0%B8%D0%B1%D0%B1%D0%B5%D0%BD%D1%82%D1%80%D0%BE%D0%BF.jpg",
+   "credit": "Molotov shakes hands with Ribbentrop, Moscow, 1939 — Mikhail Mikhaylovich Kalashnikov — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, a Russian diplomat said Moscow could sign non-aggression pacts with NATO member states."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1939, Moscow signed one with Hitler's Germany, and it did not last."
+  },
+  {
+   "show": "airport",
+   "tag": "23 AUG 1939",
+   "say": "On August 23rd, 1939, Nazi Germany's foreign minister flew to Moscow. Stalin shook his hand.",
+   "also": "stalin"
+  },
+  {
+   "show": "sign",
+   "tag": "23 AUG 1939",
+   "say": "That night, Molotov and Ribbentrop signed a non-aggression pact, with Stalin looking on."
+  },
+  {
+   "show": "map",
+   "tag": "1939",
+   "say": "A secret protocol split Poland and the Baltic states between them."
+  },
+  {
+   "show": "invade",
+   "tag": "SEPT 1939",
+   "say": "Nine days later, Germany invaded Poland. On September 17th, the Red Army invaded from the east.",
+   "also": "invade2"
+  },
+  {
+   "show": "parade",
+   "tag": "22 SEP 1939",
+   "say": "Five days after that, German and Soviet troops held a joint parade in Brest.",
+   "also": "parade2"
+  },
+  {
+   "show": "shake",
+   "tag": "THE PACT",
+   "say": "Less than two years later, Hitler broke it and invaded the Soviet Union."
+  },
+  {
+   "show": "now",
+   "tag": "MOSCOW · 2026",
+   "say": "Now Europe has to decide whether to believe Moscow again."
+  },
+  {
+   "show": "end",
+   "say": "Would you trust a Russian non-aggression pact today?"
+  }
+ ],
+ "end": {
+  "title": "TRUST MOSCOW?",
+  "sub": "MOSCOW, 1939",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
