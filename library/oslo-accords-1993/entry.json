@@ -1,0 +1,168 @@
+{
+ "slug": "oslo-accords-1993",
+ "event": "The Oslo Accords, 1993",
+ "then_year": 1993,
+ "actors": [
+  "Gaza",
+  "Gaza Strip",
+  "Hamas",
+  "Palestinian",
+  "Palestinians",
+  "Netanyahu",
+  "Israel",
+  "Israeli",
+  "Arafat",
+  "Abbas",
+  "West Bank",
+  "ceasefire",
+  "Nasser Hospital",
+  "Palestinian Authority"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.4
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Bill_Clinton%2C_Yitzhak_Rabin%2C_Yasser_Arafat_at_the_White_House_1993-09-13_%28short%29.jpg",
+  "credit": "Clinton, Rabin and Arafat at the White House, 13 September 1993 — Vince Musi / The White House — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.4
+  ]
+ },
+ "now_people": [
+  {
+   "article": "Benjamin Netanyahu",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Mahmoud Abbas",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "PEACE OR PAUSE?",
+   "sub": "OSLO, 1993"
+  },
+  {
+   "title": "CAN PEACE HOLD?",
+   "sub": "OSLO, 1993"
+  }
+ ],
+ "examples": {
+  "line1": "This week, officials said an Israeli strike on a Gaza hospital killed at least six people, despite a ceasefire.",
+  "line2": "But in 1993, Israelis and Palestinians shook hands on a deal that promised peace.",
+  "now_tag": "GAZA · 2026",
+  "now": "Now another ceasefire is under strain.",
+  "question": "Can a ceasefire last without a real peace deal?"
+ },
+ "facts": "On 13 September 1993, on the White House lawn, Israel's prime minister Yitzhak Rabin and PLO chairman Yasser Arafat shook hands, with President Clinton. The Oslo Accords promised Palestinian self-government and a path to a final peace deal. In 1994 Rabin, Arafat and Shimon Peres shared the Nobel Peace Prize. In November 1995 an Israeli extremist assassinated Rabin. In 2005 Israel pulled its settlers and soldiers out of Gaza. In 2007 Hamas took control of the Gaza Strip.",
+ "images": {
+  "shake": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Bill_Clinton%2C_Yitzhak_Rabin%2C_Yasser_Arafat_at_the_White_House_1993-09-13_%28cropped%29.jpg",
+   "credit": "Rabin, Clinton and Arafat at the White House, 13 September 1993 — Vince Musi / The White House — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "shake2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Bill_Clinton%2C_Yitzhak_Rabin%2C_Yasser_Arafat_at_the_White_House_1993-09-13_%28short%29.jpg",
+   "credit": "Clinton, Rabin and Arafat at the White House, 13 September 1993 — Vince Musi / The White House — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "peres": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/66/Peres_signing_Oslo_I_%281%29.jpg",
+   "credit": "Shimon Peres signs the Oslo agreement, September 1993 — Israeli News Company — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.55,
+    0.55
+   ]
+  },
+  "nobel": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Flickr_-_Government_Press_Office_%28GPO%29_-_THE_NOBEL_PEACE_PRIZE_LAUREATES_FOR_1994_IN_OSLO..jpg",
+   "credit": "Arafat, Peres and Rabin, Nobel Peace Prize laureates, Oslo, 1994 — Saar Yaacov, GPO — CC BY-SA 3.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "protest": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/The_young_Likud_party_members%2C_demonstrating_against_Rabin_rule_and_his_peace_proces_activity_with_the_PLO%2C_1995_Dan_Hadani_Archive.jpg",
+   "credit": "Likud youth demonstrating against Rabin's government, 1995 — Gideon Markowiz — CC BY 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "pullout": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Flickr_-_Israel_Defense_Forces_-_The_Evacuation_of_Neve_Dekalim.jpg",
+   "credit": "The evacuation of Neve Dekalim, Gaza, August 2005 — Israel Defense Forces — CC BY-SA 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "pullout2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/09/Flickr_-_Israel_Defense_Forces_-_The_Evacuation_of_Neve_Dekalim_%2811%29.jpg",
+   "credit": "A resident in tears during the evacuation of Neve Dekalim, August 2005 — Israel Defense Forces — CC BY-SA 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.35
+   ]
+  },
+  "map": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Gaza_strip_may_2005.jpg",
+   "credit": "Map of the Gaza Strip, 2005 — Unknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "shake",
+   "tag": "13 SEP 1993",
+   "say": "In September 1993, on the White House lawn, Israel's Yitzhak Rabin and the PLO's Yasser Arafat shook hands.",
+   "also": "shake2"
+  },
+  {
+   "show": "peres",
+   "tag": "SEP 1993",
+   "say": "The Oslo Accords promised Palestinian self-government, and a path to a final peace deal."
+  },
+  {
+   "show": "nobel",
+   "tag": "1994",
+   "say": "A year later, Rabin, Arafat and Shimon Peres shared the Nobel Peace Prize."
+  },
+  {
+   "show": "protest",
+   "tag": "1995",
+   "say": "But the deal had bitter enemies on both sides. In November 1995, an Israeli extremist assassinated Rabin."
+  },
+  {
+   "show": "pullout",
+   "tag": "AUG 2005",
+   "say": "In 2005, Israel pulled its settlers and soldiers out of Gaza.",
+   "also": "pullout2"
+  },
+  {
+   "show": "map",
+   "tag": "GAZA STRIP",
+   "say": "Two years later, Hamas took control of the Strip."
+  }
+ ]
+}
