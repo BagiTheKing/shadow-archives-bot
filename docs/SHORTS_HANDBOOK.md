@@ -162,6 +162,15 @@ Library target ~40 entries.
 
 ## Current state
 
+- 12 Nov 2026: auto job ran (17:07 UTC) but 0 headline matches (library
+  too small / on cooldown); hand-made backup posted
+  https://youtube.com/shorts/IkosAxtSBw0 (Gaza / Oslo 1993; entry
+  oslo-accords-1993 added; library now 11). Lessons: check every NOW photo's
+  date and tone (an undated "2025" Commons portrait was ~30 years old; a
+  mocking effigy picture sat over an assassination line, caught in frames).
+  Never use TIFFs. Library still needs ~30 more entries; add Yalta 1945,
+  Osirak 1981, Georgia 2008, Korea, Suez 1956, Berlin 1961, Gulf War 1991.
+
 - 11 Nov 2026: the library is the bottleneck: 10 entries, 8 of them posted in
   the last week and on the 90-day cooldown, so the auto job found no fresh
   match and posted nothing (also its cron run died on a hung apt mirror;
