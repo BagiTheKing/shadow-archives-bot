@@ -4,7 +4,7 @@
  "now_tag": "NOW",
  "now_focus": [
   0.5,
-  0.2
+  0.25
  ],
  "then_focus": [
   0.5,
@@ -44,11 +44,11 @@
    ]
   },
   "protest": {
-   "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/The_young_Likud_party_members%2C_demonstrating_against_Rabin_rule_and_his_peace_proces_activity_with_the_PLO%2C_1995_Dan_Hadani_Archive.jpg",
-   "credit": "Likud youth demonstrating against Rabin's government, 1995 — Gideon Markowiz — CC BY 4.0 (via Wikimedia Commons)",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b0/The_Rabin_couple_on_their_way_to_the_signing_ceremony_of_the_Oslo_II_Accord%2C_September_1995_Dan_Hadani_Archive.jpg",
+   "credit": "Yitzhak Rabin and his wife Leah on their way to sign Oslo II, September 1995 — Gideon Markowiz — CC BY 4.0 (via Wikimedia Commons)",
    "focus": [
-    0.5,
-    0.45
+    0.6,
+    0.35
    ]
   },
   "pullout": {
@@ -104,7 +104,7 @@
   {
    "show": "protest",
    "tag": "1995",
-   "say": "But the deal had bitter enemies on both sides. In November 1995, an Israeli extremist assassinated Rabin."
+   "say": "In 1995, a second agreement extended Palestinian self-rule. But in November, an Israeli extremist assassinated Rabin."
   },
   {
    "show": "pullout",
