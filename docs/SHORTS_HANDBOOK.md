@@ -162,6 +162,15 @@ Library target ~40 entries.
 
 ## Current state
 
+- 13 Nov 2026: auto job skipped again (0 matches; 12 entries, most on
+  cooldown); backup posted https://youtube.com/shorts/gtPAjggRwHo (Finland /
+  Winter War, entry winter-war-1939 added; library now 12). The auto job has
+  posted only 1 Short (10 Nov); keep the backup on. The auto matcher is
+  strict (whole-word actors, headline words): when it skips, check
+  `skip.json` headlines against entries and widen `actors`. The 90-day
+  cooldown plus 12 entries means almost every day needs a new entry: the
+  weekly session and the backup must each add one per run.
+
 - 12 Nov 2026: auto job ran (17:07 UTC) but 0 headline matches (library
   too small / on cooldown); hand-made backup posted
   https://youtube.com/shorts/IkosAxtSBw0 (Gaza / Oslo 1993; entry
