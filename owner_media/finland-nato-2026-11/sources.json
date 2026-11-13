@@ -1,0 +1,14 @@
+{
+ "now": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Vladimir_Putin_%282026_02_23%29_%28cropped%29.jpg",
+  "credit": "Vladimir Putin, February 2026 — Kremlin.ru — CC BY 4.0 (via Wikimedia Commons)"
+ },
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Expon_9.jpg",
+  "credit": "Advance detachment of the Red Army, Winter War, 1939 — no — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ }
+}

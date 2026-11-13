@@ -1,0 +1,162 @@
+{
+ "slug": "winter-war-1939",
+ "event": "The Winter War, 1939",
+ "then_year": 1939,
+ "actors": [
+  "Finland",
+  "Finnish",
+  "Helsinki",
+  "Stubb",
+  "Baltic",
+  "Baltics",
+  "Estonia",
+  "Latvia",
+  "Lithuania",
+  "NATO exit",
+  "neutrality",
+  "buffer zone"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Expon_9.jpg",
+  "credit": "Advance detachment of the Red Army, Winter War, 1939 — no — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ },
+ "now_people": [
+  {
+   "article": "Vladimir Putin",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Alexander Stubb",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "WHO DECIDES?",
+   "sub": "FINLAND, 1939"
+  },
+  {
+   "title": "WHOSE BORDER?",
+   "sub": "FINLAND, 1939"
+  }
+ ],
+ "examples": {
+  "line1": "This week, a report said Russia wants Finland out of NATO and a ban on military bases in the Baltics.",
+  "line2": "But in 1939, Moscow made demands of Finland too, and it ended in war.",
+  "now_tag": "HELSINKI · 2026",
+  "now": "Now Finland is a NATO member, and Moscow wants that undone.",
+  "question": "Should Moscow have a say in who Finland allies with?"
+ },
+ "facts": "In autumn 1939 the Soviet Union demanded that Finland move its border on the Karelian Isthmus back from Leningrad and give up land for Soviet bases. Finland refused. On 30 November 1939 Soviet bombers hit Helsinki and the Red Army invaded. Outnumbered, Finland's soldiers fought on through a very cold winter, captured Soviet tanks and held for more than three months. In March 1940 Finland signed a peace and gave up about a tenth of its land, but stayed independent.",
+ "images": {
+  "border": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/59/A-Finnish-soldier-guarding-the-Karelian-border-142353729731.jpg",
+   "credit": "A Finnish soldier guards the Karelian border, 1939 — Unknown photographer — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "air": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/2a/Ilmapommituksen_tuhoa.jpg",
+   "credit": "Damage of an air raid in Helsinki on the first day of the Winter War, 30 November 1939 — SA-kuva. — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "air2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/a0/Helsinki_bombardment_1939_Lasipalatsi.jpg",
+   "credit": "Smoke and dust after the bombing of Helsinki, 1939 — Finnish Army — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "soldier": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b6/A-Finnish-soldier-in-position-during-the-winter-war-Finland-352116949997.jpg",
+   "credit": "A Finnish soldier in position during the Winter War, 1940 — Pekka Aljinen (?) — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "bunker": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/79/A-finnish-soldier-standing-in-his-bunker-142436183225.jpg",
+   "credit": "A Finnish soldier on guard, February 1940 — Kaj Holbech &amp; Olav Kjelstrup — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.4
+   ]
+  },
+  "tank": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/a7/Captured_Russian_Tank.jpg",
+   "credit": "A Soviet tank captured by the Finns, Winter War, 1940 — SA-kuva. — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "tank2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Torjuttu_neuvostopanssari.jpg",
+   "credit": "A Soviet amphibious tank knocked out at Tolvajärvi, 1939 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "evac": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/22/Evacuees_from_East-Finland.jpg",
+   "credit": "Evacuees from Finnish Karelia heading west, 1940 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.55
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "border",
+   "tag": "AUTUMN 1939",
+   "say": "In autumn 1939, the Soviet Union demanded that Finland push its border back and give up land for Soviet bases. Finland refused."
+  },
+  {
+   "show": "air",
+   "tag": "30 NOV 1939",
+   "say": "On November 30th, Soviet bombers hit Helsinki and the Red Army invaded.",
+   "also": "air2"
+  },
+  {
+   "show": "soldier",
+   "tag": "WINTER 1939",
+   "say": "Outnumbered, Finland's soldiers fought on through one of the coldest winters in memory.",
+   "also": "bunker"
+  },
+  {
+   "show": "tank",
+   "tag": "1940",
+   "say": "They captured Soviet tanks, and held the Red Army for more than three months.",
+   "also": "tank2"
+  },
+  {
+   "show": "evac",
+   "tag": "MARCH 1940",
+   "say": "In March, Finland signed a peace and gave up a tenth of its land. But it stayed independent."
+  }
+ ]
+}
