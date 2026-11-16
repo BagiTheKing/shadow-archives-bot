@@ -162,6 +162,13 @@ Library target ~40 entries.
 
 ## Current state
 
+- 16 Nov 2026: the daily cron did NOT run today (no run since 13 Nov: GitHub
+  drops/delays schedules on this repo). Backup posted
+  https://youtube.com/shorts/qp0vcjeVyUg (Trump/Xi/Putin summit, Yalta 1945
+  entry added; library 13). Consider an extra trigger for the daily job (a
+  scheduled Claude task that dispatches daily_library.yml at 08:47 UTC) if the
+  cron keeps missing.
+
 - 13 Nov 2026: auto job skipped again (0 matches; 12 entries, most on
   cooldown); backup posted https://youtube.com/shorts/gtPAjggRwHo (Finland /
   Winter War, entry winter-war-1939 added; library now 12). The auto job has
