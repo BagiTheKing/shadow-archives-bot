@@ -1,0 +1,14 @@
+{
+ "now": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Xi_Jinping_-_2026_%2855063342986%29_%28cropped%29.jpg",
+  "credit": "Xi Jinping, January 2026 — Finnish Government — CC BY 4.0 (via Wikimedia Commons)"
+ },
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/3/3a/Jalta_1945.jpg",
+  "credit": "Churchill, Roosevelt and Stalin at Yalta, February 1945 — U. S. Signal Corps — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.45
+  ]
+ }
+}
