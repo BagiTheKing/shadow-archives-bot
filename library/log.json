@@ -116,5 +116,10 @@
   "date": "2026-11-18",
   "status": "skipped",
   "reason": "no headline matches a library entry"
+ },
+ {
+  "date": "2026-11-19",
+  "status": "skipped",
+  "reason": "no match passed the checks"
  }
 ]
