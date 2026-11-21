@@ -38,6 +38,12 @@ class T(unittest.TestCase):
         self.assertEqual(L.match_score("Ukrainian forces advance", self.by["budapest-1994"]), 1)
         self.assertEqual(L.match_score("Sukraine", self.by["budapest-1994"]), 0)
 
+    def test_fallback_and_control(self):
+        fb = L.fallback(["Cat show", "Dog show"], self.entries, recent={"budapest-1994"})
+        self.assertTrue(fb and all(e["slug"] != "budapest-1994" for _, e in fb))
+        self.assertEqual({h for h, _ in fb}, {"Cat show", "Dog show"})
+        self.assertEqual(L.control("/nonexistent.json"), {"daily_job": "on", "claude_backup": "on"})
+
     def test_good_passes(self):
         self.assertEqual(L.today_problems(good(), HEAD, self.by["budapest-1994"]), [])
 

@@ -1,0 +1,57 @@
+name: Set Shorts Mode
+
+# The owner's switches (tap "Run workflow" in the GitHub app or site):
+#   daily_job     on/off  the automatic Gemini Short (daily_library.yml)
+#   claude_backup on/off  the Claude backup session that makes a Short by hand
+#                         when the daily job posted nothing (it reads this file
+#                         first and does nothing when off, costing almost no credits)
+# Writes library/control.json on main. "keep" leaves a switch as it is.
+on:
+  workflow_dispatch:
+    inputs:
+      daily_job:
+        description: "Automatic Gemini Short"
+        type: choice
+        options: [keep, 'on', 'off']
+        default: keep
+      claude_backup:
+        description: "Claude backup (hand-made Short when the daily job posted nothing)"
+        type: choice
+        options: [keep, 'on', 'off']
+        default: keep
+
+permissions:
+  contents: write
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write the switches
+        run: |
+          python3 - <<'PY'
+          import json, os
+          p = "library/control.json"
+          try:
+              c = json.load(open(p))
+          except Exception:
+              c = {}
+          for k in ("daily_job", "claude_backup"):
+              v = os.environ["IN_" + k]
+              if v in ("on", "off"):
+                  c[k] = v
+          c.setdefault("daily_job", "on"); c.setdefault("claude_backup", "on")
+          json.dump(c, open(p, "w"), indent=1)
+          print(c)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add library/control.json
+          git diff --cached --quiet && exit 0
+          git commit -qm "Shorts mode: $(cat library/control.json | tr -d '\n ')"
+          git pull -q --rebase origin main && git push -q origin HEAD:main
+        env:
+          IN_daily_job: ${{ inputs.daily_job }}
+          IN_claude_backup: ${{ inputs.claude_backup }}

@@ -88,6 +88,27 @@ def candidates(heads, entries, recent=(), max_per_head=2):
     return out
 
 
+def fallback(heads, entries, recent=(), per_head=3, heads_n=2):
+    """When no actor matches: the first headlines paired with the entries not
+    on cooldown, so the model can still judge a direct parallel (it answers
+    fit=false when there is none). Newest entries first."""
+    usable = [e for e in entries if e["slug"] not in recent and not validate(e)]
+    usable.sort(key=lambda e: e.get("added", ""), reverse=True)
+    return [(h, e) for h in heads[:heads_n] for e in usable[:per_head]]
+
+
+def control(path=None):
+    """library/control.json: {"daily_job": "on"|"off", "claude_backup": "on"|"off"}
+    (owner's switches, flipped by the Set Shorts Mode workflow)."""
+    path = path or os.path.join(LIB, "control.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            c = json.load(f)
+    except (FileNotFoundError, ValueError):
+        c = {}
+    return {"daily_job": c.get("daily_job", "on"), "claude_backup": c.get("claude_backup", "on")}
+
+
 # ---------------------------------------------------------------- the today half
 
 def _spoken(spec, entry):

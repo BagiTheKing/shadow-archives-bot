@@ -93,6 +93,12 @@ def main(out):
         with open(os.path.join(out, "skip.json"), "w", encoding="utf-8") as f:
             json.dump({"reason": reason, **kw}, f, ensure_ascii=False, indent=1)
 
+    if L.control()["daily_job"] == "off":
+        return skip("paused by the owner (library/control.json daily_job=off)")
+    log0 = read_log()
+    today = dt.date.today().isoformat()
+    if any(r.get("date") == today and r.get("status") == "posted" for r in log0):
+        return skip("already posted today")
     entries = L.load()
     bad = [p for e in entries for p in L.validate(e)]
     if bad:
@@ -105,11 +111,14 @@ def main(out):
     cands = L.candidates(heads, entries, recent=on_cooldown(log))
     print(f"📰 {len(heads)} headlines, {len(cands)} matches with the library")
     if not cands:
+        cands = L.fallback(heads, entries, recent=on_cooldown(log))
+        print(f"↪️  No actor match: {len(cands)} loose pairs for the model to judge")
+    if not cands:
         return skip("no headline matches a library entry", headlines=heads[:10])
     from llm_provider import get_pool
     from longform_llm import _call
     pool = get_pool()
-    for headline, entry in cands[:4]:
+    for headline, entry in cands[:6]:
         print(f"🕰️  {headline[:90]}  →  {entry['slug']}")
         spec = write_today(pool, _call, headline, entry)
         if not spec:

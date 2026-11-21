@@ -160,6 +160,19 @@ Library target ~40 entries.
   to it (create new ones bound to it, delete yours), tell the owner the new
   session's name in one line, then stop.
 
+## Owner's switches (21 Nov)
+
+Run workflow **Set Shorts Mode** (GitHub app/site, Actions tab) to flip
+`library/control.json`: `daily_job` (the Gemini Short) and `claude_backup` (the
+Claude session that makes a Short by hand when the daily job posted nothing).
+The backup task reads this file first and does nothing when it is off (a few
+cents of credits per day). The daily job runs at 08:47, 12:47 and 16:47 UTC
+(GitHub drops or delays crons) and skips if a Short is already logged today;
+with no actor match it lets the model judge the 6 loosest pairs. To post
+without any Claude session: run **Daily Library Short** by hand (post=true).
+The backup task is tied to the main session, which only runs it while awake:
+if it was idle the days are simply missed (17, 18, 20 Nov).
+
 ## Current state
 
 - 16 Nov 2026: the daily cron did NOT run today (no run since 13 Nov: GitHub

@@ -9,6 +9,8 @@ name: Daily Library Short
 on:
   schedule:
     - cron: '47 8 * * 1-5'
+    - cron: '47 12 * * 1-5'
+    - cron: '47 16 * * 1-5'
   workflow_dispatch:
     inputs:
       post:
