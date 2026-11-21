@@ -38,18 +38,24 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - name: Install ffmpeg, espeak-ng and the Python packages
-        # the apt mirror hung for 10 minutes on 11 Nov and killed the run:
-        # skip apt when ffmpeg is already there, give each try 3 minutes,
-        # and only fail if ffmpeg is still missing
+        # the apt mirror hangs on some days (11 Nov, 20 Nov): fail fast, retry,
+        # then fall back to a static ffmpeg build; only fail if ffmpeg and
+        # ffprobe are both missing
         timeout-minutes: 15
         run: |
-          if ! command -v ffmpeg >/dev/null; then
+          APT="-o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
             for i in 1 2 3; do
-              timeout 180 sudo apt-get update -q && timeout 240 sudo apt-get install -y -q ffmpeg espeak-ng && break
+              timeout 120 sudo apt-get $APT update -q && timeout 240 sudo apt-get $APT install -y -q ffmpeg espeak-ng && break
               echo "apt took too long; trying again"
             done
           fi
-          command -v ffmpeg
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            echo "apt failed: static ffmpeg"
+            curl -sSL --retry 3 -o ff.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+            tar -xf ff.tar.xz && sudo cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/
+          fi
+          command -v ffmpeg && command -v ffprobe
           pip install -r requirements.txt
       - name: Cache Kokoro model files
         uses: actions/cache@v4
@@ -104,6 +110,7 @@ jobs:
           git pull -q --rebase origin main && git push -q origin HEAD:main
       - name: Push to preview-media
         if: always()
+        continue-on-error: true
         run: |
           [ -d out ] || exit 0
           cd out
