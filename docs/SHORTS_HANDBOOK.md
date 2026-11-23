@@ -175,6 +175,17 @@ if it was idle the days are simply missed (17, 18, 20 Nov).
 
 ## Current state
 
+- 23 Nov 2026: THE LIBRARY IS EXHAUSTED: 14 entries, 13 posted in the last 2
+  weeks and on cooldown; only the entries never posted can be used. The
+  daily job ran twice by hand today and posted nothing (no fit); none of its
+  three crons fired. Backup posted https://youtube.com/shorts/vwUlxZnq3a8
+  (Iran/blockade, Cuba 1962). TOP PRIORITY for the weekly session: add 10+
+  entries on the biggest recurring stories (Iran: 1953 coup, Osirak 1981,
+  Iran-Iraq war; Russia/Ukraine: Georgia 2008, Berlin 1948-49, Czechoslovakia
+  1968, Afghanistan 1979; Israel/Lebanon 1982, Suez 1956; Korea; Taiwan 1958;
+  Venezuela/Cuba Bay of Pigs 1961; Gulf War 1991). Owner switches:
+  Set Shorts Mode workflow (library/control.json).
+
 - 16 Nov 2026: the daily cron did NOT run today (no run since 13 Nov: GitHub
   drops/delays schedules on this repo). Backup posted
   https://youtube.com/shorts/qp0vcjeVyUg (Trump/Xi/Putin summit, Yalta 1945
