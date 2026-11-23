@@ -139,5 +139,10 @@
   "date": "2026-11-22",
   "status": "skipped",
   "reason": "no match passed the checks"
+ },
+ {
+  "date": "2026-11-23",
+  "status": "skipped",
+  "reason": "no match passed the checks"
  }
 ]
