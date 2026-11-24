@@ -187,5 +187,10 @@
   "date": "2026-11-24",
   "status": "skipped",
   "reason": "already posted today"
+ },
+ {
+  "date": "2026-11-24",
+  "status": "skipped",
+  "reason": "already posted today"
  }
 ]
