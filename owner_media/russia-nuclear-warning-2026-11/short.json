@@ -1,0 +1,123 @@
+{
+ "then_year": 1961,
+ "music": "Beyond the Lows",
+ "now_tag": "NOW",
+ "now_focus": [
+  0.5,
+  0.2
+ ],
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "images": {
+  "trucks": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/ec/East_German_Army_Trucks_%288048308237%29.jpg",
+   "credit": "East German army trucks at the Brandenburg Gate, 14 August 1961 — Central Intelligence Agency from Washington, D.C. — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "barrier": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/3a/Bundesarchiv_Bild_183-88574-0003%2C_Berlin%2C_Mauerbau%2C_Friedrichstra%C3%9Fe%2C_Panzersperre.jpg",
+   "credit": "Anti-tank barriers on Friedrichstrasse, Berlin, August 1961 — Stöhr — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.55
+   ]
+  },
+  "night": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/ff/07_US_Tanks_by_Night_at_Checkpoint_Charlie%2C_Berlin_-_Flickr_-_The_Central_Intelligence_Agency.jpg",
+   "credit": "US tanks by night at Checkpoint Charlie, Berlin, October 1961 — The Central Intelligence Agency — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "sign": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Checkpoint_Charlie_-_Flickr_-_The_Central_Intelligence_Agency_%283%29.jpg",
+   "credit": "A US tank at Checkpoint Charlie, 25 October 1961 — The Central Intelligence Agency — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "faceoff": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/7d/US_Army_tanks_face_off_against_Soviet_tanks%2C_Berlin_1961.jpg",
+   "credit": "US Army tanks face off against Soviet tanks, Berlin, October 1961 — U.S. Army photo Photo Credit: USAMHI — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.55
+   ]
+  },
+  "leave": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Soviet_Tanks_Leave_Checkpoint_Charlie_-_Flickr_-_The_Central_Intelligence_Agency.jpg",
+   "credit": "Soviet tanks leave Checkpoint Charlie, 28 October 1961 — The Central Intelligence Agency — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "wall": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/c0/East_Berlin_from_the_Berlin_Wall.jpg",
+   "credit": "East Berlin seen from the Berlin Wall, 1963 — Roger Wollstadt — CC BY-SA 2.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "opening",
+   "say": "This week, Russia warned of a preventive nuclear attack, claiming Ukraine and NATO have crossed a line."
+  },
+  {
+   "show": "opening",
+   "say": "But in 1961, American and Soviet tanks stood gun to gun in Berlin."
+  },
+  {
+   "show": "trucks",
+   "tag": "13 AUG 1961",
+   "say": "On August 13th, 1961, East Germany sealed off West Berlin. Within days, barbed wire became a wall.",
+   "also": "barrier"
+  },
+  {
+   "show": "night",
+   "tag": "OCT 1961",
+   "say": "Berlin became the Cold War's flashpoint, with American and Soviet forces facing each other across the line.",
+   "also": "sign"
+  },
+  {
+   "show": "faceoff",
+   "tag": "27 OCT 1961",
+   "say": "On October 27th, American and Soviet tanks stood gun to gun at Checkpoint Charlie."
+  },
+  {
+   "show": "leave",
+   "tag": "28 OCT 1961",
+   "say": "After about sixteen hours, the Soviet tanks pulled back, and then the American tanks did too."
+  },
+  {
+   "show": "wall",
+   "tag": "1963",
+   "say": "Nobody fired a shot. The Wall stood for twenty-eight years."
+  },
+  {
+   "show": "now",
+   "tag": "MOSCOW · 2026",
+   "say": "Now Russia and NATO are staring at each other again."
+  },
+  {
+   "show": "end",
+   "say": "Who would blink first this time?"
+  }
+ ],
+ "end": {
+  "title": "WHO BLINKS?",
+  "sub": "BERLIN, 1961",
+  "pointer": "TELL US IN THE COMMENTS",
+  "arrow": "right"
+ }
+}
