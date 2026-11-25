@@ -1,0 +1,153 @@
+{
+ "slug": "baltic-occupation-1940",
+ "event": "The Soviet takeover of the Baltic states, 1940",
+ "then_year": 1940,
+ "actors": [
+  "Estonia",
+  "Estonian",
+  "Tallinn",
+  "Baltic",
+  "Baltics",
+  "Latvia",
+  "Latvian",
+  "Lithuania",
+  "Lithuanian",
+  "Narva",
+  "Kaja Kallas",
+  "Russophobia"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.45
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/9/97/Red_Army_enters_the_territory_of_Lithuania_during_its_occupation%2C_1940_%28cropped%29.jpg",
+  "credit": "Red Army soldiers enter Lithuania, June 1940 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ },
+ "now_people": [
+  {
+   "article": "Vladimir Putin",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Kaja Kallas",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "WHO IS NEXT?",
+   "sub": "THE BALTICS, 1940"
+  },
+  {
+   "title": "REAL THREAT?",
+   "sub": "THE BALTICS, 1940"
+  }
+ ],
+ "examples": {
+  "line1": "This week, Russia accused NATO member Estonia of hostile actions, saying it was on the verge of unleashing open war.",
+  "line2": "But in 1940, Moscow made the same kind of accusations against the Baltic states, and then took them over.",
+  "now_tag": "TALLINN · 2026",
+  "now": "Now Estonia is a NATO member, and it is taking the warning seriously.",
+  "question": "Is Moscow's language a warning, or a pretext?"
+ },
+ "facts": "In autumn 1939 the Soviet Union pressed Estonia, Latvia and Lithuania into mutual assistance pacts that allowed Soviet bases. In June 1940 Moscow accused them of hostile acts, demanded new governments, and Soviet troops poured in. Red Army troops landed on Estonia's islands. In July, staged elections voted to join the Soviet Union and Estonia vanished from the map. Estonia's president, Konstantin Päts, was deported and died in Soviet captivity in 1956.",
+ "images": {
+  "pact": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/75/%D0%9F%D0%BE%D0%B4%D0%BF%D0%B8%D1%81%D0%B0%D0%BD%D0%B8%D0%B5_%D0%B4%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80%D0%B0_%D0%BE_%D0%B4%D1%80%D1%83%D0%B6%D0%B1%D0%B5_%D0%B8_%D0%B2%D0%B7%D0%B0%D0%B8%D0%BC%D0%BE%D0%BF%D0%BE%D0%BC%D0%BE%D1%89%D0%B8_%D1%81_%D0%9B%D0%B0%D1%82%D0%B2%D0%B8%D0%B9%D1%81%D0%BA%D0%BE%D0%B9_%D1%80%D0%B5%D1%81%D0%BF%D1%83%D0%B1%D0%BB%D0%B8%D0%BA%D0%BE%D0%B9.jpg",
+   "credit": "Signing of a mutual assistance pact between the USSR and Latvia, Stalin and Molotov looking on, October 1939 — Mikhail Mikhaylovich Kalashnikov — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "troops": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/97/Red_Army_enters_the_territory_of_Lithuania_during_its_occupation%2C_1940_%28cropped%29.jpg",
+   "credit": "Red Army soldiers enter Lithuania, June 1940 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "crowd": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/39/1940_06_19_lithuania.jpg",
+   "credit": "A welcome for the Soviet Army, Lithuania, 19 June 1940 — unknown — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "landing": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/27/Punav%C3%A4elased_maabuvad_Naissaarel_1940_-_AM_2637-RF5345_1.jpg",
+   "credit": "Red Army troops land on Naissaar, Estonia, summer 1940 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "decl": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Estonia_declaration_USSR_%281940-07-22%29_01.jpg",
+   "credit": "Declaration of the Estonian SSR on joining the Soviet Union, 22 July 1940 — Государственная Дума Эстонии — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "decl2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b8/%D0%94%D0%B5%D0%BA%D0%BB%D0%B0%D1%80%D0%B0%D1%86%D0%B8%D1%8F_%D0%BE_%D0%B2%D1%85%D0%BE%D0%B6%D0%B4%D0%B5%D0%BD%D0%B8%D0%B8_%D0%AD%D1%81%D1%82%D0%BE%D0%BD%D0%B8%D0%B8_%D0%B2_%D1%81%D0%BE%D1%81%D1%82%D0%B0%D0%B2_%D0%A1%D0%A1%D0%A1%D0%A0.jpg",
+   "credit": "Declaration on Estonia joining the Soviet Union, 1940 — Государственная дума Эстонии — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "pats": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/14/Konstantin_P%C3%A4ts%2C_1938.jpg",
+   "credit": "Konstantin Päts, President of Estonia, 1938 — Ukendt forfatter — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "pact",
+   "tag": "AUTUMN 1939",
+   "say": "In autumn 1939, the Soviet Union pressed the Baltic states into pacts that let Soviet troops set up bases."
+  },
+  {
+   "show": "troops",
+   "tag": "JUNE 1940",
+   "say": "In June 1940, Moscow accused them of hostile acts and demanded new governments. Soviet troops poured in.",
+   "also": "crowd"
+  },
+  {
+   "show": "landing",
+   "tag": "SUMMER 1940",
+   "say": "Red Army troops landed on Estonia's islands."
+  },
+  {
+   "show": "decl",
+   "tag": "JULY 1940",
+   "say": "In July, staged elections voted to join the Soviet Union, and Estonia vanished from the map.",
+   "also": "decl2"
+  },
+  {
+   "show": "pats",
+   "tag": "PRESIDENT PÄTS",
+   "say": "Estonia's president, Konstantin Päts, was deported. He died in Soviet captivity in 1956."
+  }
+ ]
+}
