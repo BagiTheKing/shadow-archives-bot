@@ -1,0 +1,148 @@
+{
+ "slug": "gulf-war-1990",
+ "event": "The Iraqi invasion of Kuwait and the Gulf War, 1990-91",
+ "then_year": 1990,
+ "actors": [
+  "Kuwait",
+  "Kuwaiti",
+  "Kuwait City",
+  "Saudi",
+  "Saudi Arabia",
+  "Saudi Aramco",
+  "Persian Gulf",
+  "Gulf states",
+  "Houthi",
+  "Houthis",
+  "Iranian strike",
+  "oil refinery",
+  "Bahrain",
+  "Gulf"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/French_military_forces_that_cleared_the_beach_in_Kuwait_City_during_Operation_Desert_Storm_gather_for_its_reopening_ceremony._An_AS-330_Puma_helicopter_stands_on_the_beach_in_the_background.jpg",
+  "credit": "French forces on the beach in Kuwait City, 1991 — Unknown — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ },
+ "now_people": [
+  {
+   "article": "Donald Trump",
+   "focus": [
+    0.5,
+    0.25
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "ANOTHER GULF WAR?",
+   "sub": "KUWAIT, 1990"
+  },
+  {
+   "title": "WHO PROTECTS OIL?",
+   "sub": "KUWAIT, 1990"
+  }
+ ],
+ "examples": {
+  "line1": "This week, Italy said two of its citizens were killed in an Iranian strike in Kuwait.",
+  "line2": "But in 1990, Kuwait was invaded, and the whole Gulf was pulled into war.",
+  "now_tag": "KUWAIT · 2026",
+  "now": "Now Kuwait is under fire again, and the Gulf is on edge.",
+  "question": "Could today's Gulf crisis become another Gulf War?"
+ },
+ "facts": "On 2 August 1990 Iraq's army invaded Kuwait and took it in two days. President George H. W. Bush said the invasion would not stand. American troops poured into Saudi Arabia to defend it. On 17 January 1991 coalition air strikes began; Iraq fired Scud missiles at Saudi Arabia and Israel and Patriot batteries shot back. Six weeks later Kuwait was free. Retreating Iraqi troops set Kuwait's oil wells on fire, and it took months to put them out.",
+ "images": {
+  "invade": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/An_Iraqi_Army_T-72_main_battle_tank_firing_during_the_invasion_of_Kuwait%2C_August_1990.jpg",
+   "credit": "An Iraqi T-72 tank firing during the invasion of Kuwait, August 1990 — Unknown authorUnknown author — CC BY 4.0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "bush": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/b9/President_George_H._W._Bush_speaks_to_the_press_regarding_Iraq%27s_invasion_of_Kuwait%3B_South_Lawn_of_the_White_House.jpg",
+   "credit": "President George H. W. Bush speaks to the press about Iraq's invasion of Kuwait, August 1990 — Credit: George H.W. Bush Presidential Library and Museum — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  "troops": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Bush_troops.jpg",
+   "credit": "President Bush talks with American troops in Saudi Arabia, 1990 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.6,
+    0.4
+   ]
+  },
+  "fahd": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/President_George_H._W._Bush_and_King_Fahd_bin_Abdulaziz_Al_Saud_discuss_the_situation_in_Iraq.jpg",
+   "credit": "President Bush and King Fahd of Saudi Arabia, November 1990 — Credit: George H.W. Bush Presidential Library and Museum — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.4
+   ]
+  },
+  "patriot": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/MIM-104_Patriot.JPG",
+   "credit": "A Patriot missile launcher in Saudi Arabia, Operation Desert Shield — Spc. Henry — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "fires": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/79/BrennendeOelquellenKuwait1991.jpg",
+   "credit": "Oil fires set by Iraqi forces in Kuwait, 1991 — United States Army — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "fires2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/3/39/F-14A_VF-114_over_burning_oil_field.jpeg",
+   "credit": "A US Navy F-14A Tomcat over a burning oil field in Kuwait, 1991 — Lt. Steve Gozzo — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "invade",
+   "tag": "2 AUG 1990",
+   "say": "On August 2nd, 1990, Iraq's army invaded Kuwait, and took it in two days."
+  },
+  {
+   "show": "bush",
+   "tag": "AUG 1990",
+   "say": "President George H. W. Bush declared the invasion would not stand."
+  },
+  {
+   "show": "troops",
+   "tag": "1990",
+   "say": "American troops poured into Saudi Arabia to defend the kingdom and its oil.",
+   "also": "fahd"
+  },
+  {
+   "show": "patriot",
+   "tag": "JAN 1991",
+   "say": "When coalition air strikes began, Iraq fired Scud missiles, and Patriot batteries shot back."
+  },
+  {
+   "show": "fires",
+   "tag": "1991",
+   "say": "Six weeks later, Kuwait was free. Retreating troops left its oil wells burning for months.",
+   "also": "fires2"
+  }
+ ]
+}

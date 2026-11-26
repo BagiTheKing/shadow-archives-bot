@@ -1,0 +1,14 @@
+{
+ "now": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/National_Portrait_Gallery_Portrait_of_President_Donald_J_Trump_2026_%28HR%29_%28cropped%29.jpg",
+  "credit": "National Portrait Gallery portrait of President Donald J. Trump, 2026 — Daniel Torok — Public domain (via Wikimedia Commons)"
+ },
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/0/04/French_military_forces_that_cleared_the_beach_in_Kuwait_City_during_Operation_Desert_Storm_gather_for_its_reopening_ceremony._An_AS-330_Puma_helicopter_stands_on_the_beach_in_the_background.jpg",
+  "credit": "French forces on the beach in Kuwait City, 1991 — Unknown — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ }
+}
