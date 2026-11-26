@@ -88,7 +88,7 @@ session branch), then dispatch.
 
 Never repost a Short. The Paraguay/Argentina Short (140 views, 63% stayed,
 99% Shorts feed, 0 subscribers) shows YouTube holds back a Short people like
-if it is not fresh. A library entry is reused only after 90 days
+if it is not fresh. A library entry is reused only after 30 days
 (`COOLDOWN_DAYS`) and with a different today half. At 5 Shorts a week that
 needs ~65 entries to run daily without gaps: the library must keep growing.
 
@@ -134,7 +134,7 @@ a hand-made Short. History lines say nothing about this week.
 **Daily job** `daily_library.yml` (08:47 UTC Mon-Fri; inputs post=true|false):
 `tools/daily_library.py` takes headlines (`daily_paradox.headlines()`), code
 matches actors to entries (`src/library_short.py`, entries posted in the last
-90 days are skipped), Gemini writes line1/line2/now/question/title/etc. (it
+30 days are skipped), Gemini writes line1/line2/now/question/title/etc. (it
 may answer fit=false) and code checks it (`today_problems`: starts "This
 week,"/"Today,", names and numbers must be in the headline, word counts, title
 format), NOW = lead photo of the named person, must be recent and of that
@@ -175,6 +175,9 @@ if it was idle the days are simply missed (17, 18, 20 Nov).
 
 ## Current state
 
+- 26 Nov 2026: owner set the cooldown to 30 days (was 90). The history half may
+  be reused after 30 days, always with a different today half.
+
 - 23 Nov 2026: THE LIBRARY IS EXHAUSTED: 14 entries, 13 posted in the last 2
   weeks and on cooldown; only the entries never posted can be used. The
   daily job ran twice by hand today and posted nothing (no fit); none of its
@@ -198,7 +201,7 @@ if it was idle the days are simply missed (17, 18, 20 Nov).
   Winter War, entry winter-war-1939 added; library now 12). The auto job has
   posted only 1 Short (10 Nov); keep the backup on. The auto matcher is
   strict (whole-word actors, headline words): when it skips, check
-  `skip.json` headlines against entries and widen `actors`. The 90-day
+  `skip.json` headlines against entries and widen `actors`. The 30-day
   cooldown plus 12 entries means almost every day needs a new entry: the
   weekly session and the backup must each add one per run.
 
@@ -212,7 +215,7 @@ if it was idle the days are simply missed (17, 18, 20 Nov).
   Osirak 1981, Georgia 2008, Korea, Suez 1956, Berlin 1961, Gulf War 1991.
 
 - 11 Nov 2026: the library is the bottleneck: 10 entries, 8 of them posted in
-  the last week and on the 90-day cooldown, so the auto job found no fresh
+  the last week and on the 30-day cooldown, so the auto job found no fresh
   match and posted nothing (also its cron run died on a hung apt mirror;
   install step fixed). Hand-made backup posted
   https://youtube.com/shorts/cSifEBt0vQU (Russia/NATO pacts, Molotov-Ribbentrop
@@ -242,11 +245,11 @@ if it was idle the days are simply missed (17, 18, 20 Nov).
 - 9 Nov 2026 (evening): Option 3 built and tested end to end (run 1, post=false:
   Paraguay/Argentina Short rendered fine, frames OK). Daily Library Short is
   scheduled (08:47 UTC Mon-Fri) and posts by itself. The 5 library entries are
-  all on the 90-day cooldown (hand-posted 5-9 Nov, seeded in library/log.json),
+  all on the 30-day cooldown (hand-posted 5-9 Nov, seeded in library/log.json),
   so it will skip until new entries exist: NEXT = add ~5 entries for actors big
   now (Iran/Hormuz variants, US, China, Korea, Gaza...). The hand-made 09:41
   task is the backup; switch it off after the daily job posts 2-3 good Shorts.
-- Channel (9 Nov): 56 subscribers, 90-day Shorts views 18.6K: monetisation
+- Channel (9 Nov): 56 subscribers, 30-day Shorts views 18.6K: monetisation
   (1,000 subs + 3M/10M Shorts views) is far off; do not promise dates.
 
 - 9 Nov 2026: Budapest 1994 Short posted (https://youtube.com/shorts/oclXehb1ujM).
