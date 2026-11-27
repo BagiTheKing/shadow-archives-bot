@@ -1,0 +1,140 @@
+{
+ "slug": "spanish-civil-war-1936",
+ "event": "The Spanish Civil War, 1936",
+ "then_year": 1936,
+ "actors": [
+  "Spain",
+  "Spanish",
+  "Madrid",
+  "Sánchez",
+  "Sanchez",
+  "Vox",
+  "Abascal",
+  "Feijóo",
+  "Feijoo",
+  "Franco",
+  "Catalonia",
+  "Spanish election"
+ ],
+ "music": "Beyond the Lows",
+ "then_focus": [
+  0.5,
+  0.5
+ ],
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/XIV_Brigada_Internacional.jpg",
+  "credit": "Soldiers of the XIV International Brigade, Spain, 1936 — Le Soldat de la République — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ },
+ "now_people": [
+  {
+   "article": "Santiago Abascal",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  },
+  {
+   "article": "Pedro Sánchez",
+   "focus": [
+    0.5,
+    0.3
+   ]
+  }
+ ],
+ "end_ideas": [
+  {
+   "title": "HOW DIVIDED?",
+   "sub": "SPAIN, 1936"
+  },
+  {
+   "title": "WHAT HAVE WE LEARNED?",
+   "sub": "SPAIN, 1936"
+  }
+ ],
+ "examples": {
+  "line1": "This weekend, Spain votes in a snap election, and the far-right Vox party could decide who governs.",
+  "line2": "But in 1936, a tense Spanish election was followed by a coup and a civil war.",
+  "now_tag": "MADRID · 2026",
+  "now": "Now Spain is deeply divided again, and the world is watching the count.",
+  "question": "How divided is too divided for a democracy?"
+ },
+ "facts": "In February 1936 Spain's Popular Front won a tight election. In July 1936 generals rose against the government and the Spanish Civil War began. Volunteers from many countries joined the International Brigades to defend the Republic. Hitler's Germany and Mussolini's Italy backed Franco with planes and troops. On 26 April 1937 German bombers destroyed the Basque town of Guernica. Franco won in 1939 and ruled Spain until he died in 1975.",
+ "images": {
+  "militia": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Brigada_Garibaldi.jpg",
+   "credit": "Garibaldi Battalion volunteers, Spain, 1936 — Unknown authorUnknown author — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "brigade": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/XIV_Brigada_Internacional.jpg",
+   "credit": "Soldiers of the XIV International Brigade, Spain, 1936 — Le Soldat de la République — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "writers": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Bundesarchiv_Bild_183-84600-0001%2C_Ivens_und_Hemingway_bei_Ludwig_Renn%2C_Chef_der_XI._Internationalen_Brigaden.jpg",
+   "credit": "Joris Ivens and Ernest Hemingway with Ludwig Renn during the Spanish Civil War — Unknown authorUnknown author — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.45
+   ]
+  },
+  "condor": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Bf_109A_from_the_Condor_Legion_with_Nationalist_Spain_markings.jpg",
+   "credit": "A Bf 109A of the Condor Legion in Nationalist Spanish markings, 1936 — Unknown authorUnknown author — CC0 (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "guernica": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/c/ca/Bundesarchiv_Bild_183-H25224%2C_Guernica%2C_Ruinen.jpg",
+   "credit": "The ruins of Guernica after the bombing, April 1937 — Unknown authorUnknown author — CC BY-SA 3.0 de (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  },
+  "guernica2": {
+   "url": "https://upload.wikimedia.org/wikipedia/commons/5/53/El_poblado_de_Guernica_en_ruinas_tras_el_bombardeo.jpg",
+   "credit": "The town of Guernica in ruins after the bombing, April 1937 — AnonymousUnknown author (CDBG) — Public domain (via Wikimedia Commons)",
+   "focus": [
+    0.5,
+    0.5
+   ]
+  }
+ },
+ "lines": [
+  {
+   "show": "militia",
+   "tag": "1936",
+   "say": "In February 1936, Spain's Popular Front won a tight election. By July, generals had risen against the government."
+  },
+  {
+   "show": "brigade",
+   "tag": "1936",
+   "say": "Volunteers from many countries joined the International Brigades to defend the Republic.",
+   "also": "writers"
+  },
+  {
+   "show": "condor",
+   "tag": "1936",
+   "say": "Hitler's Germany and Mussolini's Italy backed Franco with planes and troops."
+  },
+  {
+   "show": "guernica",
+   "tag": "26 APR 1937",
+   "say": "On April 26th, 1937, German bombers destroyed the Basque town of Guernica.",
+   "also": "guernica2"
+  }
+ ]
+}
