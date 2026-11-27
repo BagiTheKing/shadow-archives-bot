@@ -1,0 +1,14 @@
+{
+ "now": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/89/Pedro_S%C3%A1nchez_2026_Portrait_%283x4_cropped%29.jpg",
+  "credit": "Pedro Sánchez, 2026 — Pool Moncloa / Carlos Spottorno de las Morenas — Attribution (via Wikimedia Commons)"
+ },
+ "then": {
+  "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/XIV_Brigada_Internacional.jpg",
+  "credit": "Soldiers of the XIV International Brigade, Spain, 1936 — Le Soldat de la République — Public domain (via Wikimedia Commons)",
+  "focus": [
+   0.5,
+   0.5
+  ]
+ }
+}
