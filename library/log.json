@@ -259,5 +259,10 @@
   "date": "2026-11-27",
   "status": "skipped",
   "reason": "already posted today"
+ },
+ {
+  "date": "2026-11-28",
+  "status": "skipped",
+  "reason": "no headline matches a library entry"
  }
 ]
